@@ -12,7 +12,21 @@ import (
 
 const (
 	_WorkbufSize = 2048 // in bytes; larger values result in less contention
+
+	// workbufAlloc is the number of bytes to allocate at a time
+	// for new workbufs. This must be a multiple of pageSize and
+	// should be a multiple of _WorkbufSize.
+	//
+	// Larger values reduce workbuf allocation overhead. Smaller
+	// values reduce heap fragmentation.
+	workbufAlloc = 32 << 10
 )
+
+func init() {
+	if workbufAlloc%pageSize != 0 || workbufAlloc%_WorkbufSize != 0 {
+		throw("bad workbufAlloc")
+	}
+}
 
 // Garbage collector work pool abstraction.
 //
@@ -318,7 +332,40 @@ func getempty() *workbuf {
 		}
 	}
 	if b == nil {
-		b = (*workbuf)(persistentalloc(unsafe.Sizeof(*b), sys.CacheLineSize, &memstats.gc_sys))
+		// Allocate more workbufs.
+		var s *mspan
+		if work.wbufSpans.free.first != nil {
+			lock(&work.wbufSpans.lock)
+			s = work.wbufSpans.free.first
+			if s != nil {
+				work.wbufSpans.free.remove(s)
+				work.wbufSpans.busy.insert(s)
+			}
+			unlock(&work.wbufSpans.lock)
+		}
+		if s == nil {
+			systemstack(func() {
+				s = mheap_.allocManual(workbufAlloc/pageSize, &memstats.gc_sys)
+			})
+			if s == nil {
+				throw("out of memory")
+			}
+			// Record the new span in the busy list.
+			lock(&work.wbufSpans.lock)
+			work.wbufSpans.busy.insert(s)
+			unlock(&work.wbufSpans.lock)
+		}
+		// Slice up the span into new workbufs. Return one and
+		// put the rest on the empty list.
+		for i := uintptr(0); i+_WorkbufSize <= workbufAlloc; i += _WorkbufSize {
+			newb := (*workbuf)(unsafe.Pointer(s.base() + i))
+			newb.nobj = 0
+			if i == 0 {
+				b = newb
+			} else {
+				putempty(newb)
+			}
+		}
 	}
 	return b
 }
@@ -419,4 +466,45 @@ func handoff(b *workbuf) *workbuf {
 	// Put b on full list - let first half of b get stolen.
 	putfull(b)
 	return b1
+}
+
+// prepareFreeWorkbufs moves busy workbuf spans to free list so they
+// can be freed to the heap. This must only be called when all
+// workbufs are on the empty list.
+func prepareFreeWorkbufs() {
+	lock(&work.wbufSpans.lock)
+	if work.full != 0 {
+		throw("cannot free workbufs when work.full != 0")
+	}
+	// Since all workbufs are on the empty list, we don't care
+	// which ones are in which spans. We can wipe the entire empty
+	// list and move all workbuf spans to the free list.
+	work.empty = 0
+	work.wbufSpans.free.takeAll(&work.wbufSpans.busy)
+	unlock(&work.wbufSpans.lock)
+}
+
+// freeSomeWbufs frees some workbufs back to the heap and returns
+// true if it should be called again to free more.
+func freeSomeWbufs(preemptible bool) bool {
+	const batchSize = 64 // ~1–2 µs per span.
+	lock(&work.wbufSpans.lock)
+	if gcphase != _GCoff || work.wbufSpans.free.isEmpty() {
+		unlock(&work.wbufSpans.lock)
+		return false
+	}
+	systemstack(func() {
+		gp := getg().m.curg
+		for i := 0; i < batchSize && !(preemptible && gp.preempt); i++ {
+			span := work.wbufSpans.free.first
+			if span == nil {
+				break
+			}
+			work.wbufSpans.free.remove(span)
+			mheap_.freeManual(span, &memstats.gc_sys)
+		}
+	})
+	more := !work.wbufSpans.free.isEmpty()
+	unlock(&work.wbufSpans.lock)
+	return more
 }

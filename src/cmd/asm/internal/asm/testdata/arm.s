@@ -6,7 +6,9 @@
 // the old assembler's (5a's) grammar and hand-writing complete
 // instructions for each rule, to guarantee we cover the same space.
 
-TEXT	foo(SB), 7, $0
+#include "../../../../../runtime/textflag.h"
+
+TEXT	foo(SB), DUPOK|NOSPLIT, $0
 
 // ADD
 //
@@ -964,6 +966,13 @@ jmp_label_3:
 	REV16	R1, R2               // b12fbfe6
 	REVSH	R1, R2               // b12fffe6
 	RBIT	R1, R2               // 312fffe6
+
+// DIVHW R0, R1, R2: R1 / R0 -> R2
+	DIVHW	R0, R1, R2           // 11f012e7
+	DIVUHW	R0, R1, R2           // 11f032e7
+// DIVHW R0, R1: R1 / R0 -> R1
+	DIVHW	R0, R1               // 11f011e7
+	DIVUHW	R0, R1               // 11f031e7
 
 //
 // END

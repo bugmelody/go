@@ -227,25 +227,24 @@ func dumpglobls() {
 	funcsyms = nil
 }
 
+func linksymname(s *types.Sym) string {
+	if isblanksym(s) {
+		return "_"
+	}
+	if s.Linkname != "" {
+		return s.Linkname
+	}
+	return s.Pkg.Prefix + "." + s.Name
+}
+
 func Linksym(s *types.Sym) *obj.LSym {
 	if s == nil {
 		return nil
 	}
-	if s.Lsym != nil {
-		return s.Lsym
+	if s.Lsym == nil {
+		s.Lsym = Ctxt.Lookup(linksymname(s), 0)
 	}
-	var name string
-	if isblanksym(s) {
-		name = "_"
-	} else if s.Linkname != "" {
-		name = s.Linkname
-	} else {
-		name = s.Pkg.Prefix + "." + s.Name
-	}
-
-	ls := Ctxt.Lookup(name, 0)
-	s.Lsym = ls
-	return ls
+	return s.Lsym
 }
 
 func duintxx(s *types.Sym, off int, v uint64, wid int) int {
@@ -253,12 +252,15 @@ func duintxx(s *types.Sym, off int, v uint64, wid int) int {
 }
 
 func duintxxLSym(s *obj.LSym, off int, v uint64, wid int) int {
-	// Update symbol data directly instead of generating a
-	// DATA instruction that liblink will have to interpret later.
-	// This reduces compilation time and memory usage.
-	off = int(Rnd(int64(off), int64(wid)))
-
-	return int(obj.Setuintxx(Ctxt, s, int64(off), v, int64(wid)))
+	if s.Type == 0 {
+		// TODO(josharian): Do this in obj.prepwrite instead.
+		s.Type = obj.SDATA
+	}
+	if off&(wid-1) != 0 {
+		Fatalf("duintxxLSym: misaligned: v=%d wid=%d off=%d", v, wid, off)
+	}
+	s.WriteInt(Ctxt, int64(off), wid, int64(v))
+	return off + wid
 }
 
 func duint8(s *types.Sym, off int, v uint8) int {

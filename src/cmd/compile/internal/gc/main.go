@@ -118,7 +118,6 @@ func Main(archInit func(*Arch)) {
 	archInit(&thearch)
 
 	Ctxt = obj.Linknew(thearch.LinkArch)
-	Ctxt.DebugInfo = debuginfo
 	Ctxt.DiagFunc = yyerror
 	Ctxt.Bso = bufio.NewWriter(os.Stdout)
 
@@ -164,9 +163,6 @@ func Main(archInit func(*Arch)) {
 	mappkg.Prefix = "go.map"
 
 	Nacl = obj.GOOS == "nacl"
-	if Nacl {
-		flag_largemodel = true
-	}
 
 	flag.BoolVar(&compiling_runtime, "+", false, "compiling runtime")
 	obj.Flagcount("%", "debug non-static initializers", &Debug['%'])
@@ -184,6 +180,7 @@ func Main(archInit func(*Arch)) {
 	flag.StringVar(&buildid, "buildid", "", "record `id` as the build id in the export metadata")
 	flag.BoolVar(&pure_go, "complete", false, "compiling complete package (no C or assembly)")
 	flag.StringVar(&debugstr, "d", "", "print debug information about items in `list`")
+	flag.BoolVar(&flagDWARF, "dwarf", true, "generate DWARF symbols")
 	obj.Flagcount("e", "no limit on number of errors reported", &Debug['e'])
 	obj.Flagcount("f", "debug stack frames", &Debug['f'])
 	obj.Flagcount("h", "halt on error", &Debug['h'])
@@ -215,9 +212,6 @@ func Main(archInit func(*Arch)) {
 		flag.BoolVar(&flag_shared, "shared", false, "generate code that can be linked into a shared library")
 		flag.BoolVar(&flag_dynlink, "dynlink", false, "support references to Go symbols defined in other shared libraries")
 	}
-	if thearch.LinkArch.Family == sys.AMD64 {
-		flag.BoolVar(&flag_largemodel, "largemodel", false, "generate code that assumes a large memory model")
-	}
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
 	flag.StringVar(&memprofile, "memprofile", "", "write memory profile to `file`")
 	flag.Int64Var(&memprofilerate, "memprofilerate", 0, "set runtime.MemProfileRate to `rate`")
@@ -233,6 +227,9 @@ func Main(archInit func(*Arch)) {
 
 	Ctxt.Debugasm = Debug_asm
 	Ctxt.Debugvlog = Debug_vlog
+	if flagDWARF {
+		Ctxt.DebugInfo = debuginfo
+	}
 
 	if flag.NArg() < 1 {
 		usage()

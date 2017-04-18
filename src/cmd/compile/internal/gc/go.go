@@ -201,7 +201,7 @@ var flag_race bool
 
 var flag_msan bool
 
-var flag_largemodel bool
+var flagDWARF bool
 
 // Whether we are adding any sort of code instrumentation, such as
 // when the race detector is enabled.

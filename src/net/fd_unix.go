@@ -28,9 +28,6 @@ type netFD struct {
 	raddr       Addr
 }
 
-func sysInit() {
-}
-
 func newFD(sysfd, family, sotype int, net string) (*netFD, error) {
 	ret := &netFD{
 		pfd: poll.FD{
@@ -210,7 +207,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 }
 
 func (fd *netFD) readFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
-	n, sa, err = fd.pfd.RecvFrom(p)
+	n, sa, err = fd.pfd.ReadFrom(p)
 	runtime.KeepAlive(fd)
 	return n, sa, wrapSyscallError("recvfrom", err)
 }

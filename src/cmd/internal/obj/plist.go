@@ -6,7 +6,6 @@ package obj
 
 import (
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -42,33 +41,9 @@ func Flushplist(ctxt *Link, plist *Plist, newprog ProgAlloc) {
 			if s == nil {
 				// func _() { }
 				curtext = nil
-
 				continue
 			}
-			if s.FuncInfo == nil {
-				s.FuncInfo = new(FuncInfo)
-			}
-
-			if s.Text != nil {
-				log.Fatalf("duplicate TEXT for %s", s.Name)
-			}
-			if s.OnList() {
-				log.Fatalf("symbol %s listed multiple times", s.Name)
-			}
-			s.Set(AttrOnList, true)
 			text = append(text, s)
-			flag := int(p.From3Offset())
-			if flag&DUPOK != 0 {
-				s.Set(AttrDuplicateOK, true)
-			}
-			if flag&NOSPLIT != 0 {
-				s.Set(AttrNoSplit, true)
-			}
-			if flag&REFLECTMETHOD != 0 {
-				s.Set(AttrReflectMethod, true)
-			}
-			s.Type = STEXT
-			s.Text = p
 			etext = p
 			curtext = s
 			continue
@@ -130,11 +105,40 @@ func Flushplist(ctxt *Link, plist *Plist, newprog ProgAlloc) {
 		ctxt.Arch.Preprocess(ctxt, s, newprog)
 		ctxt.Arch.Assemble(ctxt, s, newprog)
 		linkpcln(ctxt, s)
-		makeFuncDebugEntry(ctxt, plist.Curfn, s)
+		ctxt.populateDWARF(plist.Curfn, s)
 	}
+}
 
-	// Add to running list in ctxt.
-	ctxt.Text = append(ctxt.Text, text...)
+func (ctxt *Link) InitTextSym(s *LSym, flag int) {
+	if s == nil {
+		// func _() { }
+		return
+	}
+	if s.FuncInfo != nil {
+		ctxt.Diag("InitTextSym double init for %s", s.Name)
+	}
+	s.FuncInfo = new(FuncInfo)
+	if s.Text != nil {
+		ctxt.Diag("duplicate TEXT for %s", s.Name)
+	}
+	if s.OnList() {
+		ctxt.Diag("symbol %s listed multiple times", s.Name)
+	}
+	s.Set(AttrOnList, true)
+	s.Set(AttrDuplicateOK, flag&DUPOK != 0)
+	s.Set(AttrNoSplit, flag&NOSPLIT != 0)
+	s.Set(AttrReflectMethod, flag&REFLECTMETHOD != 0)
+	s.Set(AttrWrapper, flag&WRAPPER != 0)
+	s.Set(AttrNeedCtxt, flag&NEEDCTXT != 0)
+	s.Set(AttrNoFrame, flag&NOFRAME != 0)
+	s.Type = STEXT
+	ctxt.Text = append(ctxt.Text, s)
+
+	// Set up DWARF entry for s.
+	dsym := ctxt.dwarfSym(s)
+	dsym.Type = SDWARFINFO
+	dsym.Set(AttrDuplicateOK, s.DuplicateOK())
+	ctxt.Data = append(ctxt.Data, dsym)
 }
 
 func (ctxt *Link) Globl(s *LSym, size int64, flag int) {
@@ -143,7 +147,7 @@ func (ctxt *Link) Globl(s *LSym, size int64, flag int) {
 	}
 	s.Set(AttrSeenGlobl, true)
 	if s.OnList() {
-		log.Fatalf("symbol %s listed multiple times", s.Name)
+		ctxt.Diag("symbol %s listed multiple times", s.Name)
 	}
 	s.Set(AttrOnList, true)
 	ctxt.Data = append(ctxt.Data, s)

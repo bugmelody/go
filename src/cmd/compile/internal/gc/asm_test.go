@@ -42,23 +42,32 @@ func TestAssembly(t *testing.T) {
 				asm := ats.compileToAsm(tt, dir)
 
 				for _, at := range ats.tests {
-					funcName := nameRegexp.FindString(at.function)[5:]
-					fa := funcAsm(asm, funcName)
-					at.verifyAsm(tt, fa)
+					funcName := nameRegexp.FindString(at.function)[len("func "):]
+					fa := funcAsm(tt, asm, funcName)
+					if fa != "" {
+						at.verifyAsm(tt, fa)
+					}
 				}
 			})
 		}
 	})
 }
 
+var nextTextRegexp = regexp.MustCompile(`\n\S`)
+
 // funcAsm returns the assembly listing for the given function name.
-func funcAsm(asm string, funcName string) string {
+func funcAsm(t *testing.T, asm string, funcName string) string {
 	if i := strings.Index(asm, fmt.Sprintf("TEXT\t\"\".%s(SB)", funcName)); i >= 0 {
 		asm = asm[i:]
+	} else {
+		t.Errorf("could not find assembly for function %v", funcName)
+		return ""
 	}
 
-	if i := strings.Index(asm[1:], "TEXT\t\"\"."); i >= 0 {
-		asm = asm[:i+1]
+	// Find the next line that doesn't begin with whitespace.
+	loc := nextTextRegexp.FindStringIndex(asm)
+	if loc != nil {
+		asm = asm[:loc[0]]
 	}
 
 	return asm
@@ -130,12 +139,6 @@ func (ats *asmTests) compileToAsm(t *testing.T, dir string) string {
 
 	// Now, compile the individual file for which we want to see the generated assembly.
 	asm := ats.runGo(t, "tool", "compile", "-I", testDir, "-S", "-o", filepath.Join(testDir, "out.o"), src)
-
-	// Get rid of code for "".init. Also gets rid of type algorithms & other junk.
-	if i := strings.Index(asm, "\n\"\".init "); i >= 0 {
-		asm = asm[:i+1]
-	}
-
 	return asm
 }
 
@@ -149,8 +152,7 @@ func (ats *asmTests) runGo(t *testing.T, args ...string) string {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		fmt.Printf(stdout.String())
-		t.Fatalf("error running cmd: %v", err)
+		t.Fatalf("error running cmd: %v\nstdout:\n%sstderr:\n%s\n", err, stdout.String(), stderr.String())
 	}
 
 	if s := stderr.String(); s != "" {
@@ -797,6 +799,63 @@ var linuxAMD64Tests = []*asmTest{
 		    return a == "xxxxxxxx"
 		}`,
 		[]string{"\tCMPQ\t[A-Z]"},
+	},
+	// Non-constant rotate
+	{
+		`func rot64l(x uint64, y int) uint64 {
+			z := uint(y & 63)
+			return x << z | x >> (64-z)
+		}`,
+		[]string{"\tROLQ\t"},
+	},
+	{
+		`func rot64r(x uint64, y int) uint64 {
+			z := uint(y & 63)
+			return x >> z | x << (64-z)
+		}`,
+		[]string{"\tRORQ\t"},
+	},
+	{
+		`func rot32l(x uint32, y int) uint32 {
+			z := uint(y & 31)
+			return x << z | x >> (32-z)
+		}`,
+		[]string{"\tROLL\t"},
+	},
+	{
+		`func rot32r(x uint32, y int) uint32 {
+			z := uint(y & 31)
+			return x >> z | x << (32-z)
+		}`,
+		[]string{"\tRORL\t"},
+	},
+	{
+		`func rot16l(x uint16, y int) uint16 {
+			z := uint(y & 15)
+			return x << z | x >> (16-z)
+		}`,
+		[]string{"\tROLW\t"},
+	},
+	{
+		`func rot16r(x uint16, y int) uint16 {
+			z := uint(y & 15)
+			return x >> z | x << (16-z)
+		}`,
+		[]string{"\tRORW\t"},
+	},
+	{
+		`func rot8l(x uint8, y int) uint8 {
+			z := uint(y & 7)
+			return x << z | x >> (8-z)
+		}`,
+		[]string{"\tROLB\t"},
+	},
+	{
+		`func rot8r(x uint8, y int) uint8 {
+			z := uint(y & 7)
+			return x >> z | x << (8-z)
+		}`,
+		[]string{"\tRORB\t"},
 	},
 }
 

@@ -66,18 +66,21 @@ func Stat(name string) (FileInfo, error) {
 	for i := 0; i < 255; i++ {
 		fi, err = Lstat(name)
 		if err != nil {
-			return fi, err
+			return nil, err
 		}
 		if fi.Mode()&ModeSymlink == 0 {
 			return fi, nil
 		}
 		newname, err := Readlink(name)
 		if err != nil {
-			return fi, err
+			return nil, err
 		}
-		if isAbs(newname) {
+		switch {
+		case isAbs(newname):
 			name = newname
-		} else {
+		case len(newname) > 0 && IsPathSeparator(newname[0]):
+			name = volumeName(name) + newname
+		default:
 			name = dirname(name) + `\` + newname
 		}
 	}

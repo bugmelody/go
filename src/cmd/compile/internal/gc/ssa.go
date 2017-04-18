@@ -157,7 +157,7 @@ func buildssa(fn *Node) *ssa.Func {
 	for _, n := range fn.Func.Dcl {
 		switch n.Class {
 		case PPARAM, PPARAMOUT:
-			aux := s.lookupSymbol(n, &ssa.ArgSymbol{Typ: n.Type, Node: n})
+			aux := s.lookupSymbol(n, &ssa.ArgSymbol{Node: n})
 			s.decladdrs[n] = s.entryNewValue1A(ssa.OpAddr, types.NewPtr(n.Type), aux, s.sp)
 			if n.Class == PPARAMOUT && s.canSSA(n) {
 				// Save ssa-able PPARAMOUT variables so we can
@@ -1380,13 +1380,13 @@ func (s *state) expr(n *Node) *ssa.Value {
 		len := s.newValue1(ssa.OpStringLen, types.Types[TINT], str)
 		return s.newValue3(ssa.OpSliceMake, n.Type, ptr, len, len)
 	case OCFUNC:
-		aux := s.lookupSymbol(n, &ssa.ExternSymbol{Typ: n.Type, Sym: Linksym(n.Left.Sym)})
+		aux := s.lookupSymbol(n, &ssa.ExternSymbol{Sym: Linksym(n.Left.Sym)})
 		return s.entryNewValue1A(ssa.OpAddr, n.Type, aux, s.sb)
 	case ONAME:
 		if n.Class == PFUNC {
 			// "value" of a function is the address of the function's closure
 			sym := Linksym(funcsym(n.Sym))
-			aux := s.lookupSymbol(n, &ssa.ExternSymbol{Typ: n.Type, Sym: sym})
+			aux := s.lookupSymbol(n, &ssa.ExternSymbol{Sym: sym})
 			return s.entryNewValue1A(ssa.OpAddr, types.NewPtr(n.Type), aux, s.sb)
 		}
 		if s.canSSA(n) {
@@ -2826,7 +2826,7 @@ func init() {
 		sys.ARM64)
 	makeOnesCount := func(op64 ssa.Op, op32 ssa.Op) func(s *state, n *Node, args []*ssa.Value) *ssa.Value {
 		return func(s *state, n *Node, args []*ssa.Value) *ssa.Value {
-			aux := s.lookupSymbol(n, &ssa.ExternSymbol{Typ: types.Types[TBOOL], Sym: Linksym(syslook("support_popcnt").Sym)})
+			aux := s.lookupSymbol(n, &ssa.ExternSymbol{Sym: Linksym(syslook("support_popcnt").Sym)})
 			addr := s.entryNewValue1A(ssa.OpAddr, types.Types[TBOOL].PtrTo(), aux, s.sb)
 			v := s.newValue2(ssa.OpLoad, types.Types[TBOOL], addr, s.mem())
 			b := s.endBlock()
@@ -3197,7 +3197,7 @@ func (s *state) addr(n *Node, bounded bool) *ssa.Value {
 		switch n.Class {
 		case PEXTERN:
 			// global variable
-			aux := s.lookupSymbol(n, &ssa.ExternSymbol{Typ: n.Type, Sym: Linksym(n.Sym)})
+			aux := s.lookupSymbol(n, &ssa.ExternSymbol{Sym: Linksym(n.Sym)})
 			v := s.entryNewValue1A(ssa.OpAddr, t, aux, s.sb)
 			// TODO: Make OpAddr use AuxInt as well as Aux.
 			if n.Xoffset != 0 {
@@ -3212,18 +3212,18 @@ func (s *state) addr(n *Node, bounded bool) *ssa.Value {
 			}
 			if n == nodfp {
 				// Special arg that points to the frame pointer (Used by ORECOVER).
-				aux := s.lookupSymbol(n, &ssa.ArgSymbol{Typ: n.Type, Node: n})
+				aux := s.lookupSymbol(n, &ssa.ArgSymbol{Node: n})
 				return s.entryNewValue1A(ssa.OpAddr, t, aux, s.sp)
 			}
 			s.Fatalf("addr of undeclared ONAME %v. declared: %v", n, s.decladdrs)
 			return nil
 		case PAUTO:
-			aux := s.lookupSymbol(n, &ssa.AutoSymbol{Typ: n.Type, Node: n})
+			aux := s.lookupSymbol(n, &ssa.AutoSymbol{Node: n})
 			return s.newValue1A(ssa.OpAddr, t, aux, s.sp)
 		case PPARAMOUT: // Same as PAUTO -- cannot generate LEA early.
 			// ensure that we reuse symbols for out parameters so
 			// that cse works on their addresses
-			aux := s.lookupSymbol(n, &ssa.ArgSymbol{Typ: n.Type, Node: n})
+			aux := s.lookupSymbol(n, &ssa.ArgSymbol{Node: n})
 			return s.newValue1A(ssa.OpAddr, t, aux, s.sp)
 		default:
 			s.Fatalf("variable address class %v not implemented", classnames[n.Class])
@@ -4744,7 +4744,7 @@ func (e *ssafn) StringData(s string) interface{} {
 		e.strings = make(map[string]interface{})
 	}
 	data := stringsym(s)
-	aux := &ssa.ExternSymbol{Typ: types.Idealstring, Sym: data}
+	aux := &ssa.ExternSymbol{Sym: data}
 	e.strings[s] = aux
 	return aux
 }

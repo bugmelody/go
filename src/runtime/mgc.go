@@ -795,6 +795,19 @@ var work struct {
 	empty lfstack                  // lock-free list of empty blocks workbuf
 	pad0  [sys.CacheLineSize]uint8 // prevents false-sharing between full/empty and nproc/nwait
 
+	wbufSpans struct {
+		lock mutex
+		// free is a list of spans dedicated to workbufs, but
+		// that don't currently contain any workbufs.
+		free mSpanList
+		// busy is a list of all spans containing workbufs on
+		// one of the workbuf lists.
+		busy mSpanList
+	}
+
+	// Restore 64-bit alignment on 32-bit.
+	_ uint32
+
 	// bytesMarked is the number of bytes marked this cycle. This
 	// includes bytes blackened in scanned objects, noscan objects
 	// that go straight to black, and permagrey objects scanned by
@@ -1470,6 +1483,10 @@ func gcMarkTermination() {
 	// world stopped.
 	mProf_Flush()
 
+	// Prepare workbufs for freeing by the sweeper. We do this
+	// asynchronously because it can take non-trivial time.
+	prepareFreeWorkbufs()
+
 	// Free stack spans. This must be done between GC cycles.
 	systemstack(freeStackSpans)
 
@@ -1912,6 +1929,10 @@ func gcSweep(mode gcMode) {
 		// Sweep all spans eagerly.
 		for sweepone() != ^uintptr(0) {
 			sweep.npausesweep++
+		}
+		// Free workbufs eagerly.
+		prepareFreeWorkbufs()
+		for freeSomeWbufs(false) {
 		}
 		// All "free" events for this mark/sweep cycle have
 		// now happened, so we can make this profile cycle

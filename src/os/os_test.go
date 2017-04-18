@@ -174,6 +174,45 @@ func TestStat(t *testing.T) {
 	}
 }
 
+func TestStatError(t *testing.T) {
+	defer chtmpdir(t)()
+
+	path := "no-such-file"
+	Remove(path) // Just in case
+
+	fi, err := Stat(path)
+	if err == nil {
+		t.Fatal("got nil, want error")
+	}
+	if fi != nil {
+		t.Errorf("got %v, want nil", fi)
+	}
+	if perr, ok := err.(*PathError); !ok {
+		t.Errorf("got %T, want %T", err, perr)
+	}
+
+	testenv.MustHaveSymlink(t)
+
+	link := "symlink"
+	Remove(link) // Just in case
+	err = Symlink(path, link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Remove(link)
+
+	fi, err = Stat(link)
+	if err == nil {
+		t.Fatal("got nil, want error")
+	}
+	if fi != nil {
+		t.Errorf("got %v, want nil", fi)
+	}
+	if perr, ok := err.(*PathError); !ok {
+		t.Errorf("got %T, want %T", err, perr)
+	}
+}
+
 func TestFstat(t *testing.T) {
 	path := sfdir + "/" + sfname
 	file, err1 := Open(path)
@@ -1773,6 +1812,23 @@ func TestStatRelativeSymlink(t *testing.T) {
 
 	if !SameFile(st, st1) {
 		t.Error("Stat doesn't follow relative symlink")
+	}
+
+	if runtime.GOOS == "windows" {
+		Remove(link)
+		err = Symlink(target[len(filepath.VolumeName(target)):], link)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		st1, err := Stat(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !SameFile(st, st1) {
+			t.Error("Stat doesn't follow relative symlink")
+		}
 	}
 }
 

@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-TEXT main·foo(SB),7,$16-0 // TEXT main.foo(SB), 7, $16-0
+#include "../../../../../runtime/textflag.h"
+
+TEXT main·foo(SB),DUPOK|NOSPLIT,$16-0 // TEXT main.foo(SB), DUPOK|NOSPLIT, $16-0
 	MOVD	R1, R2                // b9040021
 	MOVW	R3, R4                // b9140043
 	MOVH	R5, R6                // b9070065
@@ -242,6 +244,9 @@ TEXT main·foo(SB),7,$16-0 // TEXT main.foo(SB), 7, $16-0
 	CMPUBGT	R9, $256, 0(PC)        // ec920000007d
 	CMPUBGE	R2, $0, 0(PC)          // ec2a0000007d
 
+	LGDR	F1, R12                // b3cd00c1
+	LDGR	R2, F15                // b3c100f2
+
 	CEFBRA	R0, F15                // b39400f0
 	CDFBRA	R1, F14                // b39500e1
 	CEGBRA	R2, F13                // b3a400d2
@@ -350,9 +355,9 @@ TEXT main·foo(SB),7,$16-0 // TEXT main.foo(SB), 7, $16-0
 
 	RET
 
-TEXT main·init(SB),7,$0 // TEXT main.init(SB), 7, $0
+TEXT main·init(SB),DUPOK|NOSPLIT,$0 // TEXT main.init(SB), DUPOK|NOSPLIT, $0
 	RET
 
-TEXT main·main(SB),7,$0 // TEXT main.main(SB), 7, $0
+TEXT main·main(SB),DUPOK|NOSPLIT,$0 // TEXT main.main(SB), DUPOK|NOSPLIT, $0
 	BL      main·foo(SB)    // CALL main.foo(SB)
 	RET
