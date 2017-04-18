@@ -25,6 +25,18 @@ var atomValue = &Feed{
 	},
 }
 
+/**
+type Feed struct 中的字段定义顺序是:
+	XMLName Name      `xml:"http://www.w3.org/2005/Atom feed"`
+	Title   string    `xml:"title"`
+	Id      string    `xml:"id"`
+	Link    []Link    `xml:"link"`
+	Updated time.Time `xml:"updated,attr"`
+	Author  Person    `xml:"author"`
+	Entry   []Entry   `xml:"entry"`
+
+因此,根据结构体生成的xml的顺序也是: title,id,link,author,entry
+ */
 var atomXml = `` +
 	`<feed xmlns="http://www.w3.org/2005/Atom" updated="2003-12-13T18:30:02Z">` +
 	`<title>Example Feed</title>` +

@@ -20,6 +20,7 @@ func ExampleMarshalIndent() {
 		FirstName string   `xml:"name>first"`
 		LastName  string   `xml:"name>last"`
 		Age       int      `xml:"age"`
+		// 注:最终的输出被忽略,因为有omitempty
 		Height    float32  `xml:"height,omitempty"`
 		Married   bool
 		Address
@@ -28,6 +29,7 @@ func ExampleMarshalIndent() {
 
 	v := &Person{Id: 13, FirstName: "John", LastName: "Doe", Age: 42}
 	v.Comment = " Need more details. "
+	// 注:尽管 Address 是匿名字段,最终 City 和 State 是在外层
 	v.Address = Address{"Hanga Roa", "Easter Island"}
 
 	output, err := xml.MarshalIndent(v, "  ", "    ")
@@ -94,6 +96,9 @@ func ExampleEncoder() {
 // some preset fields. Note that the Phone field isn't modified and that
 // the XML <Company> element is ignored. Also, the Groups field is assigned
 // considering the element path provided in its tag.
+//
+// 注: preset(预先设置的)
+// 注: excerpt ['eksɜːpt] n. 摘录，引用 vt. 引用，摘录 vi. 摘录，引用
 func ExampleUnmarshal() {
 	type Email struct {
 		Where string `xml:"where,attr"`
@@ -105,13 +110,17 @@ func ExampleUnmarshal() {
 	type Result struct {
 		XMLName xml.Name `xml:"Person"`
 		Name    string   `xml:"FullName"`
+		// 注: Note that the Phone field isn't modified
 		Phone   string
 		Email   []Email
+		// 注: the Groups field is assigned considering the element path provided in its tag.
 		Groups  []string `xml:"Group>Value"`
 		Address
 	}
+	// 注: Name字段最后有变化,Phone字段最后没有变化
 	v := Result{Name: "none", Phone: "none"}
 
+	// 注: Note that the XML <Company> element is ignored
 	data := `
 		<Person>
 			<FullName>Grace R. Emlin</FullName>

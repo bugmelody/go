@@ -19,6 +19,8 @@ const (
 	// A generic XML header suitable for use with the output of Marshal.
 	// This is not automatically added to any output of this package,
 	// it is provided as a convenience.
+	//
+	// 注: 本包中的任何输出并不会包含Header. Header在这里的作用是避免开发人员手写.
 	Header = `<?xml version="1.0" encoding="UTF-8"?>` + "\n"
 )
 
@@ -32,6 +34,7 @@ const (
 // elements containing the data.
 //
 // The name for the XML elements is taken from, in order of preference:
+//     - 注: XML元素标签名是从以下规则中生成(以下规则已经按照优先级排序)
 //     - the tag on the XMLName field, if the data is a struct
 //     - the value of the XMLName field of type Name
 //     - the tag of the struct field used to obtain the data
@@ -59,6 +62,7 @@ const (
 //       if the field value is empty. The empty values are false, 0, any
 //       nil pointer or interface value, and any array, slice, map, or
 //       string of length zero.
+//       (注意: omitempty只是Marshal中使用,跟UnMarshal没有关系)
 //     - an anonymous struct field is handled as if the fields of its
 //       value were part of the outer struct.
 //

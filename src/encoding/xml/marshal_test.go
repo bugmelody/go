@@ -33,9 +33,11 @@ type Ship struct {
 	XMLName struct{} `xml:"spaceship"`
 
 	Name      string       `xml:"name,attr"`
+	// pilot ['pailət] n. 1.舵手，领航员；领港员；引水者 2.飞行员；飞机驾驶员；正驾驶；机长
 	Pilot     string       `xml:"pilot,attr"`
 	Drive     DriveType    `xml:"drive"`
 	Age       uint         `xml:"age"`
+	// Passenger n. 旅客；乘客；过路人
 	Passenger []*Passenger `xml:"passenger"`
 	secret    string
 }
@@ -86,11 +88,13 @@ type Particle struct {
 	HasMass bool     `xml:",chardata"`
 }
 
+// Departure: n. 离开；出发；违背
 type Departure struct {
 	XMLName struct{}  `xml:"departure"`
 	When    time.Time `xml:",chardata"`
 }
 
+// 注: SecretAgent: 间谍；特务
 type SecretAgent struct {
 	XMLName   struct{} `xml:"agent"`
 	Handle    string   `xml:"handle,attr"`
@@ -101,6 +105,7 @@ type SecretAgent struct {
 type NestedItems struct {
 	XMLName struct{} `xml:"result"`
 	Items   []string `xml:">item"`
+	// 注: 下面的Items是指结构体的Items字段
 	Item1   []string `xml:"Items>item1"`
 }
 
@@ -200,6 +205,7 @@ type AttrTest struct {
 }
 
 type AttrsTest struct {
+	// 这个Attr是指xml.Attr
 	Attrs []Attr  `xml:",any,attr"`
 	Int   int     `xml:",attr"`
 	Named int     `xml:"int,attr"`
@@ -312,8 +318,10 @@ type ChardataEmptyTest struct {
 type MyMarshalerTest struct {
 }
 
+// 注: 编译期验证 *MyMarshalerTest 实现了 Marshaler 接口.
 var _ Marshaler = (*MyMarshalerTest)(nil)
 
+// 注: 对 *MyMarshalerTest 实现 Marshaler 接口.
 func (m *MyMarshalerTest) MarshalXML(e *Encoder, start StartElement) error {
 	e.EncodeToken(start)
 	e.EncodeToken(CharData([]byte("hello world")))
@@ -543,6 +551,7 @@ var marshalTests = []struct {
 	{Value: nil, ExpectXML: ``, MarshalOnly: true},
 	{Value: nilStruct, ExpectXML: ``, MarshalOnly: true},
 
+	// 注: Value: &Plain 的不会进入 Unmarshal 测试
 	// Test value types
 	{Value: &Plain{true}, ExpectXML: `<Plain><V>true</V></Plain>`},
 	{Value: &Plain{false}, ExpectXML: `<Plain><V>false</V></Plain>`},
@@ -567,20 +576,22 @@ var marshalTests = []struct {
 	{Value: &Plain{[3]int{1, 2, 3}}, ExpectXML: `<Plain><V>1</V><V>2</V><V>3</V></Plain>`},
 	{Value: ifaceptr(true), MarshalOnly: true, ExpectXML: `<bool>true</bool>`},
 
+	// 注: Value: &Plain 的不会进行 Unmarshal 测试
 	// Test time.
 	{
 		Value:     &Plain{time.Unix(1e9, 123456789).UTC()},
 		ExpectXML: `<Plain><V>2001-09-09T01:46:40.123456789Z</V></Plain>`,
 	},
-
 	// A pointer to struct{} may be used to test for an element's presence.
 	{
 		Value:     &PresenceTest{new(struct{})},
 		ExpectXML: `<PresenceTest><Exists></Exists></PresenceTest>`,
+		// 注: Unmarshal 的时候, PresenceTest.Exists 字段有值
 	},
 	{
 		Value:     &PresenceTest{},
 		ExpectXML: `<PresenceTest></PresenceTest>`,
+		// 注: Unmarshal 的时候, PresenceTest.Exists 字段是 zero value.
 	},
 
 	// A pointer to struct{} may be used to test for an element's presence.
@@ -603,6 +614,7 @@ var marshalTests = []struct {
 		Value:         &Data{Bytes: []byte{}, Custom: MyBytes{}, Attr: []byte{}},
 		ExpectXML:     `<Data Attr=""><Bytes></Bytes><Custom></Custom></Data>`,
 		UnmarshalOnly: true,
+		// 在 Unmarshal 的时候, []byte 字段, nil 和 空是不同的, nil 根本不会生成, 空 []byte 会生成
 	},
 
 	// Check that []byte works, including named []byte types.
@@ -621,6 +633,7 @@ var marshalTests = []struct {
 		ExpectXML:   `<agent handle="007"><Identity>James Bond</Identity><redacted/></agent>`,
 		MarshalOnly: true,
 	},
+	// 注: 这个测试, Identity 和 Obfuscate 有重叠区域.
 	{
 		Value: &SecretAgent{
 			Handle:    "007",
@@ -635,13 +648,19 @@ var marshalTests = []struct {
 	{Value: &Port{Type: "ssl", Number: "443"}, ExpectXML: `<port type="ssl">443</port>`},
 	{Value: &Port{Number: "443"}, ExpectXML: `<port>443</port>`},
 	{Value: &Port{Type: "<unix>"}, ExpectXML: `<port type="&lt;unix&gt;"></port>`},
+	// 注: 在Port的定义中,Comment字段先于Number字段,因此 Marshal的时候也是按照这个顺序.
 	{Value: &Port{Number: "443", Comment: "https"}, ExpectXML: `<port><!--https-->443</port>`},
+	// 注: 仅仅在 MarshalOnly 的时候, 如果comment字段以-结尾,实际生成的xml的-后面会多出空格
 	{Value: &Port{Number: "443", Comment: "add space-"}, ExpectXML: `<port><!--add space- -->443</port>`, MarshalOnly: true},
+	// 注: Domain.Name 的定义: Name []byte `xml:",chardata"`
 	{Value: &Domain{Name: []byte("google.com&friends")}, ExpectXML: `<domain>google.com&amp;friends</domain>`},
+	// 注: 在Domain的定义中,Name字段先于Comment字段
 	{Value: &Domain{Name: []byte("google.com"), Comment: []byte(" &friends ")}, ExpectXML: `<domain>google.com<!-- &friends --></domain>`},
+	// 注: Book.Title 的定义: Title string `xml:",chardata"` ;  Pride & Prejudice: 《傲慢与偏见》
 	{Value: &Book{Title: "Pride & Prejudice"}, ExpectXML: `<book>Pride &amp; Prejudice</book>`},
 	{Value: &Event{Year: -3114}, ExpectXML: `<event>-3114</event>`},
 	{Value: &Movie{Length: 13440}, ExpectXML: `<movie>13440</movie>`},
+	// 注: ?????? 测试是怎么精确比较的 ??????
 	{Value: &Pi{Approximation: 3.14159265}, ExpectXML: `<pi>3.1415927</pi>`},
 	{Value: &Universe{Visible: 9.3e13}, ExpectXML: `<universe>9.3e+13</universe>`},
 	{Value: &Particle{HasMass: true}, ExpectXML: `<particle>true</particle>`},
@@ -707,6 +726,7 @@ var marshalTests = []struct {
 			`</result>`,
 	},
 	{
+		// 注: 当Marshal的时候,Items字段在xml中生成了,Item1在xml中没有生成
 		Value: &NestedItems{Items: []string{}, Item1: []string{}},
 		ExpectXML: `<result>` +
 			`<Items>` +
@@ -715,6 +735,7 @@ var marshalTests = []struct {
 		MarshalOnly: true,
 	},
 	{
+		// 注: Item1字段其实是共享了Items在xml中的路径
 		Value: &NestedItems{Items: nil, Item1: []string{"A"}},
 		ExpectXML: `<result>` +
 			`<Items>` +
@@ -741,6 +762,12 @@ var marshalTests = []struct {
 			`</Items>` +
 			`</result>`,
 	},
+	/**
+	注: xml.Marshal文档中提到:
+	If a field uses a tag "a>b>c", then the element c will be nested inside
+	parent elements a and b. Fields that appear next to each other that name
+	the same parent will be enclosed in one XML element.
+	 */
 	{
 		Value: &NestedOrder{Field1: "C", Field2: "B", Field3: "A"},
 		ExpectXML: `<result>` +
@@ -752,6 +779,7 @@ var marshalTests = []struct {
 			`</result>`,
 	},
 	{
+		// Marshal的时候字段可以使用空接口类型
 		Value: &NilTest{A: "A", B: nil, C: "C"},
 		ExpectXML: `<NilTest>` +
 			`<parent1>` +
@@ -763,6 +791,9 @@ var marshalTests = []struct {
 	},
 	{
 		Value: &MixedNested{A: "A", B: "B", C: "C", D: "D"},
+		// 为什么Marshal的时候,xml中会出现两个parent1标签??????
+		// 为什么字段A,B属于第一个parent1,字段C,D属于第二个parent1
+		// 为什么A和D不属于同一个parent1
 		ExpectXML: `<result>` +
 			`<parent1><a>A</a></parent1>` +
 			`<b>B</b>` +
@@ -799,11 +830,15 @@ var marshalTests = []struct {
 	},
 	{
 		Value: &struct {
+			// UnMarshal的时候,不会给XMLName字段赋值
 			XMLName struct{} `xml:"space top"`
 			A       string   `xml:"x>a"`
 			B       string   `xml:"x>b"`
+			// 注: space不是跟x结合, 其实是跟c结合
 			C       string   `xml:"space x>c"`
+			// 注: space1不是跟x结合, 其实是跟c结合
 			C1      string   `xml:"space1 x>c"`
+			// 注: space1不是跟x结合, 其实是跟d结合
 			D1      string   `xml:"space1 x>d"`
 		}{
 			A:  "a",
@@ -902,6 +937,7 @@ var marshalTests = []struct {
 
 	// Test that name casing matters
 	{
+		// 此测试说明xml的marshal和unmashal是区分大小写的
 		Value:     &NameCasing{Xy: "mixed", XY: "upper", XyA: "mixedA", XYA: "upperA"},
 		ExpectXML: `<casing Xy="mixedA" XY="upperA"><Xy>mixed</Xy><XY>upper</XY></casing>`,
 	},
@@ -915,19 +951,28 @@ var marshalTests = []struct {
 			InFieldName: "D",
 		},
 		ExpectXML: `<Parent>` +
+			// 标签名来自 NamePrecedence.FromTag的tag
 			`<InTag>A</InTag>` +
+			// 标签名来自 NamePrecedence.FromNameVal.XMLName(xml.Name类型)字段的值
 			`<InXMLName>B</InXMLName>` +
+			// 标签名来自 NamePrecedence.FromNameTag.XMLName(xml.Name类型)字段的tag
 			`<InXMLNameTag>C</InXMLNameTag>` +
+			// 标签名来自结构体的字段名 NamePrecedence.InFieldName
 			`<InFieldName>D</InFieldName>` +
 			`</Parent>`,
 		MarshalOnly: true,
 	},
 	{
+		// 这个是在测试UnmarshalOnly的时候xml标签名的优先级
 		Value: &NamePrecedence{
 			XMLName:     Name{Local: "Parent"},
+			// 使用tag的xml来匹配标签名,最后标签名信息会写入XMLName.Name字段
 			FromTag:     XMLNameWithoutTag{XMLName: Name{Local: "InTag"}, Value: "A"},
+			// 使用 XMLName Name字段的值来匹配标签名,最后标签名信息会写入XMLName.Name字段
 			FromNameVal: XMLNameWithoutTag{XMLName: Name{Local: "FromNameVal"}, Value: "B"},
+			// 使用 XMLName Name字段的tag来匹配标签名,最后标签名信息会写入XMLName.Name字段
 			FromNameTag: XMLNameWithTag{XMLName: Name{Local: "InXMLNameTag"}, Value: "C"},
+			// 使用结构体字段名来匹配标签名,这时不存在标签名信息的写入,因为没有XMLName.Name字段
 			InFieldName: "D",
 		},
 		ExpectXML: `<Parent>` +
@@ -953,6 +998,7 @@ var marshalTests = []struct {
 	// Marshaling zero xml.Name uses the tag or field name.
 	{
 		Value:       &NameInField{},
+		// 由于NameInField.Foo(类型为xml.Name)是zero value, 因此MarshalOnly后生成的xml标签名是使用tag,而不是NameInField.Foo字段的值
 		ExpectXML:   `<NameInField><foo xmlns="ns"></foo></NameInField>`,
 		MarshalOnly: true,
 	},
@@ -972,6 +1018,8 @@ var marshalTests = []struct {
 			` Bool="true" Str="str" Bytes="byt"></AttrTest>`,
 	},
 	{
+		// 注: &AttrTest{Bytes: []byte{}} 与 &{Int:0 Named:0 Float:0 Uint8:0 Bool:false Str: Bytes:[]} 的写法是等价的
+		// 注: AttrTest{Bytes: []byte{}} 中 Bytes 字段不是 nil, 而是 empty slice
 		Value: &AttrTest{Bytes: []byte{}},
 		ExpectXML: `<AttrTest Int="0" int="0" Float="0" Uint8="0"` +
 			` Bool="false" Str="" Bytes=""></AttrTest>`,
@@ -993,6 +1041,11 @@ var marshalTests = []struct {
 		MarshalOnly: true,
 	},
 	{
+		// 标记: any1111
+		// 注意在Unmarshal的文档中提到
+		// * If the XML element has an attribute not handled by the previous
+		//    rule and the struct has a field with an associated tag containing
+		//    ",any,attr", Unmarshal records the attribute value in the first such field.
 		Value: &AttrsTest{
 			Attrs: []Attr{
 				{Name: Name{Local: "Answer"}, Value: "42"},
@@ -1032,18 +1085,23 @@ var marshalTests = []struct {
 			Bool:  true,
 			Str:   "str",
 			Bytes: []byte("byt"),
+			// 注意: 对空字符串取地址,是一个非空指针,因此生成的xml中会包含PStr属性
 			PStr:  &empty,
 		},
 		ExpectXML: `<OmitAttrTest Int="8" int="9" Float="23.5" Uint8="255"` +
 			` Bool="true" Str="str" Bytes="byt" PStr=""></OmitAttrTest>`,
 	},
 	{
+		// 字段值全部是empty,因此生成的xml中不会包含任何attr
 		Value:     &OmitAttrTest{},
 		ExpectXML: `<OmitAttrTest></OmitAttrTest>`,
 	},
 
 	// pointer fields
 	{
+		// Marshal文档中提到
+		// Marshal handles a pointer by marshaling the value it points at or, if the
+		// pointer is nil, by writing nothing.
 		Value:       &PointerFieldsTest{Name: &nameAttr, Age: &ageAttr, Contents: &contentsAttr},
 		ExpectXML:   `<dummy name="Sarah" age="12">lorem ipsum</dummy>`,
 		MarshalOnly: true,
@@ -1051,6 +1109,9 @@ var marshalTests = []struct {
 
 	// empty chardata pointer field
 	{
+		// Marshal文档中提到
+		// Marshal handles a pointer by marshaling the value it points at or, if the
+		// pointer is nil, by writing nothing.
 		Value:       &ChardataEmptyTest{},
 		ExpectXML:   `<test></test>`,
 		MarshalOnly: true,
@@ -1058,6 +1119,7 @@ var marshalTests = []struct {
 
 	// omitempty on fields
 	{
+		// 到此
 		Value: &OmitFieldTest{
 			Int:   8,
 			Named: 9,
@@ -1276,11 +1338,13 @@ var marshalTests = []struct {
 		Value:       &IndirComment{Comment: stringptr("hi")},
 		MarshalOnly: true,
 	},
+	// 注: Comment指针指向的实际内容为空字符串
 	{
 		ExpectXML:   `<IndirComment><T1></T1><T2></T2></IndirComment>`,
 		Value:       &IndirComment{Comment: stringptr("")},
 		MarshalOnly: true,
 	},
+	// 注: Comment字段是空指针会报错
 	{
 		ExpectXML:    `<IndirComment><T1></T1><T2></T2></IndirComment>`,
 		Value:        &IndirComment{Comment: nil},
@@ -1288,6 +1352,7 @@ var marshalTests = []struct {
 	},
 	{
 		ExpectXML:     `<IndirComment><T1></T1><!--hi--><T2></T2></IndirComment>`,
+		// 注: 这里Unmarshal的时候,为什么Comment是nil??????
 		Value:         &IndirComment{Comment: nil},
 		UnmarshalOnly: true,
 	},
@@ -1298,6 +1363,7 @@ var marshalTests = []struct {
 	},
 	{
 		ExpectXML:     `<IfaceComment><T1></T1><!--hi--><T2></T2></IfaceComment>`,
+		// 注: 这里Unmarshal的时候,为什么Comment是nil??????
 		Value:         &IfaceComment{Comment: nil},
 		UnmarshalOnly: true,
 	},
@@ -1803,6 +1869,7 @@ func TestUnmarshal(t *testing.T) {
 				}
 				return
 			}
+			// 注: 对于复杂的结构,在测试时可以使用 reflect.DeepEqual 来判断是否相等.
 			if got, want := dest, test.Value; !reflect.DeepEqual(got, want) {
 				t.Errorf("unmarshal(%q):\nhave %#v\nwant %#v", test.ExpectXML, got, want)
 			}

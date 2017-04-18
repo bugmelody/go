@@ -4,6 +4,9 @@
 
 // Package xml implements a simple XML 1.0 parser that
 // understands XML name spaces.
+//
+// 注: 参考: https://github.com/astaxie/build-web-application-with-golang/blob/master/zh/07.1.md
+// 注: xml命名空间参考: http://www.w3.org/TR/REC-xml-names/
 package xml
 
 // References:
@@ -97,6 +100,10 @@ type Comment []byte
 func (c Comment) Copy() Comment { return Comment(makeCopy(c)) }
 
 // A ProcInst represents an XML processing instruction of the form <?target inst?>
+//
+// 注: 参考:
+// http://blog.csdn.net/dagouaofei/article/details/5636019 .
+// http://www.w3school.com.cn/xmldom/dom_processinginstruction.asp .
 type ProcInst struct {
 	Target string
 	Inst   []byte
@@ -109,6 +116,8 @@ func (p ProcInst) Copy() ProcInst {
 
 // A Directive represents an XML directive of the form <!text>.
 // The bytes do not include the <! and > markers.
+//
+// 注: xml指示器 : http://www.runoob.com/schema/schema-complex-indicators.html
 type Directive []byte
 
 func (d Directive) Copy() Directive { return Directive(makeCopy(d)) }

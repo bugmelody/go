@@ -57,6 +57,8 @@ import (
 //      ",any,attr", Unmarshal records the attribute value in the first
 //      such field.
 //
+//     在marshal_test.go中搜索'any1111'可以看到any的例子
+//
 //   * If the XML element contains character data, that data is
 //      accumulated in the first struct field that has tag ",chardata".
 //      The struct field may have type []byte or string.
@@ -79,6 +81,8 @@ import (
 //      explicit name tag as per the previous rule, unmarshal maps
 //      the sub-element to that struct field.
 //
+//   * 上面这条是什么意思??????
+//
 //   * If the XML element contains a sub-element whose name matches a
 //      field without any mode flags (",attr", ",chardata", etc), Unmarshal
 //      maps the sub-element to that struct field.
@@ -86,6 +90,8 @@ import (
 //   * If the XML element contains a sub-element that hasn't matched any
 //      of the above rules and the struct has a field with tag ",any",
 //      unmarshal maps the sub-element to that struct field.
+//
+//   * 上面这条是什么意思??????
 //
 //   * An anonymous struct field is handled as if the fields of its
 //      value were part of the outer struct.
@@ -101,6 +107,8 @@ import (
 //
 // Unmarshal maps an attribute value to an Attr by saving the attribute,
 // including its name, in the Attr.
+//
+// 上面是什么意思?例子???????
 //
 // Unmarshal maps an XML element or attribute value to a slice by
 // extending the length of the slice and mapping the element or attribute
