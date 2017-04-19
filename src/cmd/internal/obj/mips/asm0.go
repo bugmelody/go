@@ -31,6 +31,7 @@ package mips
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"cmd/internal/sys"
 	"fmt"
 	"log"
@@ -386,7 +387,7 @@ var oprange [ALAST & obj.AMask][]Optab
 var xcmp [C_NCLASS][C_NCLASS]bool
 
 func span0(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
-	p := cursym.Text
+	p := cursym.Func.Text
 	if p == nil || p.Link == nil { // handle external functions and ELF section symbols
 		return
 	}
@@ -431,7 +432,7 @@ func span0(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	for bflag != 0 {
 		bflag = 0
 		pc = 0
-		for p = c.cursym.Text.Link; p != nil; p = p.Link {
+		for p = c.cursym.Func.Text.Link; p != nil; p = p.Link {
 			p.Pc = pc
 			o = c.oplook(p)
 
@@ -488,7 +489,7 @@ func span0(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	bp := c.cursym.P
 	var i int32
 	var out [4]uint32
-	for p := c.cursym.Text.Link; p != nil; p = p.Link {
+	for p := c.cursym.Func.Text.Link; p != nil; p = p.Link {
 		c.pc = p.Pc
 		o = c.oplook(p)
 		if int(o.size) > 4*len(out) {
@@ -545,7 +546,7 @@ func (c *ctxt0) aclass(a *obj.Addr) int {
 			}
 			c.instoffset = a.Offset
 			if a.Sym != nil { // use relocation
-				if a.Sym.Type == obj.STLSBSS {
+				if a.Sym.Type == objabi.STLSBSS {
 					return C_TLS
 				}
 				return C_ADDR
@@ -605,13 +606,13 @@ func (c *ctxt0) aclass(a *obj.Addr) int {
 			if s == nil {
 				break
 			}
-			if s.Type == obj.SCONST {
+			if s.Type == objabi.SCONST {
 				c.instoffset = a.Offset
 				goto consize
 			}
 
 			c.instoffset = a.Offset
-			if s.Type == obj.STLSBSS {
+			if s.Type == objabi.STLSBSS {
 				return C_STCON // address of TLS variable
 			}
 			return C_LECON
@@ -1210,7 +1211,7 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		}
 		o1 = OP_JMP(c.opirr(p.As), uint32(v))
 		if p.To.Sym == nil {
-			p.To.Sym = c.cursym.Text.From.Sym
+			p.To.Sym = c.cursym.Func.Text.From.Sym
 			p.To.Offset = p.Pcond.Pc
 		}
 		rel := obj.Addrel(c.cursym)
@@ -1219,9 +1220,9 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Sym = p.To.Sym
 		rel.Add = p.To.Offset
 		if p.As == AJAL {
-			rel.Type = obj.R_CALLMIPS
+			rel.Type = objabi.R_CALLMIPS
 		} else {
-			rel.Type = obj.R_JMPMIPS
+			rel.Type = objabi.R_JMPMIPS
 		}
 
 	case 12: /* movbs r,r */
@@ -1278,7 +1279,7 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel := obj.Addrel(c.cursym)
 		rel.Off = int32(c.pc)
 		rel.Siz = 0
-		rel.Type = obj.R_CALLIND
+		rel.Type = objabi.R_CALLIND
 
 	case 19: /* mov $lcon,r ==> lu+or */
 		v := c.regoff(&p.From)
@@ -1474,14 +1475,14 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Siz = 4
 		rel.Sym = p.To.Sym
 		rel.Add = p.To.Offset
-		rel.Type = obj.R_ADDRMIPSU
+		rel.Type = objabi.R_ADDRMIPSU
 		o2 = OP_IRR(c.opirr(p.As), uint32(0), uint32(REGTMP), uint32(p.From.Reg))
 		rel2 := obj.Addrel(c.cursym)
 		rel2.Off = int32(c.pc + 4)
 		rel2.Siz = 4
 		rel2.Sym = p.To.Sym
 		rel2.Add = p.To.Offset
-		rel2.Type = obj.R_ADDRMIPS
+		rel2.Type = objabi.R_ADDRMIPS
 
 		if o.size == 12 {
 			o3 = o2
@@ -1496,14 +1497,14 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Siz = 4
 		rel.Sym = p.From.Sym
 		rel.Add = p.From.Offset
-		rel.Type = obj.R_ADDRMIPSU
+		rel.Type = objabi.R_ADDRMIPSU
 		o2 = OP_IRR(c.opirr(-p.As), uint32(0), uint32(REGTMP), uint32(p.To.Reg))
 		rel2 := obj.Addrel(c.cursym)
 		rel2.Off = int32(c.pc + 4)
 		rel2.Siz = 4
 		rel2.Sym = p.From.Sym
 		rel2.Add = p.From.Offset
-		rel2.Type = obj.R_ADDRMIPS
+		rel2.Type = objabi.R_ADDRMIPS
 
 		if o.size == 12 {
 			o3 = o2
@@ -1518,14 +1519,14 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Siz = 4
 		rel.Sym = p.From.Sym
 		rel.Add = p.From.Offset
-		rel.Type = obj.R_ADDRMIPSU
+		rel.Type = objabi.R_ADDRMIPSU
 		o2 = OP_IRR(c.opirr(add), uint32(0), uint32(p.To.Reg), uint32(p.To.Reg))
 		rel2 := obj.Addrel(c.cursym)
 		rel2.Off = int32(c.pc + 4)
 		rel2.Siz = 4
 		rel2.Sym = p.From.Sym
 		rel2.Add = p.From.Offset
-		rel2.Type = obj.R_ADDRMIPS
+		rel2.Type = objabi.R_ADDRMIPS
 
 		if o.size == 12 {
 			o3 = o2
@@ -1543,7 +1544,7 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Siz = 4
 		rel.Sym = p.To.Sym
 		rel.Add = p.To.Offset
-		rel.Type = obj.R_ADDRMIPSTLS
+		rel.Type = objabi.R_ADDRMIPSTLS
 
 	case 54: /* mov tlsvar, r ==> rdhwr + lw o(r3) */
 		// clobbers R3 !
@@ -1554,7 +1555,7 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Siz = 4
 		rel.Sym = p.From.Sym
 		rel.Add = p.From.Offset
-		rel.Type = obj.R_ADDRMIPSTLS
+		rel.Type = objabi.R_ADDRMIPSTLS
 
 	case 55: /* mov $tlsvar, r ==> rdhwr + add */
 		// clobbers R3 !
@@ -1565,7 +1566,7 @@ func (c *ctxt0) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Siz = 4
 		rel.Sym = p.From.Sym
 		rel.Add = p.From.Offset
-		rel.Type = obj.R_ADDRMIPSTLS
+		rel.Type = objabi.R_ADDRMIPSTLS
 	}
 
 	out[0] = o1

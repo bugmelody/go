@@ -33,6 +33,7 @@ package gc
 import (
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"cmd/internal/src"
 )
 
@@ -145,13 +146,29 @@ func (pp *Progs) settext(fn *Node) {
 		Fatalf("Progs.settext called twice")
 	}
 	ptxt := pp.Prog(obj.ATEXT)
-	if fn.Func.lsym != nil {
-		fn.Func.lsym.Text = ptxt
-		ptxt.From.Type = obj.TYPE_MEM
-		ptxt.From.Name = obj.NAME_EXTERN
-		ptxt.From.Sym = fn.Func.lsym
-	}
 	pp.Text = ptxt
+
+	if fn.Func.lsym == nil {
+		// func _() { }
+		return
+	}
+
+	fn.Func.lsym.Func.Text = ptxt
+	ptxt.From.Type = obj.TYPE_MEM
+	ptxt.From.Name = obj.NAME_EXTERN
+	ptxt.From.Sym = fn.Func.lsym
+
+	p := pp.Prog(obj.AFUNCDATA)
+	Addrconst(&p.From, objabi.FUNCDATA_ArgsPointerMaps)
+	p.To.Type = obj.TYPE_MEM
+	p.To.Name = obj.NAME_EXTERN
+	p.To.Sym = &fn.Func.lsym.Func.GCArgs
+
+	p = pp.Prog(obj.AFUNCDATA)
+	Addrconst(&p.From, objabi.FUNCDATA_LocalsPointerMaps)
+	p.To.Type = obj.TYPE_MEM
+	p.To.Name = obj.NAME_EXTERN
+	p.To.Sym = &fn.Func.lsym.Func.GCLocals
 }
 
 func (f *Func) initLSym() {

@@ -8,6 +8,7 @@ import (
 	"cmd/compile/internal/types"
 	"cmd/internal/bio"
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -73,7 +74,7 @@ func dumpobj1(outfile string, mode int) {
 	}
 
 	printheader := func() {
-		fmt.Fprintf(bout, "go object %s %s %s %s\n", obj.GOOS, obj.GOARCH, obj.Version, obj.Expstring())
+		fmt.Fprintf(bout, "go object %s %s %s %s\n", objabi.GOOS, objabi.GOARCH, objabi.Version, objabi.Expstring())
 		if buildid != "" {
 			fmt.Fprintf(bout, "build id %q\n", buildid)
 		}
@@ -152,6 +153,8 @@ func dumpobj1(outfile string, mode int) {
 		ggloblsym(zero, int32(zerosize), obj.DUPOK|obj.RODATA)
 	}
 
+	addGCLocals()
+
 	obj.WriteObjFile(Ctxt, bout.Writer)
 
 	if writearchive {
@@ -227,6 +230,27 @@ func dumpglobls() {
 	funcsyms = nil
 }
 
+// addGCLocals adds gcargs and gclocals symbols to Ctxt.Data.
+// It takes care not to add any duplicates.
+// Though the object file format handles duplicates efficiently,
+// storing only a single copy of the data,
+// failure to remove these duplicates adds a few percent to object file size.
+func addGCLocals() {
+	seen := make(map[string]bool)
+	for _, s := range Ctxt.Text {
+		if s.Func == nil {
+			continue
+		}
+		for _, gcsym := range []*obj.LSym{&s.Func.GCArgs, &s.Func.GCLocals} {
+			if seen[gcsym.Name] {
+				continue
+			}
+			Ctxt.Data = append(Ctxt.Data, gcsym)
+			seen[gcsym.Name] = true
+		}
+	}
+}
+
 func linksymname(s *types.Sym) string {
 	if isblanksym(s) {
 		return "_"
@@ -254,7 +278,7 @@ func duintxx(s *types.Sym, off int, v uint64, wid int) int {
 func duintxxLSym(s *obj.LSym, off int, v uint64, wid int) int {
 	if s.Type == 0 {
 		// TODO(josharian): Do this in obj.prepwrite instead.
-		s.Type = obj.SDATA
+		s.Type = objabi.SDATA
 	}
 	if off&(wid-1) != 0 {
 		Fatalf("duintxxLSym: misaligned: v=%d wid=%d off=%d", v, wid, off)
@@ -279,11 +303,19 @@ func duintptr(s *types.Sym, off int, v uint64) int {
 	return duintxx(s, off, v, Widthptr)
 }
 
-func dbvec(s *types.Sym, off int, bv bvec) int {
+func duint8LSym(s *obj.LSym, off int, v uint8) int {
+	return duintxxLSym(s, off, uint64(v), 1)
+}
+
+func duint32LSym(s *obj.LSym, off int, v uint32) int {
+	return duintxxLSym(s, off, uint64(v), 4)
+}
+
+func dbvecLSym(s *obj.LSym, off int, bv bvec) int {
 	// Runtime reads the bitmaps as byte arrays. Oblige.
 	for j := 0; int32(j) < bv.n; j += 8 {
 		word := bv.b[j/32]
-		off = duint8(s, off, uint8(word>>(uint(j)%32)))
+		off = duint8LSym(s, off, uint8(word>>(uint(j)%32)))
 	}
 	return off
 }

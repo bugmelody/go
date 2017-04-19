@@ -32,38 +32,25 @@
 package obj
 
 import (
+	"cmd/internal/objabi"
 	"fmt"
 	"log"
 	"math"
-	"os"
-	"path/filepath"
 )
-
-// WorkingDir returns the current working directory
-// (or "/???" if the directory cannot be identified),
-// with "/" as separator.
-func WorkingDir() string {
-	var path string
-	path, _ = os.Getwd()
-	if path == "" {
-		path = "/???"
-	}
-	return filepath.ToSlash(path)
-}
 
 func Linknew(arch *LinkArch) *Link {
 	ctxt := new(Link)
-	ctxt.Hash = make(map[SymVer]*LSym)
+	ctxt.hash = make(map[SymVer]*LSym)
 	ctxt.Arch = arch
-	ctxt.Pathname = WorkingDir()
+	ctxt.Pathname = objabi.WorkingDir()
 
-	ctxt.Headtype.Set(GOOS)
+	ctxt.Headtype.Set(objabi.GOOS)
 	if ctxt.Headtype < 0 {
-		log.Fatalf("unknown goos %s", GOOS)
+		log.Fatalf("unknown goos %s", objabi.GOOS)
 	}
 
 	ctxt.Flag_optimize = true
-	ctxt.Framepointer_enabled = Framepointer_enabled(GOOS, arch.Name)
+	ctxt.Framepointer_enabled = objabi.Framepointer_enabled(objabi.GOOS, arch.Name)
 	return ctxt
 }
 
@@ -76,13 +63,13 @@ func (ctxt *Link) Lookup(name string, v int) *LSym {
 // LookupInit looks up the symbol with name name and version v.
 // If it does not exist, it creates it and passes it to initfn for one-time initialization.
 func (ctxt *Link) LookupInit(name string, v int, init func(s *LSym)) *LSym {
-	s := ctxt.Hash[SymVer{name, v}]
+	s := ctxt.hash[SymVer{name, v}]
 	if s != nil {
 		return s
 	}
 
 	s = &LSym{Name: name, Version: int16(v)}
-	ctxt.Hash[SymVer{name, v}] = s
+	ctxt.hash[SymVer{name, v}] = s
 	if init != nil {
 		init(s)
 	}

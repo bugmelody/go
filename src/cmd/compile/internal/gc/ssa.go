@@ -15,6 +15,7 @@ import (
 	"cmd/compile/internal/ssa"
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"cmd/internal/src"
 	"cmd/internal/sys"
 )
@@ -85,6 +86,11 @@ func initssaconfig() {
 	assertE2I2 = Sysfunc("assertE2I2")
 	assertI2I = Sysfunc("assertI2I")
 	assertI2I2 = Sysfunc("assertI2I2")
+	goschedguarded = Sysfunc("goschedguarded")
+	writeBarrier = Sysfunc("writeBarrier")
+	writebarrierptr = Sysfunc("writebarrierptr")
+	typedmemmove = Sysfunc("typedmemmove")
+	typedmemclr = Sysfunc("typedmemclr")
 }
 
 // buildssa builds an SSA function.
@@ -4326,9 +4332,7 @@ func genssa(f *ssa.Func, pp *Progs) {
 	e := f.Frontend().(*ssafn)
 
 	// Generate GC bitmaps.
-	gcargs := makefuncdatasym(pp, "gcargs·", obj.FUNCDATA_ArgsPointerMaps, e.curfn)
-	gclocals := makefuncdatasym(pp, "gclocals·", obj.FUNCDATA_LocalsPointerMaps, e.curfn)
-	s.stackMapIndex = liveness(e, f, gcargs, gclocals)
+	s.stackMapIndex = liveness(e, f)
 
 	// Remember where each block starts.
 	s.bstart = make([]*obj.Prog, f.NumBlocks())
@@ -4660,7 +4664,7 @@ func (s *SSAGenState) Call(v *ssa.Value) *obj.Prog {
 		Fatalf("missing stack map index for %v", v.LongString())
 	}
 	p := s.Prog(obj.APCDATA)
-	Addrconst(&p.From, obj.PCDATA_StackMapIndex)
+	Addrconst(&p.From, objabi.PCDATA_StackMapIndex)
 	Addrconst(&p.To, int64(idx))
 
 	if sym, _ := v.Aux.(*obj.LSym); sym == Deferreturn {
@@ -4944,7 +4948,20 @@ func (e *ssafn) UseWriteBarrier() bool {
 }
 
 func (e *ssafn) Syslook(name string) *obj.LSym {
-	return Linksym(syslook(name).Sym)
+	switch name {
+	case "goschedguarded":
+		return goschedguarded
+	case "writeBarrier":
+		return writeBarrier
+	case "writebarrierptr":
+		return writebarrierptr
+	case "typedmemmove":
+		return typedmemmove
+	case "typedmemclr":
+		return typedmemclr
+	}
+	Fatalf("unknown Syslook func %v", name)
+	return nil
 }
 
 func (n *Node) Typ() ssa.Type {

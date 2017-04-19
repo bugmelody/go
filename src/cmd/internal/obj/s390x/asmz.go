@@ -31,6 +31,7 @@ package s390x
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"log"
 	"math"
 	"sort"
@@ -400,7 +401,7 @@ var oprange [ALAST & obj.AMask][]Optab
 var xcmp [C_NCLASS][C_NCLASS]bool
 
 func spanz(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
-	p := cursym.Text
+	p := cursym.Func.Text
 	if p == nil || p.Link == nil { // handle external functions and ELF section symbols
 		return
 	}
@@ -422,7 +423,7 @@ func spanz(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		changed = false
 		buffer = buffer[:0]
 		c.cursym.R = make([]obj.Reloc, 0)
-		for p := c.cursym.Text; p != nil; p = p.Link {
+		for p := c.cursym.Func.Text; p != nil; p = p.Link {
 			pc := int64(len(buffer))
 			if pc != p.Pc {
 				changed = true
@@ -487,7 +488,7 @@ func (c *ctxtz) aclass(a *obj.Addr) int {
 				break
 			}
 			c.instoffset = a.Offset
-			if a.Sym.Type == obj.STLSBSS {
+			if a.Sym.Type == objabi.STLSBSS {
 				if c.ctxt.Flag_shared {
 					return C_TLS_IE // initial exec model
 				}
@@ -557,7 +558,7 @@ func (c *ctxtz) aclass(a *obj.Addr) int {
 				break
 			}
 			c.instoffset = a.Offset
-			if s.Type == obj.SCONST {
+			if s.Type == objabi.SCONST {
 				goto consize
 			}
 
@@ -2508,7 +2509,7 @@ func (c *ctxtz) addrilreloc(sym *obj.LSym, add int64) *obj.Reloc {
 	rel.Siz = 4
 	rel.Sym = sym
 	rel.Add = add + offset + int64(rel.Siz)
-	rel.Type = obj.R_PCRELDBL
+	rel.Type = objabi.R_PCRELDBL
 	return rel
 }
 
@@ -2522,7 +2523,7 @@ func (c *ctxtz) addrilrelocoffset(sym *obj.LSym, add, offset int64) *obj.Reloc {
 	rel.Siz = 4
 	rel.Sym = sym
 	rel.Add = add + offset + int64(rel.Siz)
-	rel.Type = obj.R_PCRELDBL
+	rel.Type = objabi.R_PCRELDBL
 	return rel
 }
 
@@ -2538,7 +2539,7 @@ func (c *ctxtz) addcallreloc(sym *obj.LSym, add int64) *obj.Reloc {
 	rel.Siz = 4
 	rel.Sym = sym
 	rel.Add = add + offset + int64(rel.Siz)
-	rel.Type = obj.R_CALL
+	rel.Type = objabi.R_CALL
 	return rel
 }
 
@@ -3716,7 +3717,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		rel.Off = int32(c.pc + 2)
 		rel.Siz = 4
 		rel.Sym = p.From.Sym
-		rel.Type = obj.R_GOTPCREL
+		rel.Type = objabi.R_GOTPCREL
 		rel.Add = 2 + int64(rel.Siz)
 
 	case 94: // TLS local exec model
@@ -3728,7 +3729,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		rel.Off = int32(c.pc + sizeRIL + sizeRXY + sizeRI)
 		rel.Siz = 8
 		rel.Sym = p.From.Sym
-		rel.Type = obj.R_TLS_LE
+		rel.Type = objabi.R_TLS_LE
 		rel.Add = 0
 
 	case 95: // TLS initial exec model
@@ -3748,7 +3749,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		ieent.Off = int32(c.pc + 2)
 		ieent.Siz = 4
 		ieent.Sym = p.From.Sym
-		ieent.Type = obj.R_TLS_IE
+		ieent.Type = objabi.R_TLS_IE
 		ieent.Add = 2 + int64(ieent.Siz)
 
 		// R_390_TLS_LOAD

@@ -13,7 +13,7 @@ import (
 
 	"cmd/compile/internal/syntax"
 	"cmd/compile/internal/types"
-	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"cmd/internal/src"
 )
 
@@ -36,7 +36,7 @@ func parseFiles(filenames []string) uint {
 			}
 			defer f.Close()
 
-			p.file, _ = syntax.Parse(base, f, p.error, p.pragma, 0) // errors are tracked via p.error
+			p.file, _ = syntax.Parse(base, f, p.error, p.pragma, syntax.CheckBranches) // errors are tracked via p.error
 		}(filename)
 	}
 
@@ -66,7 +66,7 @@ func yyerrorpos(pos src.Pos, format string, args ...interface{}) {
 var pathPrefix string
 
 func absFilename(name string) string {
-	return obj.AbsFile(Ctxt.Pathname, name, pathPrefix)
+	return objabi.AbsFile(Ctxt.Pathname, name, pathPrefix)
 }
 
 // noder transforms package syntax's AST into a Node tree.
@@ -725,9 +725,6 @@ func (p *noder) stmt(stmt syntax.Stmt) *Node {
 		if stmt.Label != nil {
 			n.Left = p.newname(stmt.Label)
 		}
-		if op == OGOTO {
-			n.Sym = types.Dclstack // context, for goto restriction
-		}
 		if op == OXFALL {
 			n.Xoffset = int64(types.Block)
 		}
@@ -909,7 +906,6 @@ func (p *noder) commClauses(clauses []*syntax.CommClause) []*Node {
 
 func (p *noder) labeledStmt(label *syntax.LabeledStmt) *Node {
 	lhs := p.nod(label, OLABEL, p.newname(label.Label), nil)
-	lhs.Sym = types.Dclstack // context, for goto restriction
 
 	var ls *Node
 	if label.Stmt != nil { // TODO(mdempsky): Should always be present.

@@ -32,6 +32,7 @@ package arm64
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
 	"cmd/internal/sys"
 	"math"
 )
@@ -62,7 +63,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 	p.To.Reg = REG_R1
 
 	q := (*obj.Prog)(nil)
-	if framesize <= obj.StackSmall {
+	if framesize <= objabi.StackSmall {
 		// small stack: SP < stackguard
 		//	MOV	SP, R2
 		//	CMP	stackguard, R2
@@ -79,7 +80,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = REG_R1
 		p.Reg = REG_R2
-	} else if framesize <= obj.StackBig {
+	} else if framesize <= objabi.StackBig {
 		// large stack: SP-framesize < stackguard-StackSmall
 		//	SUB	$(framesize-StackSmall), SP, R2
 		//	CMP	stackguard, R2
@@ -87,7 +88,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 
 		p.As = ASUB
 		p.From.Type = obj.TYPE_CONST
-		p.From.Offset = int64(framesize) - obj.StackSmall
+		p.From.Offset = int64(framesize) - objabi.StackSmall
 		p.Reg = REGSP
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = REG_R2
@@ -113,7 +114,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 
 		p.As = ACMP
 		p.From.Type = obj.TYPE_CONST
-		p.From.Offset = obj.StackPreempt
+		p.From.Offset = objabi.StackPreempt
 		p.Reg = REG_R1
 
 		p = obj.Appendp(p, c.newprog)
@@ -124,7 +125,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 		p = obj.Appendp(p, c.newprog)
 		p.As = AADD
 		p.From.Type = obj.TYPE_CONST
-		p.From.Offset = obj.StackGuard
+		p.From.Offset = objabi.StackGuard
 		p.Reg = REGSP
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = REG_R2
@@ -139,7 +140,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 		p = obj.Appendp(p, c.newprog)
 		p.As = AMOVD
 		p.From.Type = obj.TYPE_CONST
-		p.From.Offset = int64(framesize) + (obj.StackGuard - obj.StackSmall)
+		p.From.Offset = int64(framesize) + (objabi.StackGuard - objabi.StackSmall)
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = REG_R3
 
@@ -156,7 +157,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 	bls.To.Type = obj.TYPE_BRANCH
 
 	var last *obj.Prog
-	for last = c.cursym.Text; last.Link != nil; last = last.Link {
+	for last = c.cursym.Func.Text; last.Link != nil; last = last.Link {
 	}
 
 	// Now we are at the end of the function, but logically
@@ -167,10 +168,10 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 	spfix.Spadj = -framesize
 
 	pcdata := obj.Appendp(spfix, c.newprog)
-	pcdata.Pos = c.cursym.Text.Pos
+	pcdata.Pos = c.cursym.Func.Text.Pos
 	pcdata.As = obj.APCDATA
 	pcdata.From.Type = obj.TYPE_CONST
-	pcdata.From.Offset = obj.PCDATA_StackMapIndex
+	pcdata.From.Offset = objabi.PCDATA_StackMapIndex
 	pcdata.To.Type = obj.TYPE_CONST
 	pcdata.To.Offset = -1 // pcdata starts at -1 at function entry
 
@@ -204,7 +205,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 	switch {
 	case c.cursym.CFunc():
 		morestack = "runtime.morestackc"
-	case !c.cursym.Text.From.Sym.NeedCtxt():
+	case !c.cursym.Func.Text.From.Sym.NeedCtxt():
 		morestack = "runtime.morestack_noctxt"
 	}
 	call.To.Sym = c.ctxt.Lookup(morestack, 0)
@@ -213,7 +214,7 @@ func (c *ctxt7) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 	jmp := obj.Appendp(call, c.newprog)
 	jmp.As = AB
 	jmp.To.Type = obj.TYPE_BRANCH
-	jmp.Pcond = c.cursym.Text.Link
+	jmp.Pcond = c.cursym.Func.Text.Link
 	jmp.Spadj = +framesize
 
 	// placeholder for bls's jump target
@@ -401,7 +402,7 @@ func (c *ctxt7) rewriteToUseGot(p *obj.Prog) {
 	if p.As == obj.ATEXT || p.As == obj.AFUNCDATA || p.As == obj.ACALL || p.As == obj.ARET || p.As == obj.AJMP {
 		return
 	}
-	if source.Sym.Type == obj.STLSBSS {
+	if source.Sym.Type == objabi.STLSBSS {
 		return
 	}
 	if source.Type != obj.TYPE_MEM {
@@ -434,18 +435,18 @@ func (c *ctxt7) rewriteToUseGot(p *obj.Prog) {
 }
 
 func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
-	if cursym.Text == nil || cursym.Text.Link == nil {
+	if cursym.Func.Text == nil || cursym.Func.Text.Link == nil {
 		return
 	}
 
 	c := ctxt7{ctxt: ctxt, newprog: newprog, cursym: cursym}
 
-	p := c.cursym.Text
+	p := c.cursym.Func.Text
 	textstksiz := p.To.Offset
 	aoffset := int32(textstksiz)
 
-	c.cursym.Args = p.To.Val.(int32)
-	c.cursym.Locals = int32(textstksiz)
+	c.cursym.Func.Args = p.To.Val.(int32)
+	c.cursym.Func.Locals = int32(textstksiz)
 
 	/*
 	 * find leaf subroutines
@@ -454,7 +455,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	 */
 	q := (*obj.Prog)(nil)
 	var q1 *obj.Prog
-	for p := c.cursym.Text; p != nil; p = p.Link {
+	for p := c.cursym.Func.Text; p != nil; p = p.Link {
 		switch p.As {
 		case obj.ATEXT:
 			p.Mark |= LEAF
@@ -471,7 +472,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		case ABL,
 			obj.ADUFFZERO,
 			obj.ADUFFCOPY:
-			c.cursym.Text.Mark &^= LEAF
+			c.cursym.Func.Text.Mark &^= LEAF
 			fallthrough
 
 		case ACBNZ,
@@ -516,17 +517,17 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 	var q2 *obj.Prog
 	var retjmp *obj.LSym
-	for p := c.cursym.Text; p != nil; p = p.Link {
+	for p := c.cursym.Func.Text; p != nil; p = p.Link {
 		o := p.As
 		switch o {
 		case obj.ATEXT:
-			c.cursym.Text = p
+			c.cursym.Func.Text = p
 			if textstksiz < 0 {
 				c.autosize = 0
 			} else {
 				c.autosize = int32(textstksiz + 8)
 			}
-			if (c.cursym.Text.Mark&LEAF != 0) && c.autosize <= 8 {
+			if (c.cursym.Func.Text.Mark&LEAF != 0) && c.autosize <= 8 {
 				c.autosize = 0
 			} else if c.autosize&(16-1) != 0 {
 				// The frame includes an LR.
@@ -539,17 +540,17 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				// that the frame size is 8 mod 16.
 				if c.autosize == 8 {
 					c.autosize += 8
-					c.cursym.Locals += 8
+					c.cursym.Func.Locals += 8
 				} else {
 					c.ctxt.Diag("%v: unaligned frame size %d - must be 8 mod 16 (or 0)", p, c.autosize-8)
 				}
 			}
 			p.To.Offset = int64(c.autosize) - 8
-			if c.autosize == 0 && !(c.cursym.Text.Mark&LEAF != 0) {
+			if c.autosize == 0 && !(c.cursym.Func.Text.Mark&LEAF != 0) {
 				if c.ctxt.Debugvlog {
-					c.ctxt.Logf("save suppressed in: %s\n", c.cursym.Text.From.Sym.Name)
+					c.ctxt.Logf("save suppressed in: %s\n", c.cursym.Func.Text.From.Sym.Name)
 				}
-				c.cursym.Text.Mark |= LEAF
+				c.cursym.Func.Text.Mark |= LEAF
 			}
 
 			if !p.From.Sym.NoSplit() {
@@ -560,7 +561,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			if aoffset > 0xF0 {
 				aoffset = 0xF0
 			}
-			if c.cursym.Text.Mark&LEAF != 0 {
+			if c.cursym.Func.Text.Mark&LEAF != 0 {
 				c.cursym.Set(obj.AttrLeaf, true)
 				if c.autosize == 0 {
 					break
@@ -614,7 +615,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				q1.Spadj = aoffset
 			}
 
-			if c.cursym.Text.From.Sym.Wrapper() {
+			if c.cursym.Func.Text.From.Sym.Wrapper() {
 				// if(g->panic != nil && g->panic->argp == FP) g->panic->argp = bottom-of-frame
 				//
 				//	MOV g_panic(g), R1
@@ -711,7 +712,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 			retjmp = p.To.Sym
 			p.To = obj.Addr{}
-			if c.cursym.Text.Mark&LEAF != 0 {
+			if c.cursym.Func.Text.Mark&LEAF != 0 {
 				if c.autosize != 0 {
 					p.As = AADD
 					p.From.Type = obj.TYPE_CONST
