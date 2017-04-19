@@ -1119,7 +1119,6 @@ var marshalTests = []struct {
 
 	// omitempty on fields
 	{
-		// 到此
 		Value: &OmitFieldTest{
 			Int:   8,
 			Named: 9,
@@ -1128,7 +1127,9 @@ var marshalTests = []struct {
 			Bool:  true,
 			Str:   "str",
 			Bytes: []byte("byt"),
+			// 注意: 对空字符串取地址,是一个非空指针,因此Marshal的结果xml会包含PStr标签
 			PStr:  &empty,
+			// 注意: 对struct取地址,是一个非空指针,因此Marshal的结果xml会包含Ptr标签
 			Ptr:   &PresenceTest{},
 		},
 		ExpectXML: `<OmitFieldTest>` +
@@ -1150,6 +1151,12 @@ var marshalTests = []struct {
 
 	// Test ",any"
 	{
+		// any1112
+		// UnMarshal 文档中提到
+		//   * If the XML element contains a sub-element whose name matches
+		//      a struct field's XMLName tag and the struct field has no
+		//      explicit name tag as per the previous rule, unmarshal maps
+		//      the sub-element to that struct field.
 		ExpectXML: `<a><nested><value>known</value></nested><other><sub>unknown</sub></other></a>`,
 		Value: &AnyTest{
 			Nested: "known",
@@ -1160,6 +1167,12 @@ var marshalTests = []struct {
 		},
 	},
 	{
+		// any1112
+		// UnMarshal 文档中提到
+		//   * If the XML element contains a sub-element whose name matches
+		//      a struct field's XMLName tag and the struct field has no
+		//      explicit name tag as per the previous rule, unmarshal maps
+		//      the sub-element to that struct field.
 		Value: &AnyTest{Nested: "known",
 			AnyField: AnyHolder{
 				XML:     "<unknown/>",
@@ -1191,6 +1204,7 @@ var marshalTests = []struct {
 		},
 	},
 	{
+		// UnMarshal的结果,AnySliceTest.AnyField是nil slice
 		ExpectXML: `<a><nested><value>b</value></nested></a>`,
 		Value: &AnySliceTest{
 			Nested: "b",
@@ -1206,10 +1220,19 @@ var marshalTests = []struct {
 				B: "b1",
 			},
 		},
+		// <RecurseA>
+		// 		<A>a1</A>
+		// 		<B>
+		// 			<A>
+		// 				<A>a2</A>
+		// 			</A>
+		// 			<B>b1</B>
+		// 		</B>
+		// </RecurseA>
 		ExpectXML: `<RecurseA><A>a1</A><B><A><A>a2</A></A><B>b1</B></B></RecurseA>`,
 	},
 
-	// Test ignoring fields via "-" tag
+	// Test ignoring fields via "-" tag到此
 	{
 		ExpectXML: `<IgnoreTest></IgnoreTest>`,
 		Value:     &IgnoreTest{},

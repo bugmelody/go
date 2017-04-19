@@ -31,43 +31,67 @@ import (
 // comparison to match XML element names to tag values and struct
 // field names.
 //
+// Unmarshal的时候,xml标签和tag值(或struct字段名)的匹配是大小写敏感的.
+//
 // Unmarshal maps an XML element to a struct using the following rules.
 // In the rules, the tag of a field refers to the value associated with the
 // key 'xml' in the struct field's tag (see the example above).
+//
+// 翻译上面这句话:In the rules,字段的tag是指struct field's tag中key 'xml'对应的值.
 //
 //   * If the struct has a field of type []byte or string with tag
 //      ",innerxml", Unmarshal accumulates the raw XML nested inside the
 //      element in that field. The rest of the rules still apply.
 //
+//   * 翻译:如果struct有一个字段类型是[]byte或string,并且tag是",innerxml":
+//      Unmarshal会将xml元素中的raw XML写入此字段.然后会继续下面的rules.
+//
 //   * If the struct has a field named XMLName of type Name,
 //      Unmarshal records the element name in that field.
+//
+//   * 翻译:如果struct存在字段名为XMLName,字段类型是Name(指xml.Name),Unmarshal会记录xml元素的标签名到这个字段.
 //
 //   * If the XMLName field has an associated tag of the form
 //      "name" or "namespace-URL name", the XML element must have
 //      the given name (and, optionally, name space) or else Unmarshal
 //      returns an error.
 //
+//   * 翻译:如果结构体XMLName字段的tag指定了"name" or "namespace-URL name",那么xml元素必须具有
+//      给定的name或namespace; 否则,Unmarshal会返回error.
+//
 //   * If the XML element has an attribute whose name matches a
 //      struct field name with an associated tag containing ",attr" or
 //      the explicit name in a struct field tag of the form "name,attr",
 //      Unmarshal records the attribute value in that field.
+//
+//   * 翻译:xml元素有一个属性
+//       如果xml属性名匹配struct字段名,并且此struct字段的tag是",attr",
+//       或者,tag中显示指定了name,"name,attr",并且xml属性名匹配name,
+//       Unmarshal会记录xml元素的属性到哪个字段.
 //
 //   * If the XML element has an attribute not handled by the previous
 //      rule and the struct has a field with an associated tag containing
 //      ",any,attr", Unmarshal records the attribute value in the first
 //      such field.
 //
-//     在marshal_test.go中搜索'any1111'可以看到any的例子
+//     在marshal_test.go中搜索'any1111'可以看到any,attr的例子
 //
 //   * If the XML element contains character data, that data is
 //      accumulated in the first struct field that has tag ",chardata".
 //      The struct field may have type []byte or string.
 //      If there is no such field, the character data is discarded.
 //
+//   * 翻译:如果XML元素包含character data(比如<a>b</a>,b就是character data),
+//      character data会被存入结构体中第一个具有",chardata" tag的字段,字段类型必须是[]byte或string.
+//      如果结构体中没有这样的字段,character data会被丢弃.
+//
 //   * If the XML element contains comments, they are accumulated in
 //      the first struct field that has tag ",comment".  The struct
 //      field may have type []byte or string. If there is no such
 //      field, the comments are discarded.
+//
+//   * 翻译:如果xml元素包含comment,comment会被存入结构体中第一个具有",comment" tag的字段,字段类型必须是[]byte或string.
+//      如果结构体中没有这样的字段,comment会被丢弃.
 //
 //   * If the XML element contains a sub-element whose name matches
 //      the prefix of a tag formatted as "a" or "a>b>c", unmarshal
@@ -76,22 +100,30 @@ import (
 //      field. A tag starting with ">" is equivalent to one starting
 //      with the field name followed by ">".
 //
+//   * 翻译:如果XML元素包含一个直接子元素(这个直接子元素的标签名匹配一个字段tag的前缀),unmarshal会descend进入XML结构中
+//      使用tag中指定的names(比如a>b>c这样一连串的names)查找xml elements,找到后将innermost elements映射到结构体字段.
+//      如果一个tag以">"开头,其实相当于是以对应结构体字段的字段名开头,然后跟上">",
+//      比如对于字段 fielda string `xml:">a"`,其实相当于写成 fielda string `xml:"fielda>a"`
+//
 //   * If the XML element contains a sub-element whose name matches
 //      a struct field's XMLName tag and the struct field has no
 //      explicit name tag as per the previous rule, unmarshal maps
 //      the sub-element to that struct field.
 //
-//   * 上面这条是什么意思??????
+//   * ?????? 上面这条是什么意思
 //
 //   * If the XML element contains a sub-element whose name matches a
 //      field without any mode flags (",attr", ",chardata", etc), Unmarshal
 //      maps the sub-element to that struct field.
 //
+//   * 翻译:如果XML element有一个子元素,其标签名匹配一个结构体中的字段(可能是通过字段名,也可能是通过tag),并且此字段的tag不具有任何的mode flag,
+//      Unmarshal会将这个子元素映射到这个字段.
+//
 //   * If the XML element contains a sub-element that hasn't matched any
 //      of the above rules and the struct has a field with tag ",any",
 //      unmarshal maps the sub-element to that struct field.
 //
-//   * 上面这条是什么意思??????
+//   * 在marshal_test.go中搜索'any1112'可以看到any的例子
 //
 //   * An anonymous struct field is handled as if the fields of its
 //      value were part of the outer struct.
@@ -108,7 +140,7 @@ import (
 // Unmarshal maps an attribute value to an Attr by saving the attribute,
 // including its name, in the Attr.
 //
-// 上面是什么意思?例子???????
+// 上面是的Attr是指xml.Attr.
 //
 // Unmarshal maps an XML element or attribute value to a slice by
 // extending the length of the slice and mapping the element or attribute
