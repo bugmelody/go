@@ -42,6 +42,7 @@ var testFlagDefn = []*cmdflag.Defn{
 	{Name: "coverprofile", PassToTest: true},
 	{Name: "cpu", PassToTest: true},
 	{Name: "cpuprofile", PassToTest: true},
+	{Name: "list", PassToTest: true},
 	{Name: "memprofile", PassToTest: true},
 	{Name: "memprofilerate", PassToTest: true},
 	{Name: "blockprofile", PassToTest: true},
@@ -145,6 +146,8 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 			case "bench":
 				// record that we saw the flag; don't care about the value
 				testBench = true
+			case "list":
+				testList = true
 			case "timeout":
 				testTimeout = value
 			case "blockprofile", "cpuprofile", "memprofile", "mutexprofile":
@@ -188,6 +191,10 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 			// Default coverage mode is atomic when -race is set.
 			testCoverMode = "atomic"
 		}
+	}
+
+	if cfg.BuildRace && testCoverMode != "atomic" {
+		base.Fatalf(`-covermode must be "atomic", not %q, when -race is enabled`, testCoverMode)
 	}
 
 	// Tell the test what directory we're running in, so it can write the profiles there.

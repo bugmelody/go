@@ -43,6 +43,7 @@ var pkgDeps = map[string][]string{
 	"sync":                    {"internal/race", "runtime", "sync/atomic", "unsafe"},
 	"sync/atomic":             {"unsafe"},
 	"unsafe":                  {},
+	"internal/cpu":            {"runtime"},
 
 	"L0": {
 		"errors",
@@ -52,11 +53,12 @@ var pkgDeps = map[string][]string{
 		"sync",
 		"sync/atomic",
 		"unsafe",
+		"internal/cpu",
 	},
 
 	// L1 adds simple functions and strings processing,
 	// but not Unicode tables.
-	"math":          {"unsafe"},
+	"math":          {"internal/cpu", "unsafe"},
 	"math/bits":     {},
 	"math/cmplx":    {"math"},
 	"math/rand":     {"L0", "math"},
@@ -302,7 +304,7 @@ var pkgDeps = map[string][]string{
 	// do networking portably, it must have a small dependency set: just L0+basic os.
 	"net": {
 		"L0", "CGO",
-		"context", "math/rand", "os", "sort", "syscall", "time",
+		"context", "math/rand", "os", "reflect", "sort", "syscall", "time",
 		"internal/nettrace", "internal/poll",
 		"internal/syscall/windows", "internal/singleflight", "internal/race",
 		"golang_org/x/net/lif", "golang_org/x/net/route",

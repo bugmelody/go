@@ -25,110 +25,126 @@ func typeWithPointers() *types.Type {
 	return t
 }
 
+func markUsed(n *Node) *Node {
+	n.Name.SetUsed(true)
+	return n
+}
+
+func markNeedZero(n *Node) *Node {
+	n.Name.SetNeedzero(true)
+	return n
+}
+
+func nodeWithClass(n Node, c Class) *Node {
+	n.SetClass(c)
+	n.Name = new(Name)
+	return &n
+}
+
 // Test all code paths for cmpstackvarlt.
 func TestCmpstackvar(t *testing.T) {
 	testdata := []struct {
-		a, b Node
+		a, b *Node
 		lt   bool
 	}{
 		{
-			Node{Class: PAUTO},
-			Node{Class: PFUNC},
+			nodeWithClass(Node{}, PAUTO),
+			nodeWithClass(Node{}, PFUNC),
 			false,
 		},
 		{
-			Node{Class: PFUNC},
-			Node{Class: PAUTO},
+			nodeWithClass(Node{}, PFUNC),
+			nodeWithClass(Node{}, PAUTO),
 			true,
 		},
 		{
-			Node{Class: PFUNC, Xoffset: 0},
-			Node{Class: PFUNC, Xoffset: 10},
+			nodeWithClass(Node{Xoffset: 0}, PFUNC),
+			nodeWithClass(Node{Xoffset: 10}, PFUNC),
 			true,
 		},
 		{
-			Node{Class: PFUNC, Xoffset: 20},
-			Node{Class: PFUNC, Xoffset: 10},
+			nodeWithClass(Node{Xoffset: 20}, PFUNC),
+			nodeWithClass(Node{Xoffset: 10}, PFUNC),
 			false,
 		},
 		{
-			Node{Class: PFUNC, Xoffset: 10},
-			Node{Class: PFUNC, Xoffset: 10},
+			nodeWithClass(Node{Xoffset: 10}, PFUNC),
+			nodeWithClass(Node{Xoffset: 10}, PFUNC),
 			false,
 		},
 		{
-			Node{Class: PPARAM, Xoffset: 10},
-			Node{Class: PPARAMOUT, Xoffset: 20},
+			nodeWithClass(Node{Xoffset: 10}, PPARAM),
+			nodeWithClass(Node{Xoffset: 20}, PPARAMOUT),
 			true,
 		},
 		{
-			Node{Class: PPARAMOUT, Xoffset: 10},
-			Node{Class: PPARAM, Xoffset: 20},
+			nodeWithClass(Node{Xoffset: 10}, PPARAMOUT),
+			nodeWithClass(Node{Xoffset: 20}, PPARAM),
 			true,
 		},
 		{
-			Node{Class: PAUTO, flags: nodeUsed},
-			Node{Class: PAUTO},
+			markUsed(nodeWithClass(Node{}, PAUTO)),
+			nodeWithClass(Node{}, PAUTO),
 			true,
 		},
 		{
-			Node{Class: PAUTO},
-			Node{Class: PAUTO, flags: nodeUsed},
+			nodeWithClass(Node{}, PAUTO),
+			markUsed(nodeWithClass(Node{}, PAUTO)),
 			false,
 		},
 		{
-			Node{Class: PAUTO, Type: typeWithoutPointers()},
-			Node{Class: PAUTO, Type: typeWithPointers()},
+			nodeWithClass(Node{Type: typeWithoutPointers()}, PAUTO),
+			nodeWithClass(Node{Type: typeWithPointers()}, PAUTO),
 			false,
 		},
 		{
-			Node{Class: PAUTO, Type: typeWithPointers()},
-			Node{Class: PAUTO, Type: typeWithoutPointers()},
+			nodeWithClass(Node{Type: typeWithPointers()}, PAUTO),
+			nodeWithClass(Node{Type: typeWithoutPointers()}, PAUTO),
 			true,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{flags: nameNeedzero}},
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}},
+			markNeedZero(nodeWithClass(Node{Type: &types.Type{}}, PAUTO)),
+			nodeWithClass(Node{Type: &types.Type{}, Name: &Name{}}, PAUTO),
 			true,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}},
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{flags: nameNeedzero}},
+			nodeWithClass(Node{Type: &types.Type{}, Name: &Name{}}, PAUTO),
+			markNeedZero(nodeWithClass(Node{Type: &types.Type{}}, PAUTO)),
 			false,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{Width: 1}, Name: &Name{}},
-			Node{Class: PAUTO, Type: &types.Type{Width: 2}, Name: &Name{}},
+			nodeWithClass(Node{Type: &types.Type{Width: 1}, Name: &Name{}}, PAUTO),
+			nodeWithClass(Node{Type: &types.Type{Width: 2}, Name: &Name{}}, PAUTO),
 			false,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{Width: 2}, Name: &Name{}},
-			Node{Class: PAUTO, Type: &types.Type{Width: 1}, Name: &Name{}},
+			nodeWithClass(Node{Type: &types.Type{Width: 2}, Name: &Name{}}, PAUTO),
+			nodeWithClass(Node{Type: &types.Type{Width: 1}, Name: &Name{}}, PAUTO),
 			true,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "abc"}},
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "xyz"}},
+			nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "abc"}}, PAUTO),
+			nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "xyz"}}, PAUTO),
 			true,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "abc"}},
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "abc"}},
+			nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "abc"}}, PAUTO),
+			nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "abc"}}, PAUTO),
 			false,
 		},
 		{
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "xyz"}},
-			Node{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "abc"}},
+			nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "xyz"}}, PAUTO),
+			nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "abc"}}, PAUTO),
 			false,
 		},
 	}
 	for _, d := range testdata {
-		got := cmpstackvarlt(&d.a, &d.b)
+		got := cmpstackvarlt(d.a, d.b)
 		if got != d.lt {
 			t.Errorf("want %#v < %#v", d.a, d.b)
 		}
 		// If we expect a < b to be true, check that b < a is false.
-		if d.lt && cmpstackvarlt(&d.b, &d.a) {
+		if d.lt && cmpstackvarlt(d.b, d.a) {
 			t.Errorf("unexpected %#v < %#v", d.b, d.a)
 		}
 	}
@@ -136,34 +152,34 @@ func TestCmpstackvar(t *testing.T) {
 
 func TestStackvarSort(t *testing.T) {
 	inp := []*Node{
-		{Class: PFUNC, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PFUNC, Xoffset: 0, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PFUNC, Xoffset: 10, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PFUNC, Xoffset: 20, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, flags: nodeUsed, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: typeWithoutPointers(), Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{flags: nameNeedzero}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{Width: 1}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{Width: 2}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "abc"}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "xyz"}},
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Xoffset: 0, Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		nodeWithClass(Node{Xoffset: 10, Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		nodeWithClass(Node{Xoffset: 20, Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		markUsed(nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO)),
+		nodeWithClass(Node{Type: typeWithoutPointers(), Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO),
+		markNeedZero(nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO)),
+		nodeWithClass(Node{Type: &types.Type{Width: 1}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{Width: 2}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "abc"}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "xyz"}}, PAUTO),
 	}
 	want := []*Node{
-		{Class: PFUNC, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PFUNC, Xoffset: 0, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PFUNC, Xoffset: 10, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PFUNC, Xoffset: 20, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, flags: nodeUsed, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{flags: nameNeedzero}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{Width: 2}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{Width: 1}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "abc"}},
-		{Class: PAUTO, Type: &types.Type{}, Name: &Name{}, Sym: &types.Sym{Name: "xyz"}},
-		{Class: PAUTO, Type: typeWithoutPointers(), Name: &Name{}, Sym: &types.Sym{}},
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		nodeWithClass(Node{Xoffset: 0, Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		nodeWithClass(Node{Xoffset: 10, Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		nodeWithClass(Node{Xoffset: 20, Type: &types.Type{}, Sym: &types.Sym{}}, PFUNC),
+		markUsed(nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO)),
+		markNeedZero(nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO)),
+		nodeWithClass(Node{Type: &types.Type{Width: 2}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{Width: 1}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "abc"}}, PAUTO),
+		nodeWithClass(Node{Type: &types.Type{}, Sym: &types.Sym{Name: "xyz"}}, PAUTO),
+		nodeWithClass(Node{Type: typeWithoutPointers(), Sym: &types.Sym{}}, PAUTO),
 	}
 	// haspointers updates Type.Haspointers as a side effect, so
 	// exercise this function on all inputs so that reflect.DeepEqual

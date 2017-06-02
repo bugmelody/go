@@ -162,6 +162,9 @@ const testFlag2 = `
 	-cover
 	    Enable coverage analysis.
 
+	    BUG: If a compilation or test fails with coverage enabled,
+	    the reported line numbers may be incorrect.
+
 	-covermode set,count,atomic
 	    Set the mode for coverage analysis for the package[s]
 	    being tested. The default is "set" unless -race is enabled,
@@ -183,6 +186,11 @@ const testFlag2 = `
 	    Specify a list of GOMAXPROCS values for which the tests or
 	    benchmarks should be executed.  The default is the current value
 	    of GOMAXPROCS.
+
+	-list regexp
+	    List tests, benchmarks, or examples matching the regular expression.
+	    No tests, benchmarks or examples will be run. This will only
+	    list top-level tests. No subtest or subbenchmarks will be shown.
 
 	-parallel n
 	    Allow parallel execution of test functions that call t.Parallel.
@@ -400,6 +408,7 @@ var (
 	testTimeout      string          // -timeout flag
 	testArgs         []string
 	testBench        bool
+	testList         bool
 	testStreamOutput bool // show output as it is generated
 	testShowPass     bool // show passing output
 
@@ -447,7 +456,7 @@ func runTest(cmd *base.Command, args []string) {
 	// show passing test output (after buffering) with -v flag.
 	// must buffer because tests are running in parallel, and
 	// otherwise the output will get mixed.
-	testShowPass = testV
+	testShowPass = testV || testList
 
 	// stream test output (no buffering) when no package has
 	// been given on the command line (implicit current directory)

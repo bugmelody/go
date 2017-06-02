@@ -252,8 +252,6 @@ func mapaccess1_faststr(t *maptype, h *hmap, ky string) unsafe.Pointer {
 				return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.valuesize))
 			}
 			// check first 4 bytes
-			// TODO: on amd64/386 at least, make this compile to one 4-byte comparison instead of
-			// four 1-byte comparisons.
 			if *((*[4]byte)(key.str)) != *((*[4]byte)(k.str)) {
 				continue
 			}
@@ -490,8 +488,7 @@ again:
 
 	if inserti == nil {
 		// all current buckets are full, allocate a new one.
-		newb := (*bmap)(newobject(t.bucket))
-		h.setoverflow(t, b, newb)
+		newb := h.newoverflow(t, b)
 		inserti = &newb.tophash[0]
 		insertk = add(unsafe.Pointer(newb), dataOffset)
 		val = add(insertk, bucketCnt*4)
@@ -579,8 +576,7 @@ again:
 
 	if inserti == nil {
 		// all current buckets are full, allocate a new one.
-		newb := (*bmap)(newobject(t.bucket))
-		h.setoverflow(t, b, newb)
+		newb := h.newoverflow(t, b)
 		inserti = &newb.tophash[0]
 		insertk = add(unsafe.Pointer(newb), dataOffset)
 		val = add(insertk, bucketCnt*8)
@@ -673,8 +669,7 @@ again:
 
 	if inserti == nil {
 		// all current buckets are full, allocate a new one.
-		newb := (*bmap)(newobject(t.bucket))
-		h.setoverflow(t, b, newb)
+		newb := h.newoverflow(t, b)
 		inserti = &newb.tophash[0]
 		insertk = add(unsafe.Pointer(newb), dataOffset)
 		val = add(insertk, bucketCnt*2*sys.PtrSize)

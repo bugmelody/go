@@ -36,13 +36,12 @@ var basicTypes = [...]struct {
 var typedefs = [...]struct {
 	name     string
 	etype    types.EType
-	width    *int
 	sameas32 types.EType
 	sameas64 types.EType
 }{
-	{"int", TINT, &Widthint, TINT32, TINT64},
-	{"uint", TUINT, &Widthint, TUINT32, TUINT64},
-	{"uintptr", TUINTPTR, &Widthptr, TUINT32, TUINT64},
+	{"int", TINT, TINT32, TINT64},
+	{"uint", TUINT, TUINT32, TUINT64},
+	{"uintptr", TUINTPTR, TUINT32, TUINT64},
 }
 
 var builtinFuncs = [...]struct {
@@ -276,7 +275,6 @@ func typeinit() {
 
 	// binary
 	okfor[OADD] = okforadd[:]
-
 	okfor[OAND] = okforand[:]
 	okfor[OANDAND] = okforbool[:]
 	okfor[OANDNOT] = okforand[:]
@@ -298,19 +296,16 @@ func typeinit() {
 
 	// unary
 	okfor[OCOM] = okforand[:]
-
 	okfor[OMINUS] = okforarith[:]
 	okfor[ONOT] = okforbool[:]
 	okfor[OPLUS] = okforarith[:]
 
 	// special
 	okfor[OCAP] = okforcap[:]
-
 	okfor[OLEN] = okforlen[:]
 
 	// comparison
 	iscmp[OLT] = true
-
 	iscmp[OGT] = true
 	iscmp[OGE] = true
 	iscmp[OLE] = true
@@ -353,18 +348,17 @@ func typeinit() {
 
 	// simple aliases
 	simtype[TMAP] = types.Tptr
-
 	simtype[TCHAN] = types.Tptr
 	simtype[TFUNC] = types.Tptr
 	simtype[TUNSAFEPTR] = types.Tptr
 
 	array_array = int(Rnd(0, int64(Widthptr)))
-	array_nel = int(Rnd(int64(array_array)+int64(Widthptr), int64(Widthint)))
-	array_cap = int(Rnd(int64(array_nel)+int64(Widthint), int64(Widthint)))
-	sizeof_Array = int(Rnd(int64(array_cap)+int64(Widthint), int64(Widthptr)))
+	array_nel = int(Rnd(int64(array_array)+int64(Widthptr), int64(Widthptr)))
+	array_cap = int(Rnd(int64(array_nel)+int64(Widthptr), int64(Widthptr)))
+	sizeof_Array = int(Rnd(int64(array_cap)+int64(Widthptr), int64(Widthptr)))
 
 	// string is same as slice wo the cap
-	sizeof_String = int(Rnd(int64(array_nel)+int64(Widthint), int64(Widthptr)))
+	sizeof_String = int(Rnd(int64(array_nel)+int64(Widthptr), int64(Widthptr)))
 
 	dowidth(types.Types[TSTRING])
 	dowidth(types.Idealstring)
@@ -375,7 +369,7 @@ func typeinit() {
 func makeErrorInterface() *types.Type {
 	field := types.NewField()
 	field.Type = types.Types[TSTRING]
-	f := functypefield(fakethisfield(), nil, []*types.Field{field})
+	f := functypefield(fakeRecvField(), nil, []*types.Field{field})
 
 	field = types.NewField()
 	field.Sym = lookup("Error")
@@ -424,7 +418,7 @@ func lexinit1() {
 		s1 := builtinpkg.Lookup(s.name)
 
 		sameas := s.sameas32
-		if *s.width == 8 {
+		if Widthptr == 8 {
 			sameas = s.sameas64
 		}
 
@@ -466,6 +460,6 @@ func finishUniverse() {
 
 	nodfp = newname(lookup(".fp"))
 	nodfp.Type = types.Types[TINT32]
-	nodfp.Class = PPARAM
-	nodfp.SetUsed(true)
+	nodfp.SetClass(PPARAM)
+	nodfp.Name.SetUsed(true)
 }

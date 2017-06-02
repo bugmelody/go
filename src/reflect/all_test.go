@@ -1576,9 +1576,11 @@ func BenchmarkCallArgCopy(b *testing.B) {
 			args := []Value{size.arg}
 			b.SetBytes(int64(size.arg.Len()))
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				size.fv.Call(args)
-			}
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					size.fv.Call(args)
+				}
+			})
 		}
 		name := fmt.Sprintf("size=%v", size.arg.Len())
 		b.Run(name, bench)
@@ -2554,6 +2556,28 @@ func TestPtrToGC(t *testing.T) {
 			t.Errorf("lost x[%d] = %d, want %d", i, k, i)
 		}
 	}
+}
+
+func BenchmarkPtrTo(b *testing.B) {
+	// Construct a type with a zero ptrToThis.
+	type T struct{ int }
+	t := SliceOf(TypeOf(T{}))
+	ptrToThis := ValueOf(t).Elem().FieldByName("ptrToThis")
+	if !ptrToThis.IsValid() {
+		b.Fatalf("%v has no ptrToThis field; was it removed from rtype?", t)
+	}
+	if ptrToThis.Int() != 0 {
+		b.Fatalf("%v.ptrToThis unexpectedly nonzero", t)
+	}
+	b.ResetTimer()
+
+	// Now benchmark calling PtrTo on it: we'll have to hit the ptrMap cache on
+	// every call.
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			PtrTo(t)
+		}
+	})
 }
 
 func TestAddr(t *testing.T) {
@@ -4909,16 +4933,20 @@ type B1 struct {
 
 func BenchmarkFieldByName1(b *testing.B) {
 	t := TypeOf(B1{})
-	for i := 0; i < b.N; i++ {
-		t.FieldByName("Z")
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			t.FieldByName("Z")
+		}
+	})
 }
 
 func BenchmarkFieldByName2(b *testing.B) {
 	t := TypeOf(S3{})
-	for i := 0; i < b.N; i++ {
-		t.FieldByName("B")
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			t.FieldByName("B")
+		}
+	})
 }
 
 type R0 struct {
@@ -5001,9 +5029,11 @@ func TestEmbed(t *testing.T) {
 
 func BenchmarkFieldByName3(b *testing.B) {
 	t := TypeOf(R0{})
-	for i := 0; i < b.N; i++ {
-		t.FieldByName("X")
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			t.FieldByName("X")
+		}
+	})
 }
 
 type S struct {
@@ -5013,9 +5043,11 @@ type S struct {
 
 func BenchmarkInterfaceBig(b *testing.B) {
 	v := ValueOf(S{})
-	for i := 0; i < b.N; i++ {
-		v.Interface()
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			v.Interface()
+		}
+	})
 	b.StopTimer()
 }
 
@@ -5031,9 +5063,11 @@ func TestAllocsInterfaceBig(t *testing.T) {
 
 func BenchmarkInterfaceSmall(b *testing.B) {
 	v := ValueOf(int64(0))
-	for i := 0; i < b.N; i++ {
-		v.Interface()
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			v.Interface()
+		}
+	})
 }
 
 func TestAllocsInterfaceSmall(t *testing.T) {
@@ -5827,7 +5861,7 @@ func TestTypeOfTypeOf(t *testing.T) {
 	check("SliceOf", SliceOf(TypeOf(T{})))
 }
 
-type XM struct{}
+type XM struct{ _ bool }
 
 func (*XM) String() string { return "" }
 
@@ -5981,6 +6015,8 @@ func TestTypeStrings(t *testing.T) {
 		{TypeOf(new(XM)).Method(0).Type, "func(*reflect_test.XM) string"},
 		{ChanOf(3, TypeOf(XM{})), "chan reflect_test.XM"},
 		{MapOf(TypeOf(int(0)), TypeOf(XM{})), "map[int]reflect_test.XM"},
+		{ArrayOf(3, TypeOf(XM{})), "[3]reflect_test.XM"},
+		{ArrayOf(3, TypeOf(struct{}{})), "[3]struct {}"},
 	}
 
 	for i, test := range stringTests {
@@ -6007,9 +6043,11 @@ func TestOffsetLock(t *testing.T) {
 
 func BenchmarkNew(b *testing.B) {
 	v := TypeOf(XM{})
-	for i := 0; i < b.N; i++ {
-		New(v)
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			New(v)
+		}
+	})
 }
 
 func TestSwapper(t *testing.T) {

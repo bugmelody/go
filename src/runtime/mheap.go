@@ -75,10 +75,28 @@ type mheap struct {
 	_ uint32 // align uint64 fields on 32-bit for atomics
 
 	// Proportional sweep
-	pagesInUse        uint64  // pages of spans in stats _MSpanInUse; R/W with mheap.lock
-	spanBytesAlloc    uint64  // bytes of spans allocated this cycle; updated atomically
-	pagesSwept        uint64  // pages swept this cycle; updated atomically
-	sweepPagesPerByte float64 // proportional sweep ratio; written with lock, read without
+	//
+	// These parameters represent a linear function from heap_live
+	// to page sweep count. The proportional sweep system works to
+	// stay in the black by keeping the current page sweep count
+	// above this line at the current heap_live.
+	//
+	// The line has slope sweepPagesPerByte and passes through a
+	// basis point at (sweepHeapLiveBasis, pagesSweptBasis). At
+	// any given time, the system is at (memstats.heap_live,
+	// pagesSwept) in this space.
+	//
+	// It's important that the line pass through a point we
+	// control rather than simply starting at a (0,0) origin
+	// because that lets us adjust sweep pacing at any time while
+	// accounting for current progress. If we could only adjust
+	// the slope, it would create a discontinuity in debt if any
+	// progress has already been made.
+	pagesInUse         uint64  // pages of spans in stats _MSpanInUse; R/W with mheap.lock
+	pagesSwept         uint64  // pages swept this cycle; updated atomically
+	pagesSweptBasis    uint64  // pagesSwept to use as the origin of the sweep ratio; updated atomically
+	sweepHeapLiveBasis uint64  // value of heap_live to use as the origin of sweep ratio; written with lock, read without
+	sweepPagesPerByte  float64 // proportional sweep ratio; written with lock, read without
 	// TODO(austin): pagesInUse should be a uintptr, but the 386
 	// compiler can't 8-byte align fields.
 
@@ -90,20 +108,44 @@ type mheap struct {
 	nsmallfree  [_NumSizeClasses]uint64 // number of frees for small objects (<=maxsmallsize)
 
 	// range of addresses we might see in the heap
-	bitmap         uintptr // Points to one byte past the end of the bitmap
-	bitmap_mapped  uintptr
-	arena_start    uintptr
-	arena_used     uintptr // One byte past usable heap arena. Set with setArenaUsed.
-	arena_end      uintptr
+	bitmap        uintptr // Points to one byte past the end of the bitmap
+	bitmap_mapped uintptr
+
+	// The arena_* fields indicate the addresses of the Go heap.
+	//
+	// The maximum range of the Go heap is
+	// [arena_start, arena_start+_MaxMem+1).
+	//
+	// The range of the current Go heap is
+	// [arena_start, arena_used). Parts of this range may not be
+	// mapped, but the metadata structures are always mapped for
+	// the full range.
+	arena_start uintptr
+	arena_used  uintptr // Set with setArenaUsed.
+
+	// The heap is grown using a linear allocator that allocates
+	// from the block [arena_alloc, arena_end). arena_alloc is
+	// often, but *not always* equal to arena_used.
+	arena_alloc uintptr
+	arena_end   uintptr
+
+	// arena_reserved indicates that the memory [arena_alloc,
+	// arena_end) is reserved (e.g., mapped PROT_NONE). If this is
+	// false, we have to be careful not to clobber existing
+	// mappings here. If this is true, then we own the mapping
+	// here and *must* clobber it to use it.
 	arena_reserved bool
+
+	_ uint32 // ensure 64-bit alignment
 
 	// central free lists for small size classes.
 	// the padding makes sure that the MCentrals are
 	// spaced CacheLineSize bytes apart, so that each MCentral.lock
 	// gets its own cache line.
-	central [_NumSizeClasses]struct {
+	// central is indexed by spanClass.
+	central [numSpanClasses]struct {
 		mcentral mcentral
-		pad      [sys.CacheLineSize]byte
+		pad      [sys.CacheLineSize - unsafe.Sizeof(mcentral{})%sys.CacheLineSize]byte
 	}
 
 	spanalloc             fixalloc // allocator for span*
@@ -242,7 +284,7 @@ type mspan struct {
 	divMul      uint16     // for divide by elemsize - divMagic.mul
 	baseMask    uint16     // if non-0, elemsize is a power of 2, & this will get object allocation base
 	allocCount  uint16     // number of allocated objects
-	sizeclass   uint8      // size class
+	spanclass   spanClass  // size class and noscan (uint8)
 	incache     bool       // being used by an mcache
 	state       mSpanState // mspaninuse etc
 	needzero    uint8      // needs to be zeroed before allocation
@@ -295,6 +337,31 @@ func recordspan(vh unsafe.Pointer, p unsafe.Pointer) {
 		}
 	}
 	h.allspans = append(h.allspans, s)
+}
+
+// A spanClass represents the size class and noscan-ness of a span.
+//
+// Each size class has a noscan spanClass and a scan spanClass. The
+// noscan spanClass contains only noscan objects, which do not contain
+// pointers and thus do not need to be scanned by the garbage
+// collector.
+type spanClass uint8
+
+const (
+	numSpanClasses = _NumSizeClasses << 1
+	tinySpanClass  = spanClass(tinySizeClass<<1 | 1)
+)
+
+func makeSpanClass(sizeclass uint8, noscan bool) spanClass {
+	return spanClass(sizeclass<<1) | spanClass(bool2int(noscan))
+}
+
+func (sc spanClass) sizeclass() int8 {
+	return int8(sc >> 1)
+}
+
+func (sc spanClass) noscan() bool {
+	return sc&1 != 0
 }
 
 // inheap reports whether b is a pointer into a (potentially dead) heap object.
@@ -381,7 +448,7 @@ func mlookup(v uintptr, base *uintptr, size *uintptr, sp **mspan) int32 {
 	}
 
 	p := s.base()
-	if s.sizeclass == 0 {
+	if s.spanclass.sizeclass() == 0 {
 		// Large object.
 		if base != nil {
 			*base = p
@@ -429,7 +496,7 @@ func (h *mheap) init(spansStart, spansBytes uintptr) {
 
 	h.busylarge.init()
 	for i := range h.central {
-		h.central[i].mcentral.init(int32(i))
+		h.central[i].mcentral.init(spanClass(i))
 	}
 
 	sp := (*slice)(unsafe.Pointer(&h.spans))
@@ -559,7 +626,7 @@ func (h *mheap) reclaim(npage uintptr) {
 
 // Allocate a new span of npage pages from the heap for GC'd memory
 // and record its size class in the HeapMap and HeapMapCache.
-func (h *mheap) alloc_m(npage uintptr, sizeclass int32, large bool) *mspan {
+func (h *mheap) alloc_m(npage uintptr, spanclass spanClass, large bool) *mspan {
 	_g_ := getg()
 	if _g_ != _g_.m.g0 {
 		throw("_mheap_alloc not on g0 stack")
@@ -576,7 +643,13 @@ func (h *mheap) alloc_m(npage uintptr, sizeclass int32, large bool) *mspan {
 		// If GC kept a bit for whether there were any marks
 		// in a span, we could release these free spans
 		// at the end of GC and eliminate this entirely.
+		if trace.enabled {
+			traceGCSweepStart()
+		}
 		h.reclaim(npage)
+		if trace.enabled {
+			traceGCSweepDone()
+		}
 	}
 
 	// transfer stats from cache to global
@@ -593,8 +666,8 @@ func (h *mheap) alloc_m(npage uintptr, sizeclass int32, large bool) *mspan {
 		h.sweepSpans[h.sweepgen/2%2].push(s) // Add to swept in-use list.
 		s.state = _MSpanInUse
 		s.allocCount = 0
-		s.sizeclass = uint8(sizeclass)
-		if sizeclass == 0 {
+		s.spanclass = spanclass
+		if sizeclass := spanclass.sizeclass(); sizeclass == 0 {
 			s.elemsize = s.npages << _PageShift
 			s.divShift = 0
 			s.divMul = 0
@@ -646,13 +719,13 @@ func (h *mheap) alloc_m(npage uintptr, sizeclass int32, large bool) *mspan {
 	return s
 }
 
-func (h *mheap) alloc(npage uintptr, sizeclass int32, large bool, needzero bool) *mspan {
+func (h *mheap) alloc(npage uintptr, spanclass spanClass, large bool, needzero bool) *mspan {
 	// Don't do any operations that lock the heap on the G stack.
 	// It might trigger stack growth, and the stack growth code needs
 	// to be able to allocate heap.
 	var s *mspan
 	systemstack(func() {
-		s = h.alloc_m(npage, sizeclass, large)
+		s = h.alloc_m(npage, spanclass, large)
 	})
 
 	if s != nil {
@@ -686,7 +759,7 @@ func (h *mheap) allocManual(npage uintptr, stat *uint64) *mspan {
 		s.state = _MSpanManual
 		s.manualFreeList = 0
 		s.allocCount = 0
-		s.sizeclass = 0
+		s.spanclass = 0
 		s.nelems = 0
 		s.elemsize = 0
 		s.limit = s.base() + s.npages<<_PageShift
@@ -1120,7 +1193,7 @@ func (span *mspan) init(base uintptr, npages uintptr) {
 	span.startAddr = base
 	span.npages = npages
 	span.allocCount = 0
-	span.sizeclass = 0
+	span.spanclass = 0
 	span.incache = false
 	span.elemsize = 0
 	span.state = _MSpanDead

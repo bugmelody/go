@@ -58,7 +58,7 @@ func Flushplist(ctxt *Link, plist *Plist, newprog ProgAlloc) {
 				if p.From.Type != TYPE_CONST || p.From.Offset != objabi.FUNCDATA_ArgsPointerMaps {
 					ctxt.Diag("FUNCDATA use of go_args_stackmap(SB) without FUNCDATA_ArgsPointerMaps")
 				}
-				p.To.Sym = ctxt.Lookup(fmt.Sprintf("%s.args_stackmap", curtext.Name), int(curtext.Version))
+				p.To.Sym = ctxt.LookupDerived(curtext, curtext.Name+".args_stackmap")
 			}
 
 		}
@@ -95,7 +95,7 @@ func Flushplist(ctxt *Link, plist *Plist, newprog ProgAlloc) {
 			p.From.Offset = objabi.FUNCDATA_ArgsPointerMaps
 			p.To.Type = TYPE_MEM
 			p.To.Name = NAME_EXTERN
-			p.To.Sym = ctxt.Lookup(fmt.Sprintf("%s.args_stackmap", s.Name), int(s.Version))
+			p.To.Sym = ctxt.LookupDerived(s, s.Name+".args_stackmap")
 		}
 	}
 
@@ -135,11 +135,14 @@ func (ctxt *Link) InitTextSym(s *LSym, flag int) {
 	s.Type = objabi.STEXT
 	ctxt.Text = append(ctxt.Text, s)
 
-	// Set up DWARF entry for s.
-	dsym := ctxt.dwarfSym(s)
+	// Set up DWARF entries for s.
+	dsym, drsym := ctxt.dwarfSym(s)
 	dsym.Type = objabi.SDWARFINFO
 	dsym.Set(AttrDuplicateOK, s.DuplicateOK())
+	drsym.Type = objabi.SDWARFRANGE
+	drsym.Set(AttrDuplicateOK, s.DuplicateOK())
 	ctxt.Data = append(ctxt.Data, dsym)
+	ctxt.Data = append(ctxt.Data, drsym)
 
 	// Set up the function's gcargs and gclocals.
 	// They will be filled in later if needed.
@@ -162,7 +165,7 @@ func (ctxt *Link) Globl(s *LSym, size int64, flag int) {
 	s.Set(AttrOnList, true)
 	ctxt.Data = append(ctxt.Data, s)
 	s.Size = size
-	if s.Type == 0 || s.Type == objabi.SXREF {
+	if s.Type == 0 {
 		s.Type = objabi.SBSS
 	}
 	if flag&DUPOK != 0 {
@@ -171,7 +174,11 @@ func (ctxt *Link) Globl(s *LSym, size int64, flag int) {
 	if flag&RODATA != 0 {
 		s.Type = objabi.SRODATA
 	} else if flag&NOPTR != 0 {
-		s.Type = objabi.SNOPTRBSS
+		if s.Type == objabi.SDATA {
+			s.Type = objabi.SNOPTRDATA
+		} else {
+			s.Type = objabi.SNOPTRBSS
+		}
 	} else if flag&TLSBSS != 0 {
 		s.Type = objabi.STLSBSS
 	}

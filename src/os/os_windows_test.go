@@ -105,6 +105,10 @@ func testDirLinks(t *testing.T, tests []dirLinkTest) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = ioutil.WriteFile(filepath.Join(dir, "abc"), []byte("abc"), 0644)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +117,7 @@ func testDirLinks(t *testing.T, tests []dirLinkTest) {
 		link := filepath.Join(tmpdir, test.name+"_link")
 		err := test.mklink(link, dir)
 		if err != nil {
-			t.Errorf("creating link for %s test failed: %v", test.name, err)
+			t.Errorf("creating link for %q test failed: %v", test.name, err)
 			continue
 		}
 
@@ -132,15 +136,35 @@ func testDirLinks(t *testing.T, tests []dirLinkTest) {
 			continue
 		}
 
-		fi, err := os.Stat(link)
+		fi1, err := os.Stat(link)
 		if err != nil {
 			t.Errorf("failed to stat link %v: %v", link, err)
 			continue
 		}
-		expected := filepath.Base(dir)
-		got := fi.Name()
-		if !fi.IsDir() || expected != got {
-			t.Errorf("link should point to %v but points to %v instead", expected, got)
+		if !fi1.IsDir() {
+			t.Errorf("%q should be a directory", link)
+			continue
+		}
+		if fi1.Name() != filepath.Base(link) {
+			t.Errorf("Stat(%q).Name() = %q, want %q", link, fi1.Name(), filepath.Base(link))
+			continue
+		}
+		if !os.SameFile(fi, fi1) {
+			t.Errorf("%q should point to %q", link, dir)
+			continue
+		}
+
+		fi2, err := os.Lstat(link)
+		if err != nil {
+			t.Errorf("failed to lstat link %v: %v", link, err)
+			continue
+		}
+		if m := fi2.Mode(); m&os.ModeSymlink == 0 {
+			t.Errorf("%q should be a link, but is not (mode=0x%x)", link, uint32(m))
+			continue
+		}
+		if m := fi2.Mode(); m&os.ModeDir != 0 {
+			t.Errorf("%q should be a link, not a directory (mode=0x%x)", link, uint32(m))
 			continue
 		}
 	}
@@ -405,6 +429,8 @@ func TestDirectorySymbolicLink(t *testing.T) {
 func TestNetworkSymbolicLink(t *testing.T) {
 	testenv.MustHaveSymlink(t)
 
+	const _NERR_ServerNotStarted = syscall.Errno(2114)
+
 	dir, err := ioutil.TempDir("", "TestNetworkSymbolicLink")
 	if err != nil {
 		t.Fatal(err)
@@ -454,6 +480,9 @@ func TestNetworkSymbolicLink(t *testing.T) {
 	if err != nil {
 		if err == syscall.ERROR_ACCESS_DENIED {
 			t.Skip("you don't have enough privileges to add network share")
+		}
+		if err == _NERR_ServerNotStarted {
+			t.Skip(_NERR_ServerNotStarted.Error())
 		}
 		t.Fatal(err)
 	}
@@ -638,8 +667,8 @@ func TestStatSymlinkLoop(t *testing.T) {
 	defer os.Remove("x")
 
 	_, err = os.Stat("x")
-	if perr, ok := err.(*os.PathError); !ok || perr.Err != syscall.ELOOP {
-		t.Errorf("expected *PathError with ELOOP, got %T: %v\n", err, err)
+	if _, ok := err.(*os.PathError); !ok {
+		t.Errorf("expected *PathError, got %T: %v\n", err, err)
 	}
 }
 

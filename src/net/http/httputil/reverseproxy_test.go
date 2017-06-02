@@ -69,6 +69,7 @@ func TestReverseProxy(t *testing.T) {
 		w.WriteHeader(backendStatus)
 		w.Write([]byte(backendResponse))
 		w.Header().Set("X-Trailer", "trailer_value")
+		w.Header().Set(http.TrailerPrefix+"X-Unannounced-Trailer", "unannounced_trailer_value")
 	}))
 	defer backend.Close()
 	backendURL, err := url.Parse(backend.URL)
@@ -121,6 +122,9 @@ func TestReverseProxy(t *testing.T) {
 	}
 	if g, e := res.Trailer.Get("X-Trailer"), "trailer_value"; g != e {
 		t.Errorf("Trailer(X-Trailer) = %q ; want %q", g, e)
+	}
+	if g, e := res.Trailer.Get("X-Unannounced-Trailer"), "unannounced_trailer_value"; g != e {
+		t.Errorf("Trailer(X-Unannounced-Trailer) = %q ; want %q", g, e)
 	}
 
 	// Test that a backend failing to be reached or one which doesn't return
@@ -692,5 +696,43 @@ func BenchmarkServeHTTP(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		proxy.ServeHTTP(w, r)
+	}
+}
+
+func TestServeHTTPDeepCopy(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello Gopher!"))
+	}))
+	defer backend.Close()
+	backendURL, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		before, after string
+	}
+
+	resultChan := make(chan result, 1)
+	proxyHandler := NewSingleHostReverseProxy(backendURL)
+	frontend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		before := r.URL.String()
+		proxyHandler.ServeHTTP(w, r)
+		after := r.URL.String()
+		resultChan <- result{before: before, after: after}
+	}))
+	defer frontend.Close()
+
+	want := result{before: "/", after: "/"}
+
+	res, err := frontend.Client().Get(frontend.URL)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	res.Body.Close()
+
+	got := <-resultChan
+	if got != want {
+		t.Errorf("got = %+v; want = %+v", got, want)
 	}
 }

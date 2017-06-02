@@ -78,8 +78,8 @@
 (Neg32  x) -> (NEGL x)
 (Neg16  x) -> (NEGL x)
 (Neg8   x) -> (NEGL x)
-(Neg32F x) -> (PXOR x (MOVSSconst <types.Float32> [f2i(math.Copysign(0, -1))]))
-(Neg64F x) -> (PXOR x (MOVSDconst <types.Float64> [f2i(math.Copysign(0, -1))]))
+(Neg32F x) -> (PXOR x (MOVSSconst <typ.Float32> [f2i(math.Copysign(0, -1))]))
+(Neg64F x) -> (PXOR x (MOVSDconst <typ.Float64> [f2i(math.Copysign(0, -1))]))
 
 (Com64 x) -> (NOTQ x)
 (Com32 x) -> (NOTL x)
@@ -97,19 +97,19 @@
 (OffPtr [off] ptr) && config.PtrSize == 4 -> (ADDLconst [off] ptr)
 
 // Lowering other arithmetic
-(Ctz64 <t> x) -> (CMOVQEQ (Select0 <t> (BSFQ x)) (MOVQconst <t> [64]) (Select1 <TypeFlags> (BSFQ x)))
-(Ctz32 x) -> (Select0 (BSFQ (ORQ <types.UInt64> (MOVQconst [1<<32]) x)))
+(Ctz64 <t> x) -> (CMOVQEQ (Select0 <t> (BSFQ x)) (MOVQconst <t> [64]) (Select1 <types.TypeFlags> (BSFQ x)))
+(Ctz32 x) -> (Select0 (BSFQ (ORQ <typ.UInt64> (MOVQconst [1<<32]) x)))
 
-(BitLen64 <t> x) -> (ADDQconst [1] (CMOVQEQ <t> (Select0 <t> (BSRQ x)) (MOVQconst <t> [-1]) (Select1 <TypeFlags> (BSRQ x))))
-(BitLen32 x) -> (BitLen64 (MOVLQZX <types.UInt64> x))
+(BitLen64 <t> x) -> (ADDQconst [1] (CMOVQEQ <t> (Select0 <t> (BSRQ x)) (MOVQconst <t> [-1]) (Select1 <types.TypeFlags> (BSRQ x))))
+(BitLen32 x) -> (BitLen64 (MOVLQZX <typ.UInt64> x))
 
 (Bswap64 x) -> (BSWAPQ x)
 (Bswap32 x) -> (BSWAPL x)
 
 (PopCount64 x) -> (POPCNTQ x)
 (PopCount32 x) -> (POPCNTL x)
-(PopCount16 x) -> (POPCNTL (MOVWQZX <types.UInt32> x))
-(PopCount8 x) -> (POPCNTL (MOVBQZX <types.UInt32> x))
+(PopCount16 x) -> (POPCNTL (MOVWQZX <typ.UInt32> x))
+(PopCount8 x) -> (POPCNTL (MOVBQZX <typ.UInt32> x))
 
 (Sqrt x) -> (SQRTSD x)
 
@@ -305,13 +305,13 @@
 
 // Lowering stores
 // These more-specific FP versions of Store pattern should come first.
-(Store {t} ptr val mem) && t.(Type).Size() == 8 && is64BitFloat(val.Type) -> (MOVSDstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 4 && is32BitFloat(val.Type) -> (MOVSSstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 8 && is64BitFloat(val.Type) -> (MOVSDstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 4 && is32BitFloat(val.Type) -> (MOVSSstore ptr val mem)
 
-(Store {t} ptr val mem) && t.(Type).Size() == 8 -> (MOVQstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 4 -> (MOVLstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 2 -> (MOVWstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 1 -> (MOVBstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 8 -> (MOVQstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 4 -> (MOVLstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 2 -> (MOVWstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 1 -> (MOVBstore ptr val mem)
 
 // Lowering moves
 (Move [0] _ _ mem) -> mem
@@ -477,22 +477,22 @@
 
 // Atomic stores.  We use XCHG to prevent the hardware reordering a subsequent load.
 // TODO: most runtime uses of atomic stores don't need that property.  Use normal stores for those?
-(AtomicStore32 ptr val mem) -> (Select1 (XCHGL <MakeTuple(types.UInt32,TypeMem)> val ptr mem))
-(AtomicStore64 ptr val mem) -> (Select1 (XCHGQ <MakeTuple(types.UInt64,TypeMem)> val ptr mem))
-(AtomicStorePtrNoWB ptr val mem) && config.PtrSize == 8 -> (Select1 (XCHGQ <MakeTuple(types.BytePtr,TypeMem)> val ptr mem))
-(AtomicStorePtrNoWB ptr val mem) && config.PtrSize == 4 -> (Select1 (XCHGL <MakeTuple(types.BytePtr,TypeMem)> val ptr mem))
+(AtomicStore32 ptr val mem) -> (Select1 (XCHGL <types.NewTuple(typ.UInt32,types.TypeMem)> val ptr mem))
+(AtomicStore64 ptr val mem) -> (Select1 (XCHGQ <types.NewTuple(typ.UInt64,types.TypeMem)> val ptr mem))
+(AtomicStorePtrNoWB ptr val mem) && config.PtrSize == 8 -> (Select1 (XCHGQ <types.NewTuple(typ.BytePtr,types.TypeMem)> val ptr mem))
+(AtomicStorePtrNoWB ptr val mem) && config.PtrSize == 4 -> (Select1 (XCHGL <types.NewTuple(typ.BytePtr,types.TypeMem)> val ptr mem))
 
 // Atomic exchanges.
 (AtomicExchange32 ptr val mem) -> (XCHGL val ptr mem)
 (AtomicExchange64 ptr val mem) -> (XCHGQ val ptr mem)
 
 // Atomic adds.
-(AtomicAdd32 ptr val mem) -> (AddTupleFirst32 (XADDLlock val ptr mem) val)
-(AtomicAdd64 ptr val mem) -> (AddTupleFirst64 (XADDQlock val ptr mem) val)
-(Select0 <t> (AddTupleFirst32 tuple val)) -> (ADDL val (Select0 <t> tuple))
-(Select1     (AddTupleFirst32 tuple _  )) -> (Select1 tuple)
-(Select0 <t> (AddTupleFirst64 tuple val)) -> (ADDQ val (Select0 <t> tuple))
-(Select1     (AddTupleFirst64 tuple _  )) -> (Select1 tuple)
+(AtomicAdd32 ptr val mem) -> (AddTupleFirst32 val (XADDLlock val ptr mem))
+(AtomicAdd64 ptr val mem) -> (AddTupleFirst64 val (XADDQlock val ptr mem))
+(Select0 <t> (AddTupleFirst32 val tuple)) -> (ADDL val (Select0 <t> tuple))
+(Select1     (AddTupleFirst32   _ tuple)) -> (Select1 tuple)
+(Select0 <t> (AddTupleFirst64 val tuple)) -> (ADDQ val (Select0 <t> tuple))
+(Select1     (AddTupleFirst64   _ tuple)) -> (Select1 tuple)
 
 // Atomic compare and swap.
 (AtomicCompareAndSwap32 ptr old new_ mem) -> (CMPXCHGLlock ptr old new_ mem)
@@ -544,6 +544,18 @@
 (SETNE (TESTQ (MOVQconst [c]) x)) && isPowerOfTwo(c) && log2(c) < 64 && !config.nacl -> (SETB  (BTQconst [log2(c)] x))
 (SETEQ (TESTQ (MOVQconst [c]) x)) && isPowerOfTwo(c) && log2(c) < 64 && !config.nacl -> (SETAE (BTQconst [log2(c)] x))
 
+// Fold boolean negation into SETcc.
+(XORLconst [1] (SETNE x)) -> (SETEQ x)
+(XORLconst [1] (SETEQ x)) -> (SETNE x)
+(XORLconst [1] (SETL  x)) -> (SETGE x)
+(XORLconst [1] (SETGE x)) -> (SETL  x)
+(XORLconst [1] (SETLE x)) -> (SETG  x)
+(XORLconst [1] (SETG  x)) -> (SETLE x)
+(XORLconst [1] (SETB  x)) -> (SETAE x)
+(XORLconst [1] (SETAE x)) -> (SETB  x)
+(XORLconst [1] (SETBE x)) -> (SETA  x)
+(XORLconst [1] (SETA  x)) -> (SETBE x)
+
 // Convert BTQconst to BTLconst if possible. It has a shorter encoding.
 (BTQconst [c] x) && c < 32 -> (BTLconst [c] x)
 
@@ -554,8 +566,8 @@
 (NE (TESTB (SETNEF cmp) (SETNEF cmp)) yes no) -> (NEF  cmp yes no)
 
 // Disabled because it interferes with the pattern match above and makes worse code.
-// (SETNEF x) -> (ORQ (SETNE <types.Int8> x) (SETNAN <types.Int8> x))
-// (SETEQF x) -> (ANDQ (SETEQ <types.Int8> x) (SETORD <types.Int8> x))
+// (SETNEF x) -> (ORQ (SETNE <typ.Int8> x) (SETNAN <typ.Int8> x))
+// (SETEQF x) -> (ANDQ (SETEQ <typ.Int8> x) (SETORD <typ.Int8> x))
 
 // fold constants into instructions
 (ADDQ x (MOVQconst [c])) && is32Bit(c) -> (ADDQconst [c] x)
@@ -953,11 +965,14 @@
 (MOVLQZX x:(MOVLloadidx1 [off] {sym} ptr idx mem)) && x.Uses == 1 && clobber(x) -> @x.Block (MOVLloadidx1 <v.Type> [off] {sym} ptr idx mem)
 (MOVLQZX x:(MOVLloadidx4 [off] {sym} ptr idx mem)) && x.Uses == 1 && clobber(x) -> @x.Block (MOVLloadidx4 <v.Type> [off] {sym} ptr idx mem)
 
-// replace load from same location as preceding store with copy
-(MOVBload [off] {sym} ptr (MOVBstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
-(MOVWload [off] {sym} ptr (MOVWstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
-(MOVLload [off] {sym} ptr (MOVLstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
+// replace load from same location as preceding store with zero/sign extension (or copy in case of full width)
+(MOVBload [off] {sym} ptr (MOVBstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVBQZX x)
+(MOVWload [off] {sym} ptr (MOVWstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVWQZX x)
+(MOVLload [off] {sym} ptr (MOVLstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVLQZX x)
 (MOVQload [off] {sym} ptr (MOVQstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
+(MOVBQSXload [off] {sym} ptr (MOVBstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVBQSX x)
+(MOVWQSXload [off] {sym} ptr (MOVWstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVWQSX x)
+(MOVLQSXload [off] {sym} ptr (MOVLstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVLQSX x)
 
 // Fold extensions and ANDs together.
 (MOVBQZX (ANDLconst [c] x)) -> (ANDLconst [c & 0xff] x)
@@ -1886,7 +1901,7 @@
   && clobber(s0)
   && clobber(s1)
   && clobber(or)
-  -> @mergePoint(b,x0,x1) (ORL <v.Type> (SHLLconst <v.Type> [j1] (ROLWconst <types.UInt16> [8] (MOVWload [i0] {s} p mem))) y)
+  -> @mergePoint(b,x0,x1) (ORL <v.Type> (SHLLconst <v.Type> [j1] (ROLWconst <typ.UInt16> [8] (MOVWload [i0] {s} p mem))) y)
 
 (ORQ
     s0:(SHLQconst [j0] x0:(MOVBload [i0] {s} p mem))
@@ -1907,7 +1922,7 @@
   && clobber(s0)
   && clobber(s1)
   && clobber(or)
-  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (ROLWconst <types.UInt16> [8] (MOVWload [i0] {s} p mem))) y)
+  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (ROLWconst <typ.UInt16> [8] (MOVWload [i0] {s} p mem))) y)
 
 (ORQ
     s0:(SHLQconst [j0] r0:(ROLWconst [8] x0:(MOVWload [i0] {s} p mem)))
@@ -1932,7 +1947,7 @@
   && clobber(s0)
   && clobber(s1)
   && clobber(or)
-  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (BSWAPL <types.UInt32> (MOVLload [i0] {s} p mem))) y)
+  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (BSWAPL <typ.UInt32> (MOVLload [i0] {s} p mem))) y)
 
 // Big-endian indexed loads
 
@@ -2032,7 +2047,7 @@
   && clobber(s0)
   && clobber(s1)
   && clobber(or)
-  -> @mergePoint(b,x0,x1) (ORL <v.Type> (SHLLconst <v.Type> [j1] (ROLWconst <types.UInt16> [8] (MOVWloadidx1 [i0] {s} p idx mem))) y)
+  -> @mergePoint(b,x0,x1) (ORL <v.Type> (SHLLconst <v.Type> [j1] (ROLWconst <typ.UInt16> [8] (MOVWloadidx1 [i0] {s} p idx mem))) y)
 
 (ORQ
     s0:(SHLQconst [j0] x0:(MOVBloadidx1 [i0] {s} p idx mem))
@@ -2053,7 +2068,7 @@
   && clobber(s0)
   && clobber(s1)
   && clobber(or)
-  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (ROLWconst <types.UInt16> [8] (MOVWloadidx1 [i0] {s} p idx mem))) y)
+  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (ROLWconst <typ.UInt16> [8] (MOVWloadidx1 [i0] {s} p idx mem))) y)
 
 (ORQ
     s0:(SHLQconst [j0] r0:(ROLWconst [8] x0:(MOVWloadidx1 [i0] {s} p idx mem)))
@@ -2078,7 +2093,7 @@
   && clobber(s0)
   && clobber(s1)
   && clobber(or)
-  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (BSWAPL <types.UInt32> (MOVLloadidx1 [i0] {s} p idx mem))) y)
+  -> @mergePoint(b,x0,x1) (ORQ <v.Type> (SHLQconst <v.Type> [j1] (BSWAPL <typ.UInt32> (MOVLloadidx1 [i0] {s} p idx mem))) y)
 
 // Combine 2 byte stores + shift into rolw 8 + word store
 (MOVBstore [i] {s} p w

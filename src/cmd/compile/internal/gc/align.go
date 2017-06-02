@@ -9,6 +9,10 @@ import (
 	"sort"
 )
 
+// sizeCalculationDisabled indicates whether it is safe
+// to calculate Types' widths and alignments. See dowidth.
+var sizeCalculationDisabled bool
+
 // machine size and rounding alignment is dictated around
 // the size of a pointer, set in betypeinit (see ../amd64/galign.go).
 var defercalc int
@@ -27,6 +31,7 @@ func expandiface(t *types.Type) {
 	for _, m := range t.Methods().Slice() {
 		if m.Sym != nil {
 			fields = append(fields, m)
+			checkwidth(m.Type)
 			continue
 		}
 
@@ -151,6 +156,10 @@ func widstruct(errtype *types.Type, t *types.Type, o int64, flag int) int64 {
 	return o
 }
 
+// dowidth calculates and stores the size and alignment for t.
+// If sizeCalculationDisabled is set, and the size/alignment
+// have not already been calculated, it calls Fatal.
+// This is used to prevent data races in the back end.
 func dowidth(t *types.Type) {
 	if Widthptr == 0 {
 		Fatalf("dowidth without betypeinit")
@@ -172,6 +181,15 @@ func dowidth(t *types.Type) {
 
 	if t.WidthCalculated() {
 		return
+	}
+
+	if sizeCalculationDisabled {
+		if t.Broke() {
+			// break infinite recursion from Fatal call below
+			return
+		}
+		t.SetBroke(true)
+		Fatalf("width not calculated: %v", t)
 	}
 
 	// break infinite recursion if the broken recursive type

@@ -166,7 +166,7 @@ var allAsmTests = []*asmTests{
 	{
 		arch:    "amd64",
 		os:      "linux",
-		imports: []string{"encoding/binary", "math/bits"},
+		imports: []string{"encoding/binary", "math/bits", "unsafe"},
 		tests:   linuxAMD64Tests,
 	},
 	{
@@ -364,7 +364,19 @@ var linuxAMD64Tests = []*asmTest{
 		`,
 		[]string{"\tMOVQ\t\\$0, \\(.*\\)", "\tMOVQ\t\\$0, 8\\(.*\\)", "\tMOVQ\t\\$0, 16\\(.*\\)"},
 	},
-	// TODO: add a test for *t = T{3,4,5} when we fix that.
+	// SSA-able composite literal initialization. Issue 18872.
+	{
+		`
+		type T18872 struct {
+			a, b, c, d int
+		}
+
+		func f18872(p *T18872) {
+			*p = T18872{1, 2, 3, 4}
+		}
+		`,
+		[]string{"\tMOVQ\t[$]1", "\tMOVQ\t[$]2", "\tMOVQ\t[$]3", "\tMOVQ\t[$]4"},
+	},
 	// Also test struct containing pointers (this was special because of write barriers).
 	{
 		`
@@ -567,7 +579,7 @@ var linuxAMD64Tests = []*asmTest{
 			return bits.TrailingZeros64(a)
 		}
 		`,
-		[]string{"\tBSFQ\t", "\tMOVQ\t\\$64,", "\tCMOVQEQ\t"},
+		[]string{"\tBSFQ\t", "\tMOVL\t\\$64,", "\tCMOVQEQ\t"},
 	},
 	{
 		`
@@ -856,6 +868,35 @@ var linuxAMD64Tests = []*asmTest{
 			return x >> z | x << (8-z)
 		}`,
 		[]string{"\tRORB\t"},
+	},
+	// Check that array compare uses 2/4/8 byte compares
+	{
+		`
+		func f68(a,b [2]byte) bool {
+		    return a == b
+		}`,
+		[]string{"\tCMPW\t[A-Z]"},
+	},
+	{
+		`
+		func f69(a,b [3]uint16) bool {
+		    return a == b
+		}`,
+		[]string{"\tCMPL\t[A-Z]"},
+	},
+	{
+		`
+		func f70(a,b [15]byte) bool {
+		    return a == b
+		}`,
+		[]string{"\tCMPQ\t[A-Z]"},
+	},
+	{
+		`
+		func f71(a,b unsafe.Pointer) bool { // This was a TODO in mapaccess1_faststr
+		    return *((*[4]byte)(a)) != *((*[4]byte)(b))
+		}`,
+		[]string{"\tCMPL\t[A-Z]"},
 	},
 }
 
@@ -1424,6 +1465,16 @@ var linuxARM64Tests = []*asmTest{
 		`,
 		[]string{"\tAND\t"},
 	},
+	{
+		// make sure offsets are folded into load and store.
+		`
+		func f36(_, a [20]byte) (b [20]byte) {
+			b = a
+			return
+		}
+		`,
+		[]string{"\tMOVD\t\"\"\\.a\\+[0-9]+\\(RSP\\), R[0-9]+", "\tMOVD\tR[0-9]+, \"\"\\.b\\+[0-9]+\\(RSP\\)"},
+	},
 }
 
 var linuxMIPSTests = []*asmTest{
@@ -1542,6 +1593,54 @@ var linuxPPC64LETests = []*asmTest{
 		}
 		`,
 		[]string{"\tFMSUBS\t"},
+	},
+	{
+		`
+		func f4(x uint32) uint32 {
+			return x<<7 | x>>25
+		}
+		`,
+		[]string{"\tROTLW\t"},
+	},
+	{
+		`
+		func f5(x uint32) uint32 {
+			return x<<7 + x>>25
+		}
+		`,
+		[]string{"\tROTLW\t"},
+	},
+	{
+		`
+		func f6(x uint32) uint32 {
+			return x<<7 ^ x>>25
+		}
+		`,
+		[]string{"\tROTLW\t"},
+	},
+	{
+		`
+		func f7(x uint64) uint64 {
+			return x<<7 | x>>57
+		}
+		`,
+		[]string{"\tROTL\t"},
+	},
+	{
+		`
+		func f8(x uint64) uint64 {
+			return x<<7 + x>>57
+		}
+		`,
+		[]string{"\tROTL\t"},
+	},
+	{
+		`
+		func f9(x uint64) uint64 {
+			return x<<7 ^ x>>57
+		}
+		`,
+		[]string{"\tROTL\t"},
 	},
 }
 

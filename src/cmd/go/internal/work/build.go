@@ -144,6 +144,8 @@ See also: go install, go get, go clean.
 	`,
 }
 
+const concurrentGCBackendCompilationEnabledByDefault = true
+
 func init() {
 	// break init cycle
 	CmdBuild.Run = runBuild
@@ -313,6 +315,9 @@ func BuildModeInit() {
 		pkgsFilter = pkgsMain
 		ldBuildmode = "exe"
 	case "pie":
+		if cfg.BuildRace {
+			base.Fatalf("-buildmode=pie not supported when -race is enabled")
+		}
 		if gccgo {
 			base.Fatalf("-buildmode=pie not supported by gccgo")
 		} else {
@@ -376,10 +381,10 @@ func BuildModeInit() {
 	}
 	if codegenArg != "" {
 		if gccgo {
-			buildGccgoflags = append(buildGccgoflags, codegenArg)
+			buildGccgoflags = append([]string{codegenArg}, buildGccgoflags...)
 		} else {
-			buildAsmflags = append(buildAsmflags, codegenArg)
-			buildGcflags = append(buildGcflags, codegenArg)
+			buildAsmflags = append([]string{codegenArg}, buildAsmflags...)
+			buildGcflags = append([]string{codegenArg}, buildGcflags...)
 		}
 		// Don't alter InstallSuffix when modifying default codegen args.
 		if cfg.BuildBuildmode != "default" || cfg.BuildLinkshared {
@@ -389,7 +394,12 @@ func BuildModeInit() {
 			cfg.BuildContext.InstallSuffix += codegenArg[1:]
 		}
 	}
+	if strings.HasPrefix(runtimeVersion, "go1") {
+		buildGcflags = append(buildGcflags, "-goversion", runtimeVersion)
+	}
 }
+
+var runtimeVersion = runtime.Version()
 
 func runBuild(cmd *base.Command, args []string) {
 	InstrumentInit()
@@ -1098,6 +1108,12 @@ func (b *Builder) Do(root *Action) {
 	if _, ok := cfg.OSArchSupportsCgo[cfg.Goos+"/"+cfg.Goarch]; !ok && cfg.BuildContext.Compiler == "gc" {
 		fmt.Fprintf(os.Stderr, "cmd/go: unsupported GOOS/GOARCH pair %s/%s\n", cfg.Goos, cfg.Goarch)
 		os.Exit(2)
+	}
+	for _, tag := range cfg.BuildContext.BuildTags {
+		if strings.Contains(tag, ",") {
+			fmt.Fprintf(os.Stderr, "cmd/go: -tags space-separated list contains comma\n")
+			os.Exit(2)
+		}
 	}
 
 	// Build list of all actions, assigning depth-first post-order priority.
@@ -2238,12 +2254,89 @@ func (gcToolchain) gc(b *Builder, p *load.Package, archive, obj string, asmhdr b
 	if asmhdr {
 		args = append(args, "-asmhdr", obj+"go_asm.h")
 	}
+
+	// Add -c=N to use concurrent backend compilation, if possible.
+	if c := gcBackendConcurrency(gcflags); c > 1 {
+		args = append(args, fmt.Sprintf("-c=%d", c))
+	}
+
 	for _, f := range gofiles {
 		args = append(args, mkAbs(p.Dir, f))
 	}
 
 	output, err = b.runOut(p.Dir, p.ImportPath, nil, args...)
 	return ofile, output, err
+}
+
+// gcBackendConcurrency returns the backend compiler concurrency level for a package compilation.
+func gcBackendConcurrency(gcflags []string) int {
+	// First, check whether we can use -c at all for this compilation.
+	canDashC := concurrentGCBackendCompilationEnabledByDefault
+
+	switch e := os.Getenv("GO19CONCURRENTCOMPILATION"); e {
+	case "0":
+		canDashC = false
+	case "1":
+		canDashC = true
+	case "":
+		// Not set. Use default.
+	default:
+		log.Fatalf("GO19CONCURRENTCOMPILATION must be 0, 1, or unset, got %q", e)
+	}
+
+	if os.Getenv("GOEXPERIMENT") != "" {
+		// Concurrent compilation is presumed incompatible with GOEXPERIMENTs.
+		canDashC = false
+	}
+
+CheckFlags:
+	for _, flag := range gcflags {
+		// Concurrent compilation is presumed incompatible with any gcflags,
+		// except for a small whitelist of commonly used flags.
+		// If the user knows better, they can manually add their own -c to the gcflags.
+		switch flag {
+		case "-N", "-l", "-S", "-B", "-C", "-I":
+			// OK
+		default:
+			canDashC = false
+			break CheckFlags
+		}
+	}
+
+	if !canDashC {
+		return 1
+	}
+
+	// Decide how many concurrent backend compilations to allow.
+	//
+	// If we allow too many, in theory we might end up with p concurrent processes,
+	// each with c concurrent backend compiles, all fighting over the same resources.
+	// However, in practice, that seems not to happen too much.
+	// Most build graphs are surprisingly serial, so p==1 for much of the build.
+	// Furthermore, concurrent backend compilation is only enabled for a part
+	// of the overall compiler execution, so c==1 for much of the build.
+	// So don't worry too much about that interaction for now.
+	//
+	// However, in practice, setting c above 4 tends not to help very much.
+	// See the analysis in CL 41192.
+	//
+	// TODO(josharian): attempt to detect whether this particular compilation
+	// is likely to be a bottleneck, e.g. when:
+	//   - it has no successor packages to compile (usually package main)
+	//   - all paths through the build graph pass through it
+	//   - critical path scheduling says it is high priority
+	// and in such a case, set c to runtime.NumCPU.
+	// We do this now when p==1.
+	if cfg.BuildP == 1 {
+		// No process parallelism. Max out c.
+		return runtime.NumCPU()
+	}
+	// Some process parallelism. Set c to min(4, numcpu).
+	c := 4
+	if ncpu := runtime.NumCPU(); ncpu < c {
+		c = ncpu
+	}
+	return c
 }
 
 func (gcToolchain) asm(b *Builder, p *load.Package, obj string, sfiles []string) ([]string, error) {
@@ -2977,7 +3070,10 @@ func (b *Builder) gfortran(p *load.Package, out string, flags []string, ffile st
 func (b *Builder) ccompile(p *load.Package, outfile string, flags []string, file string, compiler []string) error {
 	file = mkAbs(p.Dir, file)
 	desc := p.ImportPath
-	output, err := b.runOut(p.Dir, desc, nil, compiler, flags, "-o", outfile, "-c", file)
+	if !filepath.IsAbs(outfile) {
+		outfile = filepath.Join(p.Dir, outfile)
+	}
+	output, err := b.runOut(filepath.Dir(file), desc, nil, compiler, flags, "-o", outfile, "-c", filepath.Base(file))
 	if len(output) > 0 {
 		// On FreeBSD 11, when we pass -g to clang 3.8 it
 		// invokes its internal assembler with -dwarf-version=2.

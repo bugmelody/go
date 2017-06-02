@@ -4,29 +4,18 @@
 
 package types
 
-import (
-	"cmd/internal/src"
-	"fmt"
-)
-
 // Declaration stack & operations
 
 var blockgen int32 = 1 // max block number
 var Block int32        // current block number
 
 // dclstack maintains a stack of shadowed symbol declarations so that
-// popdcl can restore their declarations when a block scope ends.
-// The stack is maintained as a linked list, using Sym's Link field.
+// Popdcl can restore their declarations when a block scope ends.
 //
-// In practice, the "stack" actually ends up forming a tree: goto and label
-// statements record the current state of dclstack so that checkgoto can
-// validate that a goto statement does not jump over any declarations or
-// into a new block scope.
-//
-// Finally, the Syms in this list are not "real" Syms as they don't actually
+// The Syms on this stack are not "real" Syms as they don't actually
 // represent object names. Sym is just a convenient type for saving shadowed
 // Sym definitions, and only a subset of its fields are actually used.
-var dclstack *Sym
+var dclstack []*Sym
 
 func dcopy(a, b *Sym) {
 	a.Pkg = b.Pkg
@@ -36,66 +25,43 @@ func dcopy(a, b *Sym) {
 	a.Lastlineno = b.Lastlineno
 }
 
-func push(pos src.XPos) *Sym {
+func push() *Sym {
 	d := new(Sym)
-	d.Lastlineno = pos
-	d.Link = dclstack
-	dclstack = d
+	dclstack = append(dclstack, d)
 	return d
 }
 
 // Pushdcl pushes the current declaration for symbol s (if any) so that
 // it can be shadowed by a new declaration within a nested block scope.
-func Pushdcl(s *Sym, pos src.XPos) {
-	d := push(pos)
-	dcopy(d, s)
+func Pushdcl(s *Sym) {
+	dcopy(push(), s)
 }
 
 // Popdcl pops the innermost block scope and restores all symbol declarations
 // to their previous state.
 func Popdcl() {
-	d := dclstack
-	for ; d != nil && d.Name != ""; d = d.Link {
-		s := d.Pkg.Lookup(d.Name)
-		lno := s.Lastlineno
-		dcopy(s, d)
-		d.Lastlineno = lno
+	for i := len(dclstack); i > 0; i-- {
+		d := dclstack[i-1]
+		if d.Name == "" {
+			// pop stack mark
+			Block = d.Block
+			dclstack = dclstack[:i-1]
+			return
+		}
+		dcopy(d.Pkg.Lookup(d.Name), d)
 	}
-
-	if d == nil {
-		Fatalf("popdcl: no mark")
-	}
-
-	dclstack = d.Link // pop mark
-	Block = d.Block
+	Fatalf("popdcl: no stack mark")
 }
 
 // Markdcl records the start of a new block scope for declarations.
-func Markdcl(lineno src.XPos) {
-	d := push(lineno)
-	d.Name = "" // used as a mark in fifo
-	d.Block = Block
-
+func Markdcl() {
+	push().Block = Block // stack mark (Name == "")
 	blockgen++
 	Block = blockgen
 }
 
-// keep around for debugging
-func DumpDclstack() {
-	i := 0
-	for d := dclstack; d != nil; d = d.Link {
-		fmt.Printf("%6d  %p", i, d)
-		if d.Name != "" {
-			fmt.Printf("  '%s'  %v\n", d.Name, d.Pkg.Lookup(d.Name))
-		} else {
-			fmt.Printf("  ---\n")
-		}
-		i++
-	}
-}
-
 func IsDclstackValid() bool {
-	for d := dclstack; d != nil; d = d.Link {
+	for _, d := range dclstack {
 		if d.Name == "" {
 			return false
 		}

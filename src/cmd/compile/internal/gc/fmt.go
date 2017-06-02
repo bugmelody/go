@@ -447,11 +447,11 @@ func (n *Node) jconv(s fmt.State, flag FmtFlag) {
 		fmt.Fprintf(s, " x(%d)", n.Xoffset)
 	}
 
-	if n.Class != 0 {
-		if int(n.Class) < len(classnames) {
-			fmt.Fprintf(s, " class(%s)", classnames[n.Class])
+	if n.Class() != 0 {
+		if int(n.Class()) < len(classnames) {
+			fmt.Fprintf(s, " class(%s)", classnames[n.Class()])
 		} else {
-			fmt.Fprintf(s, " class(%d?)", n.Class)
+			fmt.Fprintf(s, " class(%d?)", n.Class())
 		}
 	}
 
@@ -489,8 +489,8 @@ func (n *Node) jconv(s fmt.State, flag FmtFlag) {
 		fmt.Fprintf(s, " ld(%d)", e.Loopdepth)
 	}
 
-	if c == 0 && n.Typecheck != 0 {
-		fmt.Fprintf(s, " tc(%d)", n.Typecheck)
+	if c == 0 && n.Typecheck() != 0 {
+		fmt.Fprintf(s, " tc(%d)", n.Typecheck())
 	}
 
 	if n.Isddd() {
@@ -501,8 +501,8 @@ func (n *Node) jconv(s fmt.State, flag FmtFlag) {
 		fmt.Fprintf(s, " implicit(%v)", n.Implicit())
 	}
 
-	if n.Embedded != 0 {
-		fmt.Fprintf(s, " embedded(%d)", n.Embedded)
+	if n.Embedded() {
+		fmt.Fprintf(s, " embedded")
 	}
 
 	if n.Addrtaken() {
@@ -520,11 +520,11 @@ func (n *Node) jconv(s fmt.State, flag FmtFlag) {
 	}
 
 	if c == 0 && n.HasCall() {
-		fmt.Fprintf(s, " hascall")
+		fmt.Fprint(s, " hascall")
 	}
 
-	if c == 0 && n.Used() {
-		fmt.Fprintf(s, " used(%v)", n.Used())
+	if c == 0 && n.Name != nil && n.Name.Used() {
+		fmt.Fprint(s, " used")
 	}
 }
 
@@ -1509,16 +1509,10 @@ func (n *Node) exprfmt(s fmt.State, prec int, mode fmtMode) {
 		}
 		mode.Fprintf(s, "make(%v)", n.Type)
 
+	case OPLUS, OMINUS, OADDR, OCOM, OIND, ONOT, ORECV:
 		// Unary
-	case OPLUS,
-		OMINUS,
-		OADDR,
-		OCOM,
-		OIND,
-		ONOT,
-		ORECV:
 		mode.Fprintf(s, "%#v", n.Op)
-		if n.Left.Op == n.Op {
+		if n.Left != nil && n.Left.Op == n.Op {
 			fmt.Fprint(s, " ")
 		}
 		n.Left.exprfmt(s, nprec+1, mode)
@@ -1760,7 +1754,11 @@ func fldconv(f *types.Field, flag FmtFlag, mode fmtMode, depth int) string {
 
 	var typ string
 	if f.Isddd() {
-		typ = "..." + tmodeString(f.Type.Elem(), mode, depth)
+		var et *types.Type
+		if f.Type != nil {
+			et = f.Type.Elem()
+		}
+		typ = "..." + tmodeString(et, mode, depth)
 	} else {
 		typ = tmodeString(f.Type, mode, depth)
 	}
@@ -1795,6 +1793,12 @@ func typeFormat(t *types.Type, s fmt.State, verb rune, mode fmtMode) {
 func tconv(t *types.Type, flag FmtFlag, mode fmtMode, depth int) string {
 	if t == nil {
 		return "<T>"
+	}
+	if t.Etype == types.TSSA {
+		return t.Extra.(string)
+	}
+	if t.Etype == types.TTUPLE {
+		return t.FieldType(0).String() + "," + t.FieldType(1).String()
 	}
 
 	if depth > 100 {

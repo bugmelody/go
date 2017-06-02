@@ -472,7 +472,7 @@ func callinstr(np **Node, init *Nodes, wr int, skip int) bool {
 	if isartificial(b) {
 		return false
 	}
-	class := b.Class
+	class := b.Class()
 
 	// BUG: we _may_ want to instrument PAUTO sometimes
 	// e.g. if we've got a local variable/method receiver
@@ -623,7 +623,7 @@ func appendinit(np **Node, init Nodes) {
 		n = nod(OCONVNOP, n, nil)
 
 		n.Type = n.Left.Type
-		n.Typecheck = 1
+		n.SetTypecheck(1)
 		*np = n
 	}
 

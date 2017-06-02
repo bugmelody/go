@@ -439,9 +439,10 @@ type response struct {
 
 	handlerDone atomicBool // set true when the handler exits
 
-	// Buffers for Date and Content-Length
-	dateBuf [len(TimeFormat)]byte
-	clenBuf [10]byte
+	// Buffers for Date, Content-Length, and status code
+	dateBuf   [len(TimeFormat)]byte
+	clenBuf   [10]byte
+	statusBuf [3]byte
 
 	// closeNotifyCh is the channel returned by CloseNotify.
 	// TODO(bradfitz): this is currently (for Go 1.8) always
@@ -622,7 +623,6 @@ type connReader struct {
 	mu      sync.Mutex // guards following
 	hasByte bool
 	byteBuf [1]byte
-	bgErr   error // non-nil means error happened on background read
 	cond    *sync.Cond
 	inRead  bool
 	aborted bool  // set true before conn.rwc deadline is set to past
@@ -730,11 +730,6 @@ func (cr *connReader) Read(p []byte) (n int, err error) {
 	if cr.hitReadLimit() {
 		cr.unlock()
 		return 0, io.EOF
-	}
-	if cr.bgErr != nil {
-		err = cr.bgErr
-		cr.unlock()
-		return 0, err
 	}
 	if len(p) == 0 {
 		cr.unlock()
@@ -948,7 +943,7 @@ func (c *conn) readRequest(ctx context.Context) (w *response, err error) {
 
 	hosts, haveHost := req.Header["Host"]
 	isH2Upgrade := req.isH2Upgrade()
-	if req.ProtoAtLeast(1, 1) && (!haveHost || len(hosts) == 0) && !isH2Upgrade {
+	if req.ProtoAtLeast(1, 1) && (!haveHost || len(hosts) == 0) && !isH2Upgrade && req.Method != "CONNECT" {
 		return nil, badRequestError("missing required Host header")
 	}
 	if len(hosts) > 1 {
@@ -1379,7 +1374,7 @@ func (cw *chunkWriter) writeHeader(p []byte) {
 		}
 	}
 
-	w.conn.bufw.WriteString(statusLine(w.req, code))
+	writeStatusLine(w.conn.bufw, w.req.ProtoAtLeast(1, 1), code, w.statusBuf[:])
 	cw.header.WriteSubset(w.conn.bufw, excludeHeader)
 	setHeader.Write(w.conn.bufw)
 	w.conn.bufw.Write(crlf)
@@ -1403,49 +1398,25 @@ func foreachHeaderElement(v string, fn func(string)) {
 	}
 }
 
-// statusLines is a cache of Status-Line strings, keyed by code (for
-// HTTP/1.1) or negative code (for HTTP/1.0). This is faster than a
-// map keyed by struct of two fields. This map's max size is bounded
-// by 2*len(statusText), two protocol types for each known official
-// status code in the statusText map.
-var (
-	statusMu    sync.RWMutex
-	statusLines = make(map[int]string)
-)
-
-// statusLine returns a response Status-Line (RFC 2616 Section 6.1)
-// for the given request and response status code.
-func statusLine(req *Request, code int) string {
-	// Fast path:
-	key := code
-	proto11 := req.ProtoAtLeast(1, 1)
-	if !proto11 {
-		key = -key
+// writeStatusLine writes an HTTP/1.x Status-Line (RFC 2616 Section 6.1)
+// to bw. is11 is whether the HTTP request is HTTP/1.1. false means HTTP/1.0.
+// code is the response status code.
+// scratch is an optional scratch buffer. If it has at least capacity 3, it's used.
+func writeStatusLine(bw *bufio.Writer, is11 bool, code int, scratch []byte) {
+	if is11 {
+		bw.WriteString("HTTP/1.1 ")
+	} else {
+		bw.WriteString("HTTP/1.0 ")
 	}
-	statusMu.RLock()
-	line, ok := statusLines[key]
-	statusMu.RUnlock()
-	if ok {
-		return line
+	if text, ok := statusText[code]; ok {
+		bw.Write(strconv.AppendInt(scratch[:0], int64(code), 10))
+		bw.WriteByte(' ')
+		bw.WriteString(text)
+		bw.WriteString("\r\n")
+	} else {
+		// don't worry about performance
+		fmt.Fprintf(bw, "%03d status code %d\r\n", code, code)
 	}
-
-	// Slow path:
-	proto := "HTTP/1.0"
-	if proto11 {
-		proto = "HTTP/1.1"
-	}
-	codestring := fmt.Sprintf("%03d", code)
-	text, ok := statusText[code]
-	if !ok {
-		text = "status code " + codestring
-	}
-	line = proto + " " + codestring + " " + text + "\r\n"
-	if ok {
-		statusMu.Lock()
-		defer statusMu.Unlock()
-		statusLines[key] = line
-	}
-	return line
 }
 
 // bodyAllowed reports whether a Write is allowed for this response type.
@@ -1714,6 +1685,7 @@ func isCommonNetReadError(err error) bool {
 // Serve a new connection.
 func (c *conn) serve(ctx context.Context) {
 	c.remoteAddr = c.rwc.RemoteAddr().String()
+	ctx = context.WithValue(ctx, LocalAddrContextKey, c.rwc.LocalAddr())
 	defer func() {
 		if err := recover(); err != nil && err != ErrAbortHandler {
 			const size = 64 << 10
@@ -2414,6 +2386,7 @@ type Server struct {
 	listeners  map[net.Listener]struct{}
 	activeConn map[*conn]struct{}
 	doneChan   chan struct{}
+	onShutdown []func()
 }
 
 func (s *Server) getDoneChan() <-chan struct{} {
@@ -2476,7 +2449,12 @@ var shutdownPollInterval = 500 * time.Millisecond
 // listeners, then closing all idle connections, and then waiting
 // indefinitely for connections to return to idle and then shut down.
 // If the provided context expires before the shutdown is complete,
-// then the context's error is returned.
+// Shutdown returns the context's error, otherwise it returns any
+// error returned from closing the Server's underlying Listener(s).
+//
+// When Shutdown is called, Serve, ListenAndServe, and
+// ListenAndServeTLS immediately return ErrServerClosed. Make sure the
+// program doesn't exit and waits instead for Shutdown to return.
 //
 // Shutdown does not attempt to close nor wait for hijacked
 // connections such as WebSockets. The caller of Shutdown should
@@ -2489,6 +2467,9 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 	srv.mu.Lock()
 	lnerr := srv.closeListenersLocked()
 	srv.closeDoneChanLocked()
+	for _, f := range srv.onShutdown {
+		go f()
+	}
 	srv.mu.Unlock()
 
 	ticker := time.NewTicker(shutdownPollInterval)
@@ -2503,6 +2484,17 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// RegisterOnShutdown registers a function to call on Shutdown.
+// This can be used to gracefully shutdown connections that have
+// undergone NPN/ALPN protocol upgrade or that have been hijacked.
+// This function should start protocol-specific graceful shutdown,
+// but should not wait for shutdown to complete.
+func (srv *Server) RegisterOnShutdown(f func()) {
+	srv.mu.Lock()
+	srv.onShutdown = append(srv.onShutdown, f)
+	srv.mu.Unlock()
 }
 
 // closeIdleConns closes all idle connections and reports whether the
@@ -2675,7 +2667,6 @@ func (srv *Server) Serve(l net.Listener) error {
 
 	baseCtx := context.Background() // base is always background, per Issue 16220
 	ctx := context.WithValue(baseCtx, ServerContextKey, srv)
-	ctx = context.WithValue(ctx, LocalAddrContextKey, l.Addr())
 	for {
 		rw, e := l.Accept()
 		if e != nil {
@@ -2944,7 +2935,10 @@ func (srv *Server) onceSetNextProtoDefaults() {
 	// Enable HTTP/2 by default if the user hasn't otherwise
 	// configured their TLSNextProto map.
 	if srv.TLSNextProto == nil {
-		srv.nextProtoErr = http2ConfigureServer(srv, nil)
+		conf := &http2Server{
+			NewWriteScheduler: func() http2WriteScheduler { return http2NewPriorityWriteScheduler(nil) },
+		}
+		srv.nextProtoErr = http2ConfigureServer(srv, conf)
 	}
 }
 

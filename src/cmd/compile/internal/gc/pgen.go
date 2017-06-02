@@ -13,17 +13,25 @@ import (
 	"cmd/internal/src"
 	"cmd/internal/sys"
 	"fmt"
+	"math/rand"
 	"sort"
+	"sync"
+	"time"
 )
 
 // "Portable" code generation.
 
+var (
+	nBackendWorkers int     // number of concurrent backend workers, set by a compiler flag
+	compilequeue    []*Node // functions waiting to be compiled
+)
+
 func emitptrargsmap() {
-	if Curfn.Func.Nname.Sym.Name == "_" {
+	if Curfn.funcname() == "_" {
 		return
 	}
-	sym := lookup(fmt.Sprintf("%s.args_stackmap", Curfn.Func.Nname.Sym.Name))
-	lsym := Linksym(sym)
+	sym := lookup(fmt.Sprintf("%s.args_stackmap", Curfn.funcname()))
+	lsym := sym.Linksym()
 
 	nptr := int(Curfn.Type.ArgWidth() / int64(Widthptr))
 	bv := bvalloc(int32(nptr) * 2)
@@ -31,8 +39,8 @@ func emitptrargsmap() {
 	if Curfn.Type.Results().NumFields() > 0 {
 		nbitmap = 2
 	}
-	off := duint32LSym(lsym, 0, uint32(nbitmap))
-	off = duint32LSym(lsym, off, uint32(bv.n))
+	off := duint32(lsym, 0, uint32(nbitmap))
+	off = duint32(lsym, off, uint32(bv.n))
 	var xoffset int64
 	if Curfn.IsMethod() {
 		xoffset = 0
@@ -44,14 +52,14 @@ func emitptrargsmap() {
 		onebitwalktype1(Curfn.Type.Params(), &xoffset, bv)
 	}
 
-	off = dbvecLSym(lsym, off, bv)
+	off = dbvec(lsym, off, bv)
 	if Curfn.Type.Results().NumFields() > 0 {
 		xoffset = 0
 		onebitwalktype1(Curfn.Type.Results(), &xoffset, bv)
-		off = dbvecLSym(lsym, off, bv)
+		off = dbvec(lsym, off, bv)
 	}
 
-	ggloblLSym(lsym, int32(off), obj.RODATA|obj.LOCAL)
+	ggloblsym(lsym, int32(off), obj.RODATA|obj.LOCAL)
 }
 
 // cmpstackvarlt reports whether the stack variable a sorts before b.
@@ -65,16 +73,16 @@ func emitptrargsmap() {
 // the top of the stack and increasing in size.
 // Non-autos sort on offset.
 func cmpstackvarlt(a, b *Node) bool {
-	if (a.Class == PAUTO) != (b.Class == PAUTO) {
-		return b.Class == PAUTO
+	if (a.Class() == PAUTO) != (b.Class() == PAUTO) {
+		return b.Class() == PAUTO
 	}
 
-	if a.Class != PAUTO {
+	if a.Class() != PAUTO {
 		return a.Xoffset < b.Xoffset
 	}
 
-	if a.Used() != b.Used() {
-		return a.Used()
+	if a.Name.Used() != b.Name.Used() {
+		return a.Name.Used()
 	}
 
 	ap := types.Haspointers(a.Type)
@@ -110,14 +118,14 @@ func (s *ssafn) AllocFrame(f *ssa.Func) {
 
 	// Mark the PAUTO's unused.
 	for _, ln := range fn.Dcl {
-		if ln.Class == PAUTO {
-			ln.SetUsed(false)
+		if ln.Class() == PAUTO {
+			ln.Name.SetUsed(false)
 		}
 	}
 
 	for _, l := range f.RegAlloc {
 		if ls, ok := l.(ssa.LocalSlot); ok {
-			ls.N.(*Node).SetUsed(true)
+			ls.N.(*Node).Name.SetUsed(true)
 		}
 	}
 
@@ -129,10 +137,10 @@ func (s *ssafn) AllocFrame(f *ssa.Func) {
 				n := a.Node.(*Node)
 				// Don't modify nodfp; it is a global.
 				if n != nodfp {
-					n.SetUsed(true)
+					n.Name.SetUsed(true)
 				}
 			case *ssa.AutoSymbol:
-				a.Node.(*Node).SetUsed(true)
+				a.Node.(*Node).Name.SetUsed(true)
 			}
 
 			if !scratchUsed {
@@ -149,10 +157,10 @@ func (s *ssafn) AllocFrame(f *ssa.Func) {
 
 	// Reassign stack offsets of the locals that are used.
 	for i, n := range fn.Dcl {
-		if n.Op != ONAME || n.Class != PAUTO {
+		if n.Op != ONAME || n.Class() != PAUTO {
 			continue
 		}
-		if !n.Used() {
+		if !n.Name.Used() {
 			fn.Dcl = fn.Dcl[:i]
 			break
 		}
@@ -207,26 +215,101 @@ func compile(fn *Node) {
 	// Set up the function's LSym early to avoid data races with the assemblers.
 	fn.Func.initLSym()
 
-	// Build an SSA backend function.
-	ssafn := buildssa(fn)
-	pp := newProgs(fn)
+	if compilenow() {
+		compileSSA(fn, 0)
+	} else {
+		compilequeue = append(compilequeue, fn)
+	}
+}
+
+// compilenow reports whether to compile immediately.
+// If functions are not compiled immediately,
+// they are enqueued in compilequeue,
+// which is drained by compileFunctions.
+func compilenow() bool {
+	return nBackendWorkers == 1 && Debug_compilelater == 0
+}
+
+const maxStackSize = 1 << 31
+
+// compileSSA builds an SSA backend function,
+// uses it to generate a plist,
+// and flushes that plist to machine code.
+// worker indicates which of the backend workers is doing the processing.
+func compileSSA(fn *Node, worker int) {
+	ssafn := buildssa(fn, worker)
+	pp := newProgs(fn, worker)
 	genssa(ssafn, pp)
-	fieldtrack(pp.Text.From.Sym, fn.Func.FieldTrack)
-	if pp.Text.To.Offset < 1<<31 {
+	if pp.Text.To.Offset < maxStackSize {
 		pp.Flush()
 	} else {
+		largeStackFramesMu.Lock()
 		largeStackFrames = append(largeStackFrames, fn.Pos)
+		largeStackFramesMu.Unlock()
 	}
+	// fieldtrack must be called after pp.Flush. See issue 20014.
+	fieldtrack(pp.Text.From.Sym, fn.Func.FieldTrack)
 	pp.Free()
 }
 
-func debuginfo(fnsym *obj.LSym, curfn interface{}) []*dwarf.Var {
+func init() {
+	if raceEnabled {
+		rand.Seed(time.Now().UnixNano())
+	}
+}
+
+// compileFunctions compiles all functions in compilequeue.
+// It fans out nBackendWorkers to do the work
+// and waits for them to complete.
+func compileFunctions() {
+	if len(compilequeue) != 0 {
+		sizeCalculationDisabled = true // not safe to calculate sizes concurrently
+		if raceEnabled {
+			// Randomize compilation order to try to shake out races.
+			tmp := make([]*Node, len(compilequeue))
+			perm := rand.Perm(len(compilequeue))
+			for i, v := range perm {
+				tmp[v] = compilequeue[i]
+			}
+			copy(compilequeue, tmp)
+		} else {
+			// Compile the longest functions first,
+			// since they're most likely to be the slowest.
+			// This helps avoid stragglers.
+			obj.SortSlice(compilequeue, func(i, j int) bool {
+				return compilequeue[i].Nbody.Len() > compilequeue[j].Nbody.Len()
+			})
+		}
+		var wg sync.WaitGroup
+		c := make(chan *Node, nBackendWorkers)
+		for i := 0; i < nBackendWorkers; i++ {
+			wg.Add(1)
+			go func(worker int) {
+				for fn := range c {
+					compileSSA(fn, worker)
+				}
+				wg.Done()
+			}(i)
+		}
+		for _, fn := range compilequeue {
+			c <- fn
+		}
+		close(c)
+		compilequeue = nil
+		wg.Wait()
+		sizeCalculationDisabled = false
+	}
+}
+
+func debuginfo(fnsym *obj.LSym, curfn interface{}) []dwarf.Scope {
 	fn := curfn.(*Node)
-	if expect := Linksym(fn.Func.Nname.Sym); fnsym != expect {
+	if expect := fn.Func.Nname.Sym.Linksym(); fnsym != expect {
 		Fatalf("unexpected fnsym: %v != %v", fnsym, expect)
 	}
 
-	var vars []*dwarf.Var
+	var dwarfVars []*dwarf.Var
+	var varScopes []ScopeID
+
 	for _, n := range fn.Func.Dcl {
 		if n.Op != ONAME { // might be OTYPE or OLITERAL
 			continue
@@ -236,9 +319,9 @@ func debuginfo(fnsym *obj.LSym, curfn interface{}) []*dwarf.Var {
 		var abbrev int
 		offs := n.Xoffset
 
-		switch n.Class {
+		switch n.Class() {
 		case PAUTO:
-			if !n.Used() {
+			if !n.Name.Used() {
 				Fatalf("debuginfo unused node (AllocFrame should truncate fn.Func.Dcl)")
 			}
 			name = obj.NAME_AUTO
@@ -261,9 +344,9 @@ func debuginfo(fnsym *obj.LSym, curfn interface{}) []*dwarf.Var {
 			continue
 		}
 
-		gotype := Linksym(ngotype(n))
+		gotype := ngotype(n).Linksym()
 		fnsym.Func.Autom = append(fnsym.Func.Autom, &obj.Auto{
-			Asym:    Ctxt.Lookup(n.Sym.Name, 0),
+			Asym:    Ctxt.Lookup(n.Sym.Name),
 			Aoffset: int32(n.Xoffset),
 			Name:    name,
 			Gotype:  gotype,
@@ -274,18 +357,26 @@ func debuginfo(fnsym *obj.LSym, curfn interface{}) []*dwarf.Var {
 		}
 
 		typename := dwarf.InfoPrefix + gotype.Name[len("type."):]
-		vars = append(vars, &dwarf.Var{
+		dwarfVars = append(dwarfVars, &dwarf.Var{
 			Name:   n.Sym.Name,
 			Abbrev: abbrev,
 			Offset: int32(offs),
-			Type:   Ctxt.Lookup(typename, 0),
+			Type:   Ctxt.Lookup(typename),
 		})
+
+		var scope ScopeID
+		if !n.Name.Captured() && !n.Name.Byval() {
+			// n.Pos of captured variables is their first
+			// use in the closure but they should always
+			// be assigned to scope 0 instead.
+			// TODO(mdempsky): Verify this.
+			scope = findScope(fn.Func.Marks, n.Pos)
+		}
+
+		varScopes = append(varScopes, scope)
 	}
 
-	// Stable sort so that ties are broken with declaration order.
-	sort.Stable(dwarf.VarsByOffset(vars))
-
-	return vars
+	return assembleScopes(fnsym, fn, dwarfVars, varScopes)
 }
 
 // fieldtrack adds R_USEFIELD relocations to fnsym to record any
@@ -305,7 +396,7 @@ func fieldtrack(fnsym *obj.LSym, tracked map[*types.Sym]struct{}) {
 	sort.Sort(symByName(trackSyms))
 	for _, sym := range trackSyms {
 		r := obj.Addrel(fnsym)
-		r.Sym = Linksym(sym)
+		r.Sym = sym.Linksym()
 		r.Type = objabi.R_USEFIELD
 	}
 }

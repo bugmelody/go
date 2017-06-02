@@ -759,11 +759,11 @@ func (c *ctxt0) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 	p.As = AJAL
 	p.To.Type = obj.TYPE_BRANCH
 	if c.cursym.CFunc() {
-		p.To.Sym = c.ctxt.Lookup("runtime.morestackc", 0)
+		p.To.Sym = c.ctxt.Lookup("runtime.morestackc")
 	} else if !c.cursym.Func.Text.From.Sym.NeedCtxt() {
-		p.To.Sym = c.ctxt.Lookup("runtime.morestack_noctxt", 0)
+		p.To.Sym = c.ctxt.Lookup("runtime.morestack_noctxt")
 	} else {
-		p.To.Sym = c.ctxt.Lookup("runtime.morestack", 0)
+		p.To.Sym = c.ctxt.Lookup("runtime.morestack")
 	}
 	p.Mark |= BRANCH
 
@@ -786,16 +786,8 @@ func (c *ctxt0) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 
 func (c *ctxt0) addnop(p *obj.Prog) {
 	q := c.newprog()
-	// we want to use the canonical NOP (SLL $0,R0,R0) here,
-	// however, as the assembler will always replace $0
-	// as R0, we have to resort to manually encode the SLL
-	// instruction as WORD $0.
-	q.As = AWORD
+	q.As = ANOOP
 	q.Pos = p.Pos
-	q.From.Type = obj.TYPE_CONST
-	q.From.Name = obj.NAME_NONE
-	q.From.Offset = 0
-
 	q.Link = p.Link
 	p.Link = q
 }

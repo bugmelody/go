@@ -45,6 +45,11 @@
 // not checkmarked, and is the dead encoding.
 // These properties must be preserved when modifying the encoding.
 //
+// The bitmap for noscan spans is not maintained. Code must ensure
+// that an object is scannable before consulting its bitmap by
+// checking either the noscan bit in the span or by consulting its
+// type's information.
+//
 // Checkmarks
 //
 // In a concurrent garbage collector, one worries about failing to mark
@@ -359,6 +364,7 @@ func heapBitsForAddr(addr uintptr) heapBits {
 // heapBitsForSpan returns the heapBits for the span base address base.
 func heapBitsForSpan(base uintptr) (hbits heapBits) {
 	if base < mheap_.arena_start || base >= mheap_.arena_used {
+		print("runtime: base ", hex(base), " not in range [", hex(mheap_.arena_start), ",", hex(mheap_.arena_used), ")\n")
 		throw("heapBitsForSpan: base out of range")
 	}
 	return heapBitsForAddr(base)
@@ -493,16 +499,6 @@ func (h heapBits) morePointers() bool {
 //go:nosplit
 func (h heapBits) isPointer() bool {
 	return h.bits()&bitPointer != 0
-}
-
-// hasPointers reports whether the given object has any pointers.
-// It must be told how large the object at h is for efficiency.
-// h must describe the initial word of the object.
-func (h heapBits) hasPointers(size uintptr) bool {
-	if size == sys.PtrSize { // 1-word objects are always pointers
-		return true
-	}
-	return (*h.bitp>>h.shift)&bitScan != 0
 }
 
 // isCheckmarked reports whether the heap bits have the checkmarked bit set.
@@ -1327,13 +1323,6 @@ Phase4:
 			unlock(&debugPtrmask.lock)
 		}
 	}
-}
-
-// heapBitsSetTypeNoScan marks x as noscan by setting the first word
-// of x in the heap bitmap to scalar/dead.
-func heapBitsSetTypeNoScan(x uintptr) {
-	h := heapBitsForAddr(uintptr(x))
-	*h.bitp &^= (bitPointer | bitScan) << h.shift
 }
 
 var debugPtrmask struct {

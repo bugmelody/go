@@ -348,9 +348,9 @@ var passes = [...]pass{
 	{name: "late opt", fn: opt, required: true}, // TODO: split required rules and optimizing rules
 	{name: "generic deadcode", fn: deadcode},
 	{name: "check bce", fn: checkbce},
-	{name: "writebarrier", fn: writebarrier, required: true}, // expand write barrier ops
 	{name: "fuse", fn: fuse},
 	{name: "dse", fn: dse},
+	{name: "writebarrier", fn: writebarrier, required: true}, // expand write barrier ops
 	{name: "insert resched checks", fn: insertLoopReschedChecks,
 		disabled: objabi.Preemptibleloops_enabled == 0}, // insert resched checks in loops.
 	{name: "tighten", fn: tighten}, // move values closer to their uses
@@ -369,6 +369,7 @@ var passes = [...]pass{
 	{name: "late nilcheck", fn: nilcheckelim2},
 	{name: "flagalloc", fn: flagalloc, required: true}, // allocate flags register
 	{name: "regalloc", fn: regalloc, required: true},   // allocate int & float registers + stack slots
+	{name: "loop rotate", fn: loopRotate},
 	{name: "stackframe", fn: stackframe, required: true},
 	{name: "trim", fn: trim}, // remove empty blocks
 }
@@ -427,6 +428,8 @@ var passOrder = [...]constraint{
 	{"schedule", "flagalloc"},
 	// regalloc needs flags to be allocated first.
 	{"flagalloc", "regalloc"},
+	// loopRotate will confuse regalloc.
+	{"regalloc", "loop rotate"},
 	// stackframe needs to know about spilled registers.
 	{"regalloc", "stackframe"},
 	// trim needs regalloc to be done first.

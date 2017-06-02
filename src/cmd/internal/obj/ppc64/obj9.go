@@ -119,9 +119,9 @@ func (c *ctxt9) rewriteToUseGot(p *obj.Prog) {
 		//     BL (CTR)
 		var sym *obj.LSym
 		if p.As == obj.ADUFFZERO {
-			sym = c.ctxt.Lookup("runtime.duffzero", 0)
+			sym = c.ctxt.Lookup("runtime.duffzero")
 		} else {
-			sym = c.ctxt.Lookup("runtime.duffcopy", 0)
+			sym = c.ctxt.Lookup("runtime.duffcopy")
 		}
 		offset := p.To.Offset
 		p.As = AMOVD
@@ -476,6 +476,11 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				// generate the addis instruction except as part of the
 				// load of a large constant, and in that case there is no
 				// way to use r12 as the source.
+				//
+				// Note that the same condition is tested in
+				// putelfsym in cmd/link/internal/ld/symtab.go
+				// where we set the st_other field to indicate
+				// the presence of these instructions.
 				q = obj.Appendp(q, c.newprog)
 				q.As = AWORD
 				q.Pos = p.Pos
@@ -489,7 +494,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				rel := obj.Addrel(c.cursym)
 				rel.Off = 0
 				rel.Siz = 8
-				rel.Sym = c.ctxt.Lookup(".TOC.", 0)
+				rel.Sym = c.ctxt.Lookup(".TOC.")
 				rel.Type = objabi.R_ADDRPOWER_PCREL
 			}
 
@@ -498,9 +503,10 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			}
 
 			if autosize != 0 {
-				// Make sure to save link register for non-empty frame, even if
-				// it is a leaf function, so that traceback works.
-				if c.cursym.Func.Text.Mark&LEAF == 0 && autosize >= -BIG && autosize <= BIG {
+				// Save the link register and update the SP.  MOVDU is used unless
+				// the frame size is too large.  The link register must be saved
+				// even for non-empty leaf functions so that traceback works.
+				if autosize >= -BIG && autosize <= BIG {
 					// Use MOVDU to adjust R1 when saving R31, if autosize is small.
 					q = obj.Appendp(q, c.newprog)
 					q.As = AMOVD
@@ -950,11 +956,11 @@ func (c *ctxt9) stacksplit(p *obj.Prog, framesize int32) *obj.Prog {
 
 	var morestacksym *obj.LSym
 	if c.cursym.CFunc() {
-		morestacksym = c.ctxt.Lookup("runtime.morestackc", 0)
+		morestacksym = c.ctxt.Lookup("runtime.morestackc")
 	} else if !c.cursym.Func.Text.From.Sym.NeedCtxt() {
-		morestacksym = c.ctxt.Lookup("runtime.morestack_noctxt", 0)
+		morestacksym = c.ctxt.Lookup("runtime.morestack_noctxt")
 	} else {
-		morestacksym = c.ctxt.Lookup("runtime.morestack", 0)
+		morestacksym = c.ctxt.Lookup("runtime.morestack")
 	}
 
 	if c.ctxt.Flag_shared {

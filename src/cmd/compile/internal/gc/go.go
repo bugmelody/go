@@ -10,6 +10,7 @@ import (
 	"cmd/internal/bio"
 	"cmd/internal/obj"
 	"cmd/internal/src"
+	"sync"
 )
 
 const (
@@ -30,17 +31,26 @@ func isRuntimePkg(p *types.Pkg) bool {
 // called declaration contexts.
 type Class uint8
 
+//go:generate stringer -type=Class
 const (
-	Pxxx      Class = iota
-	PEXTERN         // global variable
-	PAUTO           // local variables
-	PAUTOHEAP       // local variable or parameter moved to heap
-	PPARAM          // input arguments
-	PPARAMOUT       // output results
-	PFUNC           // global function
+	Pxxx      Class = iota // no class; used during ssa conversion to indicate pseudo-variables
+	PEXTERN                // global variable
+	PAUTO                  // local variables
+	PAUTOHEAP              // local variable or parameter moved to heap
+	PPARAM                 // input arguments
+	PPARAMOUT              // output results
+	PFUNC                  // global function
 
 	PDISCARD // discard during parse of duplicate import
+	// Careful: Class is stored in three bits in Node.flags.
+	// Adding a new Class will overflow that.
 )
+
+func init() {
+	if PDISCARD != 7 {
+		panic("PDISCARD changed; does all Class values still fit in three bits?")
+	}
+}
 
 // note this is the runtime representation
 // of the compilers arrays.
@@ -114,8 +124,6 @@ var racepkg *types.Pkg // package runtime/race
 
 var msanpkg *types.Pkg // package runtime/msan
 
-var typepkg *types.Pkg // fake package for runtime type info (headers)
-
 var unsafepkg *types.Pkg // package unsafe
 
 var trackpkg *types.Pkg // fake package for field tracking
@@ -171,15 +179,16 @@ var exportlist []*Node
 
 var importlist []*Node // imported functions and methods with inlinable bodies
 
-var funcsyms []*types.Sym
+var (
+	funcsymsmu sync.Mutex // protects funcsyms and associated package lookups (see func funcsym)
+	funcsyms   []*types.Sym
+)
 
 var dclcontext Class // PEXTERN/PAUTO
 
 var Curfn *Node
 
 var Widthptr int
-
-var Widthint int
 
 var Widthreg int
 
@@ -207,6 +216,9 @@ var flagDWARF bool
 // when the race detector is enabled.
 var instrumenting bool
 
+// Whether we are tracking lexical scopes for DWARF.
+var trackScopes bool
+
 var debuglive int
 
 var Ctxt *obj.Link
@@ -230,8 +242,9 @@ type Arch struct {
 	MAXWIDTH int64
 	Use387   bool // should 386 backend use 387 FP instructions instead of sse2.
 
-	Defframe func(*Progs, *Node, int64)
-	Ginsnop  func(*Progs)
+	PadFrame  func(int64) int64
+	ZeroRange func(*Progs, *obj.Prog, int64, int64, *uint32) *obj.Prog
+	Ginsnop   func(*Progs)
 
 	// SSAMarkMoves marks any MOVXconst ops that need to avoid clobbering flags.
 	SSAMarkMoves func(*SSAGenState, *ssa.Block)
@@ -242,6 +255,11 @@ type Arch struct {
 	// SSAGenBlock emits end-of-block Progs. SSAGenValue should be called
 	// for all values in the block before SSAGenBlock.
 	SSAGenBlock func(s *SSAGenState, b, next *ssa.Block)
+
+	// ZeroAuto emits code to zero the given auto stack variable.
+	// ZeroAuto must not use any non-temporary registers.
+	// ZeroAuto will only be called for variables which contain a pointer.
+	ZeroAuto func(*Progs, *Node)
 }
 
 var thearch Arch
@@ -270,5 +288,6 @@ var (
 	writeBarrier,
 	writebarrierptr,
 	typedmemmove,
-	typedmemclr *obj.LSym
+	typedmemclr,
+	Udiv *obj.LSym
 )

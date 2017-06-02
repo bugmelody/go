@@ -10,12 +10,13 @@ import (
 
 	"cmd/compile/internal/gc"
 	"cmd/compile/internal/ssa"
+	"cmd/compile/internal/types"
 	"cmd/internal/obj"
 	"cmd/internal/obj/arm"
 )
 
 // loadByType returns the load instruction of the given type.
-func loadByType(t ssa.Type) obj.As {
+func loadByType(t *types.Type) obj.As {
 	if t.IsFloat() {
 		switch t.Size() {
 		case 4:
@@ -45,7 +46,7 @@ func loadByType(t ssa.Type) obj.As {
 }
 
 // storeByType returns the store instruction of the given type.
-func storeByType(t ssa.Type) obj.As {
+func storeByType(t *types.Type) obj.As {
 	if t.IsFloat() {
 		switch t.Size() {
 		case 4:
@@ -622,8 +623,13 @@ func ssaGenValue(s *gc.SSAGenState, v *ssa.Value) {
 		p.From.Offset = v.AuxInt
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg()
-	case ssa.OpARMCALLstatic, ssa.OpARMCALLclosure, ssa.OpARMCALLinter, ssa.OpARMCALLudiv:
+	case ssa.OpARMCALLstatic, ssa.OpARMCALLclosure, ssa.OpARMCALLinter:
 		s.Call(v)
+	case ssa.OpARMCALLudiv:
+		p := s.Prog(obj.ACALL)
+		p.To.Type = obj.TYPE_MEM
+		p.To.Name = obj.NAME_EXTERN
+		p.To.Sym = gc.Udiv
 	case ssa.OpARMDUFFZERO:
 		p := s.Prog(obj.ADUFFZERO)
 		p.To.Type = obj.TYPE_MEM
@@ -756,6 +762,8 @@ func ssaGenValue(s *gc.SSAGenState, v *ssa.Value) {
 		v.Fatalf("Flag* ops should never make it to codegen %v", v.LongString())
 	case ssa.OpARMInvertFlags:
 		v.Fatalf("InvertFlags should never make it to codegen %v", v.LongString())
+	case ssa.OpClobber:
+		// TODO: implement for clobberdead experiment. Nop is ok for now.
 	default:
 		v.Fatalf("genValue not implemented: %s", v.LongString())
 	}

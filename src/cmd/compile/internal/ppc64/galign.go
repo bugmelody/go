@@ -18,7 +18,8 @@ func Init(arch *gc.Arch) {
 	arch.REGSP = ppc64.REGSP
 	arch.MAXWIDTH = 1 << 50
 
-	arch.Defframe = defframe
+	arch.ZeroRange = zerorange
+	arch.ZeroAuto = zeroAuto
 	arch.Ginsnop = ginsnop2
 
 	arch.SSAMarkMoves = ssaMarkMoves

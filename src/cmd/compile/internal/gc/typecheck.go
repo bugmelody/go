@@ -144,7 +144,7 @@ func typecheck(n *Node, top int) *Node {
 
 	// Skip typecheck if already done.
 	// But re-typecheck ONAME/OTYPE/OLITERAL/OPACK node in case context has changed.
-	if n.Typecheck == 1 {
+	if n.Typecheck() == 1 {
 		switch n.Op {
 		case ONAME, OTYPE, OLITERAL, OPACK:
 			break
@@ -155,7 +155,7 @@ func typecheck(n *Node, top int) *Node {
 		}
 	}
 
-	if n.Typecheck == 2 {
+	if n.Typecheck() == 2 {
 		// Typechecking loop. Trying printing a meaningful message,
 		// otherwise a stack trace of typechecking.
 		switch n.Op {
@@ -195,12 +195,12 @@ func typecheck(n *Node, top int) *Node {
 		return n
 	}
 
-	n.Typecheck = 2
+	n.SetTypecheck(2)
 
 	typecheck_tcstack = append(typecheck_tcstack, n)
 	n = typecheck1(n, top)
 
-	n.Typecheck = 1
+	n.SetTypecheck(1)
 
 	last := len(typecheck_tcstack) - 1
 	typecheck_tcstack[last] = nil
@@ -323,7 +323,7 @@ OpSwitch:
 				return n
 			}
 
-			n.SetUsed(true)
+			n.Name.SetUsed(true)
 		}
 
 		ok |= Erv
@@ -498,6 +498,12 @@ OpSwitch:
 			ok |= Etype
 			n.Op = OTYPE
 			n.Type = types.NewPtr(l.Type)
+			// Ensure l.Type gets dowidth'd for the backend. Issue 20174.
+			// Don't checkwidth [...] arrays, though, since they
+			// will be replaced by concrete-sized arrays. Issue 20333.
+			if !l.Type.IsDDDArray() {
+				checkwidth(l.Type)
+			}
 			n.Left = nil
 			break OpSwitch
 		}
@@ -633,7 +639,7 @@ OpSwitch:
 					if r.Type.IsInterface() == l.Type.IsInterface() || l.Type.Width >= 1<<16 {
 						l = nod(aop, l, nil)
 						l.Type = r.Type
-						l.Typecheck = 1
+						l.SetTypecheck(1)
 						n.Left = l
 					}
 
@@ -655,7 +661,7 @@ OpSwitch:
 					if r.Type.IsInterface() == l.Type.IsInterface() || r.Type.Width >= 1<<16 {
 						r = nod(aop, r, nil)
 						r.Type = l.Type
-						r.Typecheck = 1
+						r.SetTypecheck(1)
 						n.Right = r
 					}
 
@@ -809,7 +815,11 @@ OpSwitch:
 		var l *Node
 		for l = n.Left; l != r; l = l.Left {
 			l.SetAddrtaken(true)
-			if l.IsClosureVar() {
+			if l.IsClosureVar() && !capturevarscomplete {
+				// Mark the original variable as Addrtaken so that capturevars
+				// knows not to pass it by value.
+				// But if the capturevars phase is complete, don't touch it,
+				// in case l.Name's containing function has not yet been compiled.
 				l.Name.Defn.SetAddrtaken(true)
 			}
 		}
@@ -818,7 +828,8 @@ OpSwitch:
 			Fatalf("found non-orig name node %v", l)
 		}
 		l.SetAddrtaken(true)
-		if l.IsClosureVar() {
+		if l.IsClosureVar() && !capturevarscomplete {
+			// See comments above about closure variables.
 			l.Name.Defn.SetAddrtaken(true)
 		}
 		n.Left = defaultlit(n.Left, nil)
@@ -886,7 +897,7 @@ OpSwitch:
 			n.Right = newname(n.Sym)
 			n.Type = methodfunc(n.Type, n.Left.Type)
 			n.Xoffset = 0
-			n.Class = PFUNC
+			n.SetClass(PFUNC)
 			ok = Erv
 			break OpSwitch
 		}
@@ -901,7 +912,7 @@ OpSwitch:
 			checkwidth(t)
 		}
 
-		if isblanksym(n.Sym) {
+		if n.Sym.IsBlank() {
 			yyerror("cannot refer to blank field or method")
 			n.Type = nil
 			return n
@@ -1621,6 +1632,7 @@ OpSwitch:
 					continue
 				}
 				as[i] = assignconv(n, t.Elem(), "append")
+				checkwidth(as[i].Type) // ensure width is calculated for backend
 			}
 		}
 
@@ -1691,6 +1703,7 @@ OpSwitch:
 	case OCONV:
 		ok |= Erv
 		saveorignode(n)
+		checkwidth(n.Type) // ensure width is calculated for backend
 		n.Left = typecheck(n.Left, Erv)
 		n.Left = convlit1(n.Left, n.Type, true, noReuse)
 		t := n.Left.Type
@@ -2010,7 +2023,7 @@ OpSwitch:
 	case OLABEL:
 		ok |= Etop
 		decldepth++
-		if isblanksym(n.Left.Sym) {
+		if n.Left.Sym.IsBlank() {
 			// Empty identifier is valid but useless.
 			// Eliminate now to simplify life later.
 			// See issues 7538, 11589, 11593.
@@ -2153,7 +2166,9 @@ OpSwitch:
 
 	evconst(n)
 	if n.Op == OTYPE && top&Etype == 0 {
-		yyerror("type %v is not an expression", n.Type)
+		if !n.Type.Broke() {
+			yyerror("type %v is not an expression", n.Type)
+		}
 		n.Type = nil
 		return n
 	}
@@ -3097,7 +3112,7 @@ func typecheckcomplit(n *Node) *Node {
 					// the field to the right of the dot,
 					// so s will be non-nil, but an OXDOT
 					// is never a valid struct literal key.
-					if key.Sym == nil || key.Op == OXDOT || isblanksym(key.Sym) {
+					if key.Sym == nil || key.Op == OXDOT || key.Sym.IsBlank() {
 						yyerror("invalid field name %v in struct initializer", key)
 						l.Left = typecheck(l.Left, Erv)
 						continue
@@ -3149,10 +3164,10 @@ func typecheckcomplit(n *Node) *Node {
 	n.Orig = norig
 	if n.Type.IsPtr() {
 		n = nod(OPTRLIT, n, nil)
-		n.Typecheck = 1
+		n.SetTypecheck(1)
 		n.Type = n.Left.Type
 		n.Left.Type = t
-		n.Left.Typecheck = 1
+		n.Left.SetTypecheck(1)
 	}
 
 	n.Orig = norig
@@ -3177,7 +3192,7 @@ func islvalue(n *Node) bool {
 		return islvalue(n.Left)
 
 	case ONAME:
-		if n.Class == PFUNC {
+		if n.Class() == PFUNC {
 			return false
 		}
 		return true
@@ -3302,10 +3317,13 @@ func typecheckas(n *Node) {
 	// second half of dance.
 	// now that right is done, typecheck the left
 	// just to get it over with.  see dance above.
-	n.Typecheck = 1
+	n.SetTypecheck(1)
 
-	if n.Left.Typecheck == 0 {
+	if n.Left.Typecheck() == 0 {
 		n.Left = typecheck(n.Left, Erv|Easgn)
+	}
+	if !isblank(n.Left) {
+		checkwidth(n.Left.Type) // ensure width is calculated for backend
 	}
 }
 
@@ -3431,10 +3449,10 @@ mismatch:
 
 	// second half of dance
 out:
-	n.Typecheck = 1
+	n.SetTypecheck(1)
 	ls = n.List.Slice()
 	for i1, n1 := range ls {
-		if n1.Typecheck == 0 {
+		if n1.Typecheck() == 0 {
 			ls[i1] = typecheck(ls[i1], Erv|Easgn)
 		}
 	}
@@ -3443,7 +3461,7 @@ out:
 // type check function definition
 func typecheckfunc(n *Node) {
 	for _, ln := range n.Func.Dcl {
-		if ln.Op == ONAME && (ln.Class == PPARAM || ln.Class == PPARAMOUT) {
+		if ln.Op == ONAME && (ln.Class() == PPARAM || ln.Class() == PPARAMOUT) {
 			ln.Name.Decldepth = 1
 		}
 	}
@@ -3571,7 +3589,7 @@ func typecheckdeftype(n *Node) {
 	lno := lineno
 	setlineno(n)
 	n.Type.Sym = n.Sym
-	n.Typecheck = 1
+	n.SetTypecheck(1)
 	n.Name.Param.Ntype = typecheck(n.Name.Param.Ntype, Etype)
 	t := n.Name.Param.Ntype.Type
 	if t == nil {
@@ -3628,12 +3646,12 @@ func typecheckdef(n *Node) *Node {
 		return n
 	}
 
-	if n.Walkdef == 1 {
+	if n.Walkdef() == 1 {
 		return n
 	}
 
 	typecheckdefstack = append(typecheckdefstack, n)
-	if n.Walkdef == 2 {
+	if n.Walkdef() == 2 {
 		flusherrors()
 		fmt.Printf("typecheckdef loop:")
 		for i := len(typecheckdefstack) - 1; i >= 0; i-- {
@@ -3644,7 +3662,7 @@ func typecheckdef(n *Node) *Node {
 		Fatalf("typecheckdef loop")
 	}
 
-	n.Walkdef = 2
+	n.SetWalkdef(2)
 
 	if n.Type != nil || n.Sym == nil { // builtin or no name
 		goto ret
@@ -3766,7 +3784,7 @@ func typecheckdef(n *Node) *Node {
 		if Curfn != nil {
 			defercheckwidth()
 		}
-		n.Walkdef = 1
+		n.SetWalkdef(1)
 		n.Type = types.New(TFORW)
 		n.Type.Nod = asTypesNode(n)
 		n.Type.Sym = n.Sym // TODO(gri) this also happens in typecheckdeftype(n) - where should it happen?
@@ -3794,7 +3812,7 @@ ret:
 	typecheckdefstack = typecheckdefstack[:last]
 
 	lineno = lno
-	n.Walkdef = 1
+	n.SetWalkdef(1)
 	return n
 }
 
@@ -3957,16 +3975,10 @@ func deadcodeslice(nn Nodes) {
 			continue
 		}
 		if n.Op == OIF && Isconst(n.Left, CTBOOL) {
-			var dead *Nodes
 			if n.Left.Bool() {
-				dead = &n.Rlist
+				n.Rlist = Nodes{}
 			} else {
-				dead = &n.Nbody
-			}
-			// TODO(mdempsky/josharian): eliminate need for haslabelgoto
-			// by checking labels and gotos earlier. See issue 19699.
-			if !(*dead).haslabelgoto() {
-				*dead = Nodes{}
+				n.Nbody = Nodes{}
 			}
 		}
 		deadcodeslice(n.Ninit)
@@ -3974,20 +3986,4 @@ func deadcodeslice(nn Nodes) {
 		deadcodeslice(n.List)
 		deadcodeslice(n.Rlist)
 	}
-}
-
-// haslabelgoto reports whether the Nodes list contains any label or goto statements.
-func (l Nodes) haslabelgoto() bool {
-	for _, n := range l.Slice() {
-		if n == nil {
-			continue
-		}
-		if n.Op == OLABEL || n.Op == OGOTO {
-			return true
-		}
-		if n.Ninit.haslabelgoto() || n.Nbody.haslabelgoto() || n.List.haslabelgoto() || n.Rlist.haslabelgoto() {
-			return true
-		}
-	}
-	return false
 }

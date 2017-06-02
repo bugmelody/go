@@ -190,12 +190,12 @@ func loadcgo(ctxt *Link, file string, pkg string, p string) {
 			s = ctxt.Syms.Lookup(local, 0)
 			if local != f[1] {
 			}
-			if s.Type == 0 || s.Type == objabi.SXREF || s.Type == objabi.SHOSTOBJ {
+			if s.Type == 0 || s.Type == SXREF || s.Type == SHOSTOBJ {
 				s.Dynimplib = lib
 				s.Extname = remote
 				s.Dynimpvers = q
-				if s.Type != objabi.SHOSTOBJ {
-					s.Type = objabi.SDYNIMPORT
+				if s.Type != SHOSTOBJ {
+					s.Type = SDYNIMPORT
 				}
 				havedynamic = 1
 			}
@@ -209,7 +209,7 @@ func loadcgo(ctxt *Link, file string, pkg string, p string) {
 			}
 			local = f[1]
 			s = ctxt.Syms.Lookup(local, 0)
-			s.Type = objabi.SHOSTOBJ
+			s.Type = SHOSTOBJ
 			s.Size = 0
 			continue
 		}
@@ -337,7 +337,7 @@ func fieldtrack(ctxt *Link) {
 	for _, s := range ctxt.Syms.Allsym {
 		if strings.HasPrefix(s.Name, "go.track.") {
 			s.Attr |= AttrSpecial // do not lay out in data segment
-			s.Attr |= AttrHidden
+			s.Attr |= AttrNotInSymbolTable
 			if s.Attr.Reachable() {
 				buf.WriteString(s.Name[9:])
 				for p := s.Reachparent; p != nil; p = p.Reachparent {
@@ -347,7 +347,7 @@ func fieldtrack(ctxt *Link) {
 				buf.WriteString("\n")
 			}
 
-			s.Type = objabi.SCONST
+			s.Type = SCONST
 			s.Value = 0
 		}
 	}
@@ -360,6 +360,7 @@ func fieldtrack(ctxt *Link) {
 		return
 	}
 	addstrdata(ctxt, *flagFieldTrack, buf.String())
+	s.Type = SDATA
 }
 
 func (ctxt *Link) addexport() {

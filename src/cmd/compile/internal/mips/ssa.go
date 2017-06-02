@@ -9,6 +9,7 @@ import (
 
 	"cmd/compile/internal/gc"
 	"cmd/compile/internal/ssa"
+	"cmd/compile/internal/types"
 	"cmd/internal/obj"
 	"cmd/internal/obj/mips"
 )
@@ -24,7 +25,7 @@ func isHILO(r int16) bool {
 }
 
 // loadByType returns the load instruction of the given type.
-func loadByType(t ssa.Type, r int16) obj.As {
+func loadByType(t *types.Type, r int16) obj.As {
 	if isFPreg(r) {
 		if t.Size() == 4 { // float32 or int32
 			return mips.AMOVF
@@ -53,7 +54,7 @@ func loadByType(t ssa.Type, r int16) obj.As {
 }
 
 // storeByType returns the store instruction of the given type.
-func storeByType(t ssa.Type, r int16) obj.As {
+func storeByType(t *types.Type, r int16) obj.As {
 	if isFPreg(r) {
 		if t.Size() == 4 { // float32 or int32
 			return mips.AMOVF
@@ -754,6 +755,8 @@ func ssaGenValue(s *gc.SSAGenState, v *ssa.Value) {
 	case ssa.OpMIPSLoweredGetClosurePtr:
 		// Closure pointer is R22 (mips.REGCTXT).
 		gc.CheckLoweredGetClosurePtr(v)
+	case ssa.OpClobber:
+		// TODO: implement for clobberdead experiment. Nop is ok for now.
 	default:
 		v.Fatalf("genValue not implemented: %s", v.LongString())
 	}

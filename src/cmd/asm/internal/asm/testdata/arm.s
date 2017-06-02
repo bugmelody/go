@@ -47,7 +47,7 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	{
 //		outcode($1, $2, &$3, 0, &$5);
 //	}
-	CLZ.S	R1, R2
+	CLZ	R1, R2
 
 //
 // MOVW
@@ -103,9 +103,9 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	{
 //		outcode($1, $2, &nullgen, 0, &$4);
 //	}
-	SWI.S	$2
-	SWI.S	(R1)
-//	SWI.S	foo(SB) - TODO: classifying foo(SB) as C_TLS_LE
+	SWI	$2
+	SWI	$3
+//	SWI	foo(SB) - TODO: classifying foo(SB) as C_TLS_LE
 
 //
 // CMP
@@ -114,9 +114,9 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	{
 //		outcode($1, $2, &$3, $5, &nullgen);
 //	}
-	CMP.S	$1, R2
-	CMP.S	R1<<R2, R3
-	CMP.S	R1, R2
+	CMP	$1, R2
+	CMP	R1<<R2, R3
+	CMP	R1, R2
 
 //
 // MOVM
@@ -132,7 +132,7 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	}
 	MOVM	0(R1), [R2,R5,R8,g] // MOVM	(R1), [R2,R5,R8,g]
 	MOVM	(R1), [R2-R5] // MOVM (R1), [R2,R3,R4,R5]
-	MOVM.S	(R1), [R2]
+	MOVM	(R1), [R2]
 
 //	LTYPE8 cond '[' reglist ']' ',' ioreg
 //	{
@@ -145,7 +145,7 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	}
 	MOVM	[R2,R5,R8,g], 0(R1) // MOVM	[R2,R5,R8,g], (R1)
 	MOVM	[R2-R5], (R1) // MOVM [R2,R3,R4,R5], (R1)
-	MOVM.S	[R2], (R1)
+	MOVM	[R2], (R1)
 
 //
 // SWAP
@@ -154,19 +154,19 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	{
 //		outcode($1, $2, &$5, int32($3.Reg), &$7);
 //	}
-	STREX.S	R1, (R2), R3 // STREX.S (R2), R1, R3
+	STREX	R1, (R2), R3 // STREX (R2), R1, R3
 
 //	LTYPE9 cond reg ',' ireg
 //	{
 //		outcode($1, $2, &$5, int32($3.Reg), &$3);
 //	}
-	STREX.S	R1, (R2) // STREX.S (R2), R1, R1
+	STREX	R1, (R2) // STREX (R2), R1, R1
 
 //	LTYPE9 cond comma ireg ',' reg
 //	{
 //		outcode($1, $2, &$4, int32($6.Reg), &$6);
 //	}
-	STREX.S	(R2), R3 // STREX.S (R2), R3, R3
+	STREX	(R2), R3 // STREX (R2), R3, R3
 
 //
 // word
@@ -184,26 +184,26 @@ TEXT	foo(SB), DUPOK|NOSPLIT, $0
 //	{
 //		outcode($1, $2, &$3, 0, &$5);
 //	}
-	ABSF.S	F1, F2
+	ABSF	F1, F2
 
 //	LTYPEK cond frcon ',' freg
 //	{
 //		outcode($1, $2, &$3, 0, &$5);
 //	}
-	ADDD.S	F1, F2
+	ADDD	F1, F2
 	MOVF	$0.5, F2 // MOVF $(0.5), F2
 
 //	LTYPEK cond frcon ',' LFREG ',' freg
 //	{
 //		outcode($1, $2, &$3, $5, &$7);
 //	}
-	ADDD.S	F1, F2, F3
+	ADDD	F1, F2, F3
 
 //	LTYPEL cond freg ',' freg
 //	{
 //		outcode($1, $2, &$3, int32($5.Reg), &nullgen);
 //	}
-	CMPD.S	F1, F2
+	CMPD	F1, F2
 
 //
 // MCR MRC
@@ -948,14 +948,28 @@ jmp_label_3:
 	SLL.S	R5, R7               // 1775b0e1
 
 // MULA / MULS
-	MULAWT	R1, R2, R3, R4       // c23124e1
-	MULAWB	R1, R2, R3, R4       // 823124e1
-	MULS	R1, R2, R3, R4       // 923164e0
-	MMULA	R1, R2, R3, R4       // 123154e7
-	MMULS	R1, R2, R3, R4       // d23154e7
-	MULABB	R1, R2, R3, R4       // 823104e1
+	MULAWT		R1, R2, R3, R4       // c23124e1
+	MULAWB		R1, R2, R3, R4       // 823124e1
+	MULS		R1, R2, R3, R4       // 923164e0
+	MULA		R1, R2, R3, R4       // 923124e0
+	MULA.S		R1, R2, R3, R4       // 923134e0
+	MMULA		R1, R2, R3, R4       // 123154e7
+	MMULS		R1, R2, R3, R4       // d23154e7
+	MULABB		R1, R2, R3, R4       // 823104e1
+	MULAL		R1, R2, (R4, R3)     // 9231e4e0
+	MULAL.S		R1, R2, (R4, R3)     // 9231f4e0
+	MULALU		R1, R2, (R4, R3)     // 9231a4e0
+	MULALU.S	R1, R2, (R4, R3)     // 9231b4e0
 
 // MUL
+	MUL	R2, R3, R4           // 930204e0
+	MUL.S	R2, R3, R4           // 930214e0
+	MULU	R5, R6, R7           // 960507e0
+	MULU.S	R5, R6, R7           // 960517e0
+	MULLU	R1, R2, (R4, R3)     // 923184e0
+	MULLU.S	R1, R2, (R4, R3)     // 923194e0
+	MULL	R1, R2, (R4, R3)     // 9231c4e0
+	MULL.S	R1, R2, (R4, R3)     // 9231d4e0
 	MMUL	R1, R2, R3           // 12f153e7
 	MULBB	R1, R2, R3           // 82f163e1
 	MULWB	R1, R2, R3           // a20123e1
@@ -973,6 +987,21 @@ jmp_label_3:
 // DIVHW R0, R1: R1 / R0 -> R1
 	DIVHW	R0, R1               // 11f011e7
 	DIVUHW	R0, R1               // 11f031e7
+
+// misc
+	CLZ	R1, R2         // 112f6fe1
+	WORD	$0             // 00000000
+	WORD	$4294967295    // ffffffff
+	WORD	$2863311530    // aaaaaaaa
+	WORD	$1431655765    // 55555555
+	PLD	4080(R6)       // f0ffd6f5
+	PLD	-4080(R9)      // f0ff59f5
+	RFE	               // 0080fde8
+	SWPW	R3, (R7), R9   // SWPW  (R7), R3, R9 // 939007e1
+	SWPBU	R4, (R2), R8   // SWPBU (R2), R4, R8 // 948042e1
+	SWI	$0             // 000000ef
+	SWI	$65535         // ffff00ef
+	SWI	               // 000000ef
 
 //
 // END

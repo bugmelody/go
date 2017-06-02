@@ -68,8 +68,8 @@
 (Neg32  x) -> (NEGL x)
 (Neg16  x) -> (NEGL x)
 (Neg8   x) -> (NEGL x)
-(Neg32F x) && !config.use387 -> (PXOR x (MOVSSconst <types.Float32> [f2i(math.Copysign(0, -1))]))
-(Neg64F x) && !config.use387 -> (PXOR x (MOVSDconst <types.Float64> [f2i(math.Copysign(0, -1))]))
+(Neg32F x) && !config.use387 -> (PXOR x (MOVSSconst <typ.Float32> [f2i(math.Copysign(0, -1))]))
+(Neg64F x) && !config.use387 -> (PXOR x (MOVSDconst <typ.Float64> [f2i(math.Copysign(0, -1))]))
 (Neg32F x) && config.use387 -> (FCHS x)
 (Neg64F x) && config.use387 -> (FCHS x)
 
@@ -256,12 +256,12 @@
 
 // Lowering stores
 // These more-specific FP versions of Store pattern should come first.
-(Store {t} ptr val mem) && t.(Type).Size() == 8 && is64BitFloat(val.Type) -> (MOVSDstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 4 && is32BitFloat(val.Type) -> (MOVSSstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 8 && is64BitFloat(val.Type) -> (MOVSDstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 4 && is32BitFloat(val.Type) -> (MOVSSstore ptr val mem)
 
-(Store {t} ptr val mem) && t.(Type).Size() == 4 -> (MOVLstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 2 -> (MOVWstore ptr val mem)
-(Store {t} ptr val mem) && t.(Type).Size() == 1 -> (MOVBstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 4 -> (MOVLstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 2 -> (MOVWstore ptr val mem)
+(Store {t} ptr val mem) && t.(*types.Type).Size() == 1 -> (MOVBstore ptr val mem)
 
 // Lowering moves
 (Move [0] _ _ mem) -> mem
@@ -615,10 +615,12 @@
 (MOVWLZX x:(MOVWloadidx1 [off] {sym} ptr idx mem)) && x.Uses == 1 && clobber(x) -> @x.Block (MOVWloadidx1 <v.Type> [off] {sym} ptr idx mem)
 (MOVWLZX x:(MOVWloadidx2 [off] {sym} ptr idx mem)) && x.Uses == 1 && clobber(x) -> @x.Block (MOVWloadidx2 <v.Type> [off] {sym} ptr idx mem)
 
-// replace load from same location as preceding store with copy
-(MOVBload [off] {sym} ptr (MOVBstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
-(MOVWload [off] {sym} ptr (MOVWstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
+// replace load from same location as preceding store with zero/sign extension (or copy in case of full width)
+(MOVBload [off] {sym} ptr (MOVBstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVBLZX x)
+(MOVWload [off] {sym} ptr (MOVWstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVWLZX x)
 (MOVLload [off] {sym} ptr (MOVLstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> x
+(MOVBLSXload [off] {sym} ptr (MOVBstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVBLSX x)
+(MOVWLSXload [off] {sym} ptr (MOVWstore [off2] {sym2} ptr2 x _)) && sym == sym2 && off == off2 && isSamePtr(ptr, ptr2) -> (MOVWLSX x)
 
 // Fold extensions and ANDs together.
 (MOVBLZX (ANDLconst [c] x)) -> (ANDLconst [c & 0xff] x)

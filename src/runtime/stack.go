@@ -102,15 +102,6 @@ const (
 	_StackLimit = _StackGuard - _StackSystem - _StackSmall
 )
 
-// Goroutine preemption request.
-// Stored into g->stackguard0 to cause split stack check failure.
-// Must be greater than any real sp.
-// 0xfffffade in hex.
-const (
-	_StackPreempt = uintptrMask & -1314
-	_StackFork    = uintptrMask & -1234
-)
-
 const (
 	// stackDebug == 0: no logging
 	//            == 1: logging of per-stack operations
@@ -121,8 +112,7 @@ const (
 	stackFromSystem  = 0 // allocate stacks from system memory instead of the heap
 	stackFaultOnFree = 0 // old stacks are mapped noaccess to detect use after free
 	stackPoisonCopy  = 0 // fill stack that should not be accessed with garbage, to detect bad dereferences during copy
-
-	stackCache = 1
+	stackNoCache     = 0 // disable per-P small stack caches
 
 	// check the BP links during traceback.
 	debugCheckBP = false
@@ -337,7 +327,8 @@ func stackalloc(n uint32) stack {
 	}
 
 	if debug.efence != 0 || stackFromSystem != 0 {
-		v := sysAlloc(round(uintptr(n), _PageSize), &memstats.stacks_sys)
+		n = uint32(round(uintptr(n), physPageSize))
+		v := sysAlloc(uintptr(n), &memstats.stacks_sys)
 		if v == nil {
 			throw("out of memory (stackalloc)")
 		}
@@ -348,7 +339,7 @@ func stackalloc(n uint32) stack {
 	// If we need a stack of a bigger size, we fall back on allocating
 	// a dedicated span.
 	var v unsafe.Pointer
-	if stackCache != 0 && n < _FixedStack<<_NumStackOrders && n < _StackCacheSize {
+	if n < _FixedStack<<_NumStackOrders && n < _StackCacheSize {
 		order := uint8(0)
 		n2 := n
 		for n2 > _FixedStack {
@@ -357,7 +348,7 @@ func stackalloc(n uint32) stack {
 		}
 		var x gclinkptr
 		c := thisg.m.mcache
-		if c == nil || thisg.m.preemptoff != "" || thisg.m.helpgc != 0 {
+		if stackNoCache != 0 || c == nil || thisg.m.preemptoff != "" || thisg.m.helpgc != 0 {
 			// c == nil can happen in the guts of exitsyscall or
 			// procresize. Just get a stack from the global pool.
 			// Also don't touch stackcache during gc
@@ -442,7 +433,7 @@ func stackfree(stk stack) {
 	if msanenabled {
 		msanfree(v, n)
 	}
-	if stackCache != 0 && n < _FixedStack<<_NumStackOrders && n < _StackCacheSize {
+	if n < _FixedStack<<_NumStackOrders && n < _StackCacheSize {
 		order := uint8(0)
 		n2 := n
 		for n2 > _FixedStack {
@@ -451,7 +442,7 @@ func stackfree(stk stack) {
 		}
 		x := gclinkptr(v)
 		c := gp.m.mcache
-		if c == nil || gp.m.preemptoff != "" || gp.m.helpgc != 0 {
+		if stackNoCache != 0 || c == nil || gp.m.preemptoff != "" || gp.m.helpgc != 0 {
 			lock(&stackpoolmu)
 			stackpoolfree(x, order)
 			unlock(&stackpoolmu)

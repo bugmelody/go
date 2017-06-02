@@ -490,6 +490,14 @@ type p struct {
 
 	tracebuf traceBufPtr
 
+	// traceSweep indicates the sweep events should be traced.
+	// This is used to defer the sweep start event until a span
+	// has actually been swept.
+	traceSweep bool
+	// traceSwept and traceReclaimed track the number of bytes
+	// swept and reclaimed by sweeping in the current sweep loop.
+	traceSwept, traceReclaimed uintptr
+
 	palloc persistentAlloc // per-P to avoid mutex
 
 	// Per-P GC state
@@ -719,16 +727,24 @@ var (
 	newprocs    int32
 
 	// Information about what cpu features are available.
-	// Set on startup in asm_{x86,amd64}.s.
-	cpuid_ecx         uint32
-	cpuid_edx         uint32
-	cpuid_ebx7        uint32
-	lfenceBeforeRdtsc bool
-	support_avx       bool
-	support_avx2      bool
-	support_bmi1      bool
-	support_bmi2      bool
-	support_popcnt    bool
+	// Set on startup in asm_{386,amd64,amd64p32}.s.
+	// Packages outside the runtime should not use these
+	// as they are not an external api.
+	processorVersionInfo uint32
+	isIntel              bool
+	lfenceBeforeRdtsc    bool
+	support_aes          bool
+	support_avx          bool
+	support_avx2         bool
+	support_bmi1         bool
+	support_bmi2         bool
+	support_erms         bool
+	support_osxsave      bool
+	support_popcnt       bool
+	support_sse2         bool
+	support_sse41        bool
+	support_sse42        bool
+	support_ssse3        bool
 
 	goarm                uint8 // set by cmd/link on arm systems
 	framepointer_enabled bool  // set by cmd/link

@@ -55,15 +55,8 @@ type Node struct {
 
 	Esc uint16 // EscXXX
 
-	Op        Op
-	Etype     types.EType // op for OASOP, etype for OTYPE, exclam for export, 6g saved reg, ChanDir for OTCHAN, for OINDEXMAP 1=LHS,0=RHS
-	Class     Class       // PPARAM, PAUTO, PEXTERN, etc
-	Embedded  uint8       // ODCLFIELD embedded type
-	Walkdef   uint8       // tracks state during typecheckdef; 2 == loop detected
-	Typecheck uint8       // tracks state during typechecking; 2 == loop detected
-	Initorder uint8
-	Likely    int8 // likeliness of if statement
-	hasVal    int8 // +1 for Val, -1 for Opt, 0 for not yet set
+	Op    Op
+	Etype types.EType // op for OASOP, etype for OTYPE, exclam for export, 6g saved reg, ChanDir for OTCHAN, for OINDEXMAP 1=LHS,0=RHS
 }
 
 // IsAutoTmp indicates if n was created by the compiler as a temporary,
@@ -76,24 +69,41 @@ func (n *Node) IsAutoTmp() bool {
 }
 
 const (
-	nodeHasBreak = 1 << iota
-	nodeIsClosureVar
-	nodeIsOutputParamHeapAddr
-	nodeNoInline  // used internally by inliner to indicate that a function call should not be inlined; set for OCALLFUNC and OCALLMETH only
-	nodeAssigned  // is the variable ever assigned to
-	nodeAddrtaken // address taken, even if not moved to heap
-	nodeImplicit
-	nodeIsddd    // is the argument variadic
-	nodeLocal    // type created in this file (see also Type.Local)
-	nodeDiag     // already printed error about this
-	nodeColas    // OAS resulting from :=
-	nodeNonNil   // guaranteed to be non-nil
-	nodeNoescape // func arguments do not escape; TODO(rsc): move Noescape to Func struct (see CL 7360)
-	nodeBounded  // bounds check unnecessary
-	nodeAddable  // addressable
-	nodeUsed     // for variable/label declared and not used error
-	nodeHasCall  // expression contains a function call
+	nodeClass, _     = iota, 1 << iota // PPARAM, PAUTO, PEXTERN, etc; three bits; first in the list because frequently accessed
+	_, _                               // second nodeClass bit
+	_, _                               // third nodeClass bit
+	nodeWalkdef, _                     // tracks state during typecheckdef; 2 == loop detected; two bits
+	_, _                               // second nodeWalkdef bit
+	nodeTypecheck, _                   // tracks state during typechecking; 2 == loop detected; two bits
+	_, _                               // second nodeTypecheck bit
+	nodeInitorder, _                   // tracks state during init1; two bits
+	_, _                               // second nodeInitorder bit
+	_, nodeHasBreak
+	_, nodeIsClosureVar
+	_, nodeIsOutputParamHeapAddr
+	_, nodeNoInline  // used internally by inliner to indicate that a function call should not be inlined; set for OCALLFUNC and OCALLMETH only
+	_, nodeAssigned  // is the variable ever assigned to
+	_, nodeAddrtaken // address taken, even if not moved to heap
+	_, nodeImplicit
+	_, nodeIsddd    // is the argument variadic
+	_, nodeLocal    // type created in this file (see also Type.Local)
+	_, nodeDiag     // already printed error about this
+	_, nodeColas    // OAS resulting from :=
+	_, nodeNonNil   // guaranteed to be non-nil
+	_, nodeNoescape // func arguments do not escape; TODO(rsc): move Noescape to Func struct (see CL 7360)
+	_, nodeBounded  // bounds check unnecessary
+	_, nodeAddable  // addressable
+	_, nodeHasCall  // expression contains a function call
+	_, nodeLikely   // if statement condition likely
+	_, nodeHasVal   // node.E contains a Val
+	_, nodeHasOpt   // node.E contains an Opt
+	_, nodeEmbedded // ODCLFIELD embedded type
 )
+
+func (n *Node) Class() Class     { return Class(n.flags.get3(nodeClass)) }
+func (n *Node) Walkdef() uint8   { return n.flags.get2(nodeWalkdef) }
+func (n *Node) Typecheck() uint8 { return n.flags.get2(nodeTypecheck) }
+func (n *Node) Initorder() uint8 { return n.flags.get2(nodeInitorder) }
 
 func (n *Node) HasBreak() bool              { return n.flags&nodeHasBreak != 0 }
 func (n *Node) IsClosureVar() bool          { return n.flags&nodeIsClosureVar != 0 }
@@ -110,8 +120,16 @@ func (n *Node) NonNil() bool                { return n.flags&nodeNonNil != 0 }
 func (n *Node) Noescape() bool              { return n.flags&nodeNoescape != 0 }
 func (n *Node) Bounded() bool               { return n.flags&nodeBounded != 0 }
 func (n *Node) Addable() bool               { return n.flags&nodeAddable != 0 }
-func (n *Node) Used() bool                  { return n.flags&nodeUsed != 0 }
 func (n *Node) HasCall() bool               { return n.flags&nodeHasCall != 0 }
+func (n *Node) Likely() bool                { return n.flags&nodeLikely != 0 }
+func (n *Node) HasVal() bool                { return n.flags&nodeHasVal != 0 }
+func (n *Node) HasOpt() bool                { return n.flags&nodeHasOpt != 0 }
+func (n *Node) Embedded() bool              { return n.flags&nodeEmbedded != 0 }
+
+func (n *Node) SetClass(b Class)     { n.flags.set3(nodeClass, uint8(b)) }
+func (n *Node) SetWalkdef(b uint8)   { n.flags.set2(nodeWalkdef, b) }
+func (n *Node) SetTypecheck(b uint8) { n.flags.set2(nodeTypecheck, b) }
+func (n *Node) SetInitorder(b uint8) { n.flags.set2(nodeInitorder, b) }
 
 func (n *Node) SetHasBreak(b bool)              { n.flags.set(nodeHasBreak, b) }
 func (n *Node) SetIsClosureVar(b bool)          { n.flags.set(nodeIsClosureVar, b) }
@@ -128,12 +146,15 @@ func (n *Node) SetNonNil(b bool)                { n.flags.set(nodeNonNil, b) }
 func (n *Node) SetNoescape(b bool)              { n.flags.set(nodeNoescape, b) }
 func (n *Node) SetBounded(b bool)               { n.flags.set(nodeBounded, b) }
 func (n *Node) SetAddable(b bool)               { n.flags.set(nodeAddable, b) }
-func (n *Node) SetUsed(b bool)                  { n.flags.set(nodeUsed, b) }
 func (n *Node) SetHasCall(b bool)               { n.flags.set(nodeHasCall, b) }
+func (n *Node) SetLikely(b bool)                { n.flags.set(nodeLikely, b) }
+func (n *Node) SetHasVal(b bool)                { n.flags.set(nodeHasVal, b) }
+func (n *Node) SetHasOpt(b bool)                { n.flags.set(nodeHasOpt, b) }
+func (n *Node) SetEmbedded(b bool)              { n.flags.set(nodeEmbedded, b) }
 
 // Val returns the Val for the node.
 func (n *Node) Val() Val {
-	if n.hasVal != +1 {
+	if !n.HasVal() {
 		return Val{}
 	}
 	return Val{n.E}
@@ -141,18 +162,18 @@ func (n *Node) Val() Val {
 
 // SetVal sets the Val for the node, which must not have been used with SetOpt.
 func (n *Node) SetVal(v Val) {
-	if n.hasVal == -1 {
+	if n.HasOpt() {
 		Debug['h'] = 1
 		Dump("have Opt", n)
 		Fatalf("have Opt")
 	}
-	n.hasVal = +1
+	n.SetHasVal(true)
 	n.E = v.U
 }
 
 // Opt returns the optimizer data for the node.
 func (n *Node) Opt() interface{} {
-	if n.hasVal != -1 {
+	if !n.HasOpt() {
 		return nil
 	}
 	return n.E
@@ -161,15 +182,15 @@ func (n *Node) Opt() interface{} {
 // SetOpt sets the optimizer data for the node, which must not have been used with SetVal.
 // SetOpt(nil) is ignored for Vals to simplify call sites that are clearing Opts.
 func (n *Node) SetOpt(x interface{}) {
-	if x == nil && n.hasVal >= 0 {
+	if x == nil && n.HasVal() {
 		return
 	}
-	if n.hasVal == +1 {
+	if n.HasVal() {
 		Debug['h'] = 1
 		Dump("have Val", n)
 		Fatalf("have Val")
 	}
-	n.hasVal = -1
+	n.SetHasOpt(true)
 	n.E = x
 }
 
@@ -191,6 +212,14 @@ func (n *Node) mayBeShared() bool {
 	return false
 }
 
+// funcname returns the name of the function n.
+func (n *Node) funcname() string {
+	if n == nil || n.Func == nil || n.Func.Nname == nil {
+		return "<nil>"
+	}
+	return n.Func.Nname.Sym.Name
+}
+
 // Name holds Node fields used only by named nodes (ONAME, OTYPE, OPACK, OLABEL, some OLITERAL).
 type Name struct {
 	Pack      *Node      // real package for import . names
@@ -202,6 +231,7 @@ type Name struct {
 	Vargen    int32      // unique name for ONAME within a function.  Function outputs are numbered starting at one.
 	Funcdepth int32
 
+	used  bool // for variable declared and not used error
 	flags bitset8
 }
 
@@ -220,6 +250,7 @@ func (n *Name) Byval() bool     { return n.flags&nameByval != 0 }
 func (n *Name) Needzero() bool  { return n.flags&nameNeedzero != 0 }
 func (n *Name) Keepalive() bool { return n.flags&nameKeepalive != 0 }
 func (n *Name) AutoTemp() bool  { return n.flags&nameAutoTemp != 0 }
+func (n *Name) Used() bool      { return n.used }
 
 func (n *Name) SetCaptured(b bool)  { n.flags.set(nameCaptured, b) }
 func (n *Name) SetReadonly(b bool)  { n.flags.set(nameReadonly, b) }
@@ -227,6 +258,7 @@ func (n *Name) SetByval(b bool)     { n.flags.set(nameByval, b) }
 func (n *Name) SetNeedzero(b bool)  { n.flags.set(nameNeedzero, b) }
 func (n *Name) SetKeepalive(b bool) { n.flags.set(nameKeepalive, b) }
 func (n *Name) SetAutoTemp(b bool)  { n.flags.set(nameAutoTemp, b) }
+func (n *Name) SetUsed(b bool)      { n.used = b }
 
 type Param struct {
 	Ntype    *Node
@@ -319,12 +351,21 @@ type Param struct {
 
 // Func holds Node fields used only with function-like nodes.
 type Func struct {
-	Shortname  *types.Sym
-	Enter      Nodes // for example, allocate and initialize memory for escaping parameters
-	Exit       Nodes
-	Cvars      Nodes   // closure params
-	Dcl        []*Node // autodcl for this func/closure
-	Inldcl     Nodes   // copy of dcl for use in inlining
+	Shortname *types.Sym
+	Enter     Nodes // for example, allocate and initialize memory for escaping parameters
+	Exit      Nodes
+	Cvars     Nodes   // closure params
+	Dcl       []*Node // autodcl for this func/closure
+	Inldcl    Nodes   // copy of dcl for use in inlining
+
+	// Parents records the parent scope of each scope within a
+	// function. The root scope (0) has no parent, so the i'th
+	// scope's parent is stored at Parents[i-1].
+	Parents []ScopeID
+
+	// Marks records scope boundary changes.
+	Marks []Mark
+
 	Closgen    int
 	Outerfunc  *Node // outer function (for closure)
 	FieldTrack map[*types.Sym]struct{}
@@ -348,31 +389,47 @@ type Func struct {
 	flags bitset8
 }
 
+// A Mark represents a scope boundary.
+type Mark struct {
+	// Pos is the position of the token that marks the scope
+	// change.
+	Pos src.XPos
+
+	// Scope identifies the innermost scope to the right of Pos.
+	Scope ScopeID
+}
+
+// A ScopeID represents a lexical scope within a function.
+type ScopeID int32
+
 const (
 	funcDupok         = 1 << iota // duplicate definitions ok
 	funcWrapper                   // is method wrapper
 	funcNeedctxt                  // function uses context register (has closure variables)
 	funcReflectMethod             // function calls reflect.Type.Method or MethodByName
 	funcIsHiddenClosure
-	funcNoFramePointer // Must not use a frame pointer for this function
-	funcHasDefer       // contains a defer statement
+	funcNoFramePointer   // Must not use a frame pointer for this function
+	funcHasDefer         // contains a defer statement
+	funcNilCheckDisabled // disable nil checks when compiling this function
 )
 
-func (f *Func) Dupok() bool           { return f.flags&funcDupok != 0 }
-func (f *Func) Wrapper() bool         { return f.flags&funcWrapper != 0 }
-func (f *Func) Needctxt() bool        { return f.flags&funcNeedctxt != 0 }
-func (f *Func) ReflectMethod() bool   { return f.flags&funcReflectMethod != 0 }
-func (f *Func) IsHiddenClosure() bool { return f.flags&funcIsHiddenClosure != 0 }
-func (f *Func) NoFramePointer() bool  { return f.flags&funcNoFramePointer != 0 }
-func (f *Func) HasDefer() bool        { return f.flags&funcHasDefer != 0 }
+func (f *Func) Dupok() bool            { return f.flags&funcDupok != 0 }
+func (f *Func) Wrapper() bool          { return f.flags&funcWrapper != 0 }
+func (f *Func) Needctxt() bool         { return f.flags&funcNeedctxt != 0 }
+func (f *Func) ReflectMethod() bool    { return f.flags&funcReflectMethod != 0 }
+func (f *Func) IsHiddenClosure() bool  { return f.flags&funcIsHiddenClosure != 0 }
+func (f *Func) NoFramePointer() bool   { return f.flags&funcNoFramePointer != 0 }
+func (f *Func) HasDefer() bool         { return f.flags&funcHasDefer != 0 }
+func (f *Func) NilCheckDisabled() bool { return f.flags&funcNilCheckDisabled != 0 }
 
-func (f *Func) SetDupok(b bool)           { f.flags.set(funcDupok, b) }
-func (f *Func) SetWrapper(b bool)         { f.flags.set(funcWrapper, b) }
-func (f *Func) SetNeedctxt(b bool)        { f.flags.set(funcNeedctxt, b) }
-func (f *Func) SetReflectMethod(b bool)   { f.flags.set(funcReflectMethod, b) }
-func (f *Func) SetIsHiddenClosure(b bool) { f.flags.set(funcIsHiddenClosure, b) }
-func (f *Func) SetNoFramePointer(b bool)  { f.flags.set(funcNoFramePointer, b) }
-func (f *Func) SetHasDefer(b bool)        { f.flags.set(funcHasDefer, b) }
+func (f *Func) SetDupok(b bool)            { f.flags.set(funcDupok, b) }
+func (f *Func) SetWrapper(b bool)          { f.flags.set(funcWrapper, b) }
+func (f *Func) SetNeedctxt(b bool)         { f.flags.set(funcNeedctxt, b) }
+func (f *Func) SetReflectMethod(b bool)    { f.flags.set(funcReflectMethod, b) }
+func (f *Func) SetIsHiddenClosure(b bool)  { f.flags.set(funcIsHiddenClosure, b) }
+func (f *Func) SetNoFramePointer(b bool)   { f.flags.set(funcNoFramePointer, b) }
+func (f *Func) SetHasDefer(b bool)         { f.flags.set(funcHasDefer, b) }
+func (f *Func) SetNilCheckDisabled(b bool) { f.flags.set(funcNilCheckDisabled, b) }
 
 type Op uint8
 

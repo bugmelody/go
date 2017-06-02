@@ -104,7 +104,7 @@ func declare(n *Node, ctxt Class) {
 			vargen++
 			gen = vargen
 		}
-		types.Pushdcl(s, lineno)
+		types.Pushdcl(s)
 		n.Name.Curfn = Curfn
 	}
 
@@ -125,7 +125,7 @@ func declare(n *Node, ctxt Class) {
 	s.Def = asTypesNode(n)
 	n.Name.Vargen = int32(gen)
 	n.Name.Funcdepth = funcdepth
-	n.Class = ctxt
+	n.SetClass(ctxt)
 
 	autoexport(n, ctxt)
 }
@@ -269,7 +269,7 @@ func oldname(s *types.Sym) *Node {
 		if c == nil || c.Name.Funcdepth != funcdepth {
 			// Do not have a closure var for the active closure yet; make one.
 			c = newname(s)
-			c.Class = PAUTOHEAP
+			c.SetClass(PAUTOHEAP)
 			c.SetIsClosureVar(true)
 			c.SetIsddd(n.Isddd())
 			c.Name.Defn = n
@@ -510,7 +510,7 @@ var funcdepth int32   // len(funcstack) during parsing, but then forced to be th
 // start the function.
 // called before funcargs; undone at end of funcbody.
 func funcstart(n *Node) {
-	types.Markdcl(lineno)
+	types.Markdcl()
 	funcstack = append(funcstack, Curfn)
 	funcdepth++
 	Curfn = n
@@ -570,7 +570,7 @@ func structfield(n *Node) *types.Field {
 		if n.Left != nil {
 			n.Left.Type = n.Type
 		}
-		if n.Embedded != 0 {
+		if n.Embedded() {
 			checkembeddedtype(n.Type)
 		}
 	}
@@ -593,7 +593,11 @@ func structfield(n *Node) *types.Field {
 
 	if n.Left != nil && n.Left.Op == ONAME {
 		f.Nname = asTypesNode(n.Left)
-		f.Embedded = n.Embedded
+		if n.Embedded() {
+			f.Embedded = 1
+		} else {
+			f.Embedded = 0
+		}
 		f.Sym = asNode(f.Nname).Sym
 	}
 
@@ -607,7 +611,7 @@ func checkdupfields(what string, ts ...*types.Type) {
 	seen := make(map[*types.Sym]bool)
 	for _, t := range ts {
 		for _, f := range t.Fields().Slice() {
-			if f.Sym == nil || isblanksym(f.Sym) || asNode(f.Nname) == nil {
+			if f.Sym == nil || f.Sym.IsBlank() || asNode(f.Nname) == nil {
 				continue
 			}
 			if seen[f.Sym] {
@@ -659,7 +663,7 @@ func tofunargs(l []*Node, funarg types.Funarg) *types.Type {
 		f.Funarg = funarg
 
 		// esc.go needs to find f given a PPARAM to add the tag.
-		if n.Left != nil && n.Left.Class == PPARAM {
+		if n.Left != nil && n.Left.Class() == PPARAM {
 			n.Left.Name.Param.Field = f
 		}
 		if f.Broke() {
@@ -679,7 +683,7 @@ func tofunargsfield(fields []*types.Field, funarg types.Funarg) *types.Type {
 		f.Funarg = funarg
 
 		// esc.go needs to find f given a PPARAM to add the tag.
-		if asNode(f.Nname) != nil && asNode(f.Nname).Class == PPARAM {
+		if asNode(f.Nname) != nil && asNode(f.Nname).Class() == PPARAM {
 			asNode(f.Nname).Name.Param.Field = f
 		}
 	}
@@ -779,34 +783,25 @@ func embedded(s *types.Sym, pkg *types.Pkg) *Node {
 		n = newname(s.Pkg.Lookup(name))
 	}
 	n = nod(ODCLFIELD, n, oldname(s))
-	n.Embedded = 1
+	n.SetEmbedded(true)
 	return n
 }
 
-// thisT is the singleton type used for interface method receivers.
-var thisT *types.Type
-
-func fakethis() *Node {
-	if thisT == nil {
-		thisT = types.NewPtr(types.New(TSTRUCT))
-	}
-	return anonfield(thisT)
+func fakeRecv() *Node {
+	return anonfield(types.FakeRecvType())
 }
 
-func fakethisfield() *types.Field {
-	if thisT == nil {
-		thisT = types.NewPtr(types.New(TSTRUCT))
-	}
+func fakeRecvField() *types.Field {
 	f := types.NewField()
-	f.Type = thisT
+	f.Type = types.FakeRecvType()
 	return f
 }
 
-// Is this field a method on an interface?
-// Those methods have thisT as the receiver.
-// (See fakethis above.)
+// isifacemethod reports whether (field) m is
+// an interface method. Such methods have the
+// special receiver type types.FakeRecvType().
 func isifacemethod(f *types.Type) bool {
-	return f.Recv().Type == thisT
+	return f.Recv().Type == types.FakeRecvType()
 }
 
 // turn a parsed function declaration into a type
@@ -916,7 +911,7 @@ func methodsym(nsym *types.Sym, t0 *types.Type, iface bool) *types.Sym {
 
 	if spkg == nil {
 		if methodsym_toppkg == nil {
-			methodsym_toppkg = mkpkg("go")
+			methodsym_toppkg = types.NewPkg("go", "")
 		}
 		spkg = methodsym_toppkg
 	}
@@ -935,7 +930,7 @@ func methodname(s *types.Sym, recv *types.Type) *types.Sym {
 	}
 
 	tsym := recv.Sym
-	if tsym == nil || isblanksym(s) {
+	if tsym == nil || s.IsBlank() {
 		return s
 	}
 
@@ -1000,7 +995,7 @@ func addmethod(msym *types.Sym, t *types.Type, local, nointerface bool) {
 		return
 	}
 
-	if isblanksym(msym) {
+	if msym.IsBlank() {
 		return
 	}
 
@@ -1063,6 +1058,16 @@ func funcsymname(s *types.Sym) string {
 
 // funcsym returns s·f.
 func funcsym(s *types.Sym) *types.Sym {
+	// funcsymsmu here serves to protect not just mutations of funcsyms (below),
+	// but also the package lookup of the func sym name,
+	// since this function gets called concurrently from the backend.
+	// There are no other concurrent package lookups in the backend,
+	// except for the types package, which is protected separately.
+	// Reusing funcsymsmu to also cover this package lookup
+	// avoids a general, broader, expensive package lookup mutex.
+	// Note makefuncsym also does package look-up of func sym names,
+	// but that it is only called serially, from the front end.
+	funcsymsmu.Lock()
 	sf, existed := s.Pkg.LookupOK(funcsymname(s))
 	// Don't export s·f when compiling for dynamic linking.
 	// When dynamically linking, the necessary function
@@ -1071,6 +1076,7 @@ func funcsym(s *types.Sym) *types.Sym {
 	if !Ctxt.Flag_dynlink && !existed {
 		funcsyms = append(funcsyms, s)
 	}
+	funcsymsmu.Unlock()
 	return sf
 }
 
@@ -1087,7 +1093,7 @@ func makefuncsym(s *types.Sym) {
 	if !Ctxt.Flag_dynlink {
 		Fatalf("makefuncsym dynlink")
 	}
-	if isblanksym(s) {
+	if s.IsBlank() {
 		return
 	}
 	if compiling_runtime && s.Name == "getg" {
@@ -1220,7 +1226,7 @@ func (c *nowritebarrierrecChecker) visitcall(n *Node) {
 	if n.Op == OCALLMETH {
 		fn = asNode(n.Left.Sym.Def)
 	}
-	if fn == nil || fn.Op != ONAME || fn.Class != PFUNC || fn.Name.Defn == nil {
+	if fn == nil || fn.Op != ONAME || fn.Class() != PFUNC || fn.Name.Defn == nil {
 		return
 	}
 	defn := fn.Name.Defn

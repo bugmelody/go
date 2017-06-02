@@ -5,6 +5,7 @@
 package ssa
 
 import (
+	"cmd/compile/internal/types"
 	"cmd/internal/obj"
 	"cmd/internal/objabi"
 	"cmd/internal/src"
@@ -17,9 +18,8 @@ import (
 // and shared across all compilations.
 type Config struct {
 	arch            string // "amd64", etc.
-	IntSize         int64  // 4 or 8
-	PtrSize         int64  // 4 or 8
-	RegSize         int64  // 4 or 8
+	PtrSize         int64  // 4 or 8; copy of cmd/internal/sys.Arch.PtrSize
+	RegSize         int64  // 4 or 8; copy of cmd/internal/sys.Arch.RegSize
 	Types           Types
 	lowerBlock      blockRewriter // lowering function
 	lowerValue      valueRewriter // lowering function
@@ -46,28 +46,28 @@ type (
 )
 
 type Types struct {
-	Bool       Type
-	Int8       Type
-	Int16      Type
-	Int32      Type
-	Int64      Type
-	UInt8      Type
-	UInt16     Type
-	UInt32     Type
-	UInt64     Type
-	Int        Type
-	Float32    Type
-	Float64    Type
-	Uintptr    Type
-	String     Type
-	BytePtr    Type // TODO: use unsafe.Pointer instead?
-	Int32Ptr   Type
-	UInt32Ptr  Type
-	IntPtr     Type
-	UintptrPtr Type
-	Float32Ptr Type
-	Float64Ptr Type
-	BytePtrPtr Type
+	Bool       *types.Type
+	Int8       *types.Type
+	Int16      *types.Type
+	Int32      *types.Type
+	Int64      *types.Type
+	UInt8      *types.Type
+	UInt16     *types.Type
+	UInt32     *types.Type
+	UInt64     *types.Type
+	Int        *types.Type
+	Float32    *types.Type
+	Float64    *types.Type
+	Uintptr    *types.Type
+	String     *types.Type
+	BytePtr    *types.Type // TODO: use unsafe.Pointer instead?
+	Int32Ptr   *types.Type
+	UInt32Ptr  *types.Type
+	IntPtr     *types.Type
+	UintptrPtr *types.Type
+	Float32Ptr *types.Type
+	Float64Ptr *types.Type
+	BytePtrPtr *types.Type
 }
 
 type Logger interface {
@@ -90,7 +90,7 @@ type Logger interface {
 }
 
 type Frontend interface {
-	CanSSA(t Type) bool
+	CanSSA(t *types.Type) bool
 
 	Logger
 
@@ -99,7 +99,7 @@ type Frontend interface {
 
 	// Auto returns a Node for an auto variable of the given type.
 	// The SSA compiler uses this function to allocate space for spills.
-	Auto(src.XPos, Type) GCNode
+	Auto(src.XPos, *types.Type) GCNode
 
 	// Given the name for a compound type, returns the name we should use
 	// for the parts of that compound type.
@@ -134,7 +134,7 @@ type Frontend interface {
 // interface used to hold *gc.Node. We'd use *gc.Node directly but
 // that would lead to an import cycle.
 type GCNode interface {
-	Typ() Type
+	Typ() *types.Type
 	String() string
 }
 
@@ -143,7 +143,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 	c := &Config{arch: arch, Types: types}
 	switch arch {
 	case "amd64":
-		c.IntSize = 8
 		c.PtrSize = 8
 		c.RegSize = 8
 		c.lowerBlock = rewriteBlockAMD64
@@ -155,7 +154,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.LinkReg = linkRegAMD64
 		c.hasGReg = false
 	case "amd64p32":
-		c.IntSize = 4
 		c.PtrSize = 4
 		c.RegSize = 8
 		c.lowerBlock = rewriteBlockAMD64
@@ -168,7 +166,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.hasGReg = false
 		c.noDuffDevice = true
 	case "386":
-		c.IntSize = 4
 		c.PtrSize = 4
 		c.RegSize = 4
 		c.lowerBlock = rewriteBlock386
@@ -180,7 +177,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.LinkReg = linkReg386
 		c.hasGReg = false
 	case "arm":
-		c.IntSize = 4
 		c.PtrSize = 4
 		c.RegSize = 4
 		c.lowerBlock = rewriteBlockARM
@@ -192,7 +188,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.LinkReg = linkRegARM
 		c.hasGReg = true
 	case "arm64":
-		c.IntSize = 8
 		c.PtrSize = 8
 		c.RegSize = 8
 		c.lowerBlock = rewriteBlockARM64
@@ -208,7 +203,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.BigEndian = true
 		fallthrough
 	case "ppc64le":
-		c.IntSize = 8
 		c.PtrSize = 8
 		c.RegSize = 8
 		c.lowerBlock = rewriteBlockPPC64
@@ -224,7 +218,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.BigEndian = true
 		fallthrough
 	case "mips64le":
-		c.IntSize = 8
 		c.PtrSize = 8
 		c.RegSize = 8
 		c.lowerBlock = rewriteBlockMIPS64
@@ -237,7 +230,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.LinkReg = linkRegMIPS64
 		c.hasGReg = true
 	case "s390x":
-		c.IntSize = 8
 		c.PtrSize = 8
 		c.RegSize = 8
 		c.lowerBlock = rewriteBlockS390X
@@ -254,7 +246,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize bool) *Config 
 		c.BigEndian = true
 		fallthrough
 	case "mipsle":
-		c.IntSize = 4
 		c.PtrSize = 4
 		c.RegSize = 4
 		c.lowerBlock = rewriteBlockMIPS

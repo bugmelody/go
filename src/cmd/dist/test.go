@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -465,7 +466,10 @@ func (t *tester) registerTests() {
 	}
 
 	// Test internal linking of PIE binaries where it is supported.
-	if t.goos == "linux" && t.goarch == "amd64" {
+	if t.goos == "linux" && t.goarch == "amd64" && !isAlpineLinux() {
+		// Issue 18243: We don't have a way to set the default
+		// dynamic linker used in internal linking mode. So
+		// this test is skipped on Alpine.
 		t.tests = append(t.tests, distTest{
 			name:    "pie_internal",
 			heading: "internal linking of -buildmode=pie",
@@ -593,7 +597,13 @@ func (t *tester) registerTests() {
 		t.registerTest("bench_go1", "../test/bench/go1", "go", "test", t.timeout(600), t.runFlag(""))
 	}
 	if t.goos != "android" && !t.iOS() {
-		const nShards = 5
+		// Only start multiple test dir shards on builders,
+		// where they get distributed to multiple machines.
+		// See issue 20141.
+		nShards := 1
+		if os.Getenv("GO_BUILDER_NAME") != "" {
+			nShards = 10
+		}
 		for shard := 0; shard < nShards; shard++ {
 			shard := shard
 			t.tests = append(t.tests, distTest{
@@ -746,6 +756,10 @@ func (t *tester) internalLink() bool {
 	if t.goarch == "arm64" || t.goarch == "mips64" || t.goarch == "mips64le" || t.goarch == "mips" || t.goarch == "mipsle" {
 		return false
 	}
+	if isAlpineLinux() {
+		// Issue 18243.
+		return false
+	}
 	return true
 }
 
@@ -758,7 +772,8 @@ func (t *tester) supportedBuildmode(mode string) bool {
 		}
 		switch pair {
 		case "darwin-386", "darwin-amd64", "darwin-arm", "darwin-arm64",
-			"linux-amd64", "linux-386", "windows-amd64", "windows-386":
+			"linux-amd64", "linux-386", "linux-ppc64le",
+			"windows-amd64", "windows-386":
 			return true
 		}
 		return false
@@ -1083,9 +1098,19 @@ func (t *tester) hasBash() bool {
 func (t *tester) raceDetectorSupported() bool {
 	switch t.gohostos {
 	case "linux", "darwin", "freebsd", "windows":
-		return t.cgoEnabled && t.goarch == "amd64" && t.gohostos == t.goos
+		// The race detector doesn't work on Alpine Linux:
+		// golang.org/issue/14481
+		return t.cgoEnabled && t.goarch == "amd64" && t.gohostos == t.goos && !isAlpineLinux()
 	}
 	return false
+}
+
+func isAlpineLinux() bool {
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	fi, err := os.Lstat("/etc/alpine-release")
+	return err == nil && fi.Mode().IsRegular()
 }
 
 func (t *tester) runFlag(rx string) string {
@@ -1096,9 +1121,9 @@ func (t *tester) runFlag(rx string) string {
 }
 
 func (t *tester) raceTest(dt *distTest) error {
-	t.addCmd(dt, "src", "go", "test", "-race", "-i", "runtime/race", "flag", "os/exec")
+	t.addCmd(dt, "src", "go", "test", "-race", "-i", "runtime/race", "flag", "os", "os/exec")
 	t.addCmd(dt, "src", "go", "test", "-race", t.runFlag("Output"), "runtime/race")
-	t.addCmd(dt, "src", "go", "test", "-race", "-short", t.runFlag("TestParse|TestEcho|TestStdinCloseRace"), "flag", "os/exec")
+	t.addCmd(dt, "src", "go", "test", "-race", "-short", t.runFlag("TestParse|TestEcho|TestStdinCloseRace|TestClosedPipeRace"), "flag", "os", "os/exec")
 	// We don't want the following line, because it
 	// slows down all.bash (by 10 seconds on my laptop).
 	// The race builder should catch any error here, but doesn't.
@@ -1125,7 +1150,7 @@ func (t *tester) testDirTest(dt *distTest, shard, shards int) error {
 	runtest.Do(func() {
 		const exe = "runtest.exe" // named exe for Windows, but harmless elsewhere
 		cmd := t.dirCmd("test", "go", "build", "-o", exe, "run.go")
-		cmd.Env = append(os.Environ(), "GOOS="+t.gohostos, "GOARCH="+t.gohostarch, "GOMAXPROCS=")
+		cmd.Env = append(os.Environ(), "GOOS="+t.gohostos, "GOARCH="+t.gohostarch)
 		runtest.exe = filepath.Join(cmd.Dir, exe)
 		if err := cmd.Run(); err != nil {
 			runtest.err = err

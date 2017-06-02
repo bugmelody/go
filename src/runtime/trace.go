@@ -31,7 +31,7 @@ const (
 	traceEvGCScanStart       = 9  // GC mark termination start [timestamp]
 	traceEvGCScanDone        = 10 // GC mark termination done [timestamp]
 	traceEvGCSweepStart      = 11 // GC sweep start [timestamp, stack id]
-	traceEvGCSweepDone       = 12 // GC sweep done [timestamp]
+	traceEvGCSweepDone       = 12 // GC sweep done [timestamp, swept, reclaimed]
 	traceEvGoCreate          = 13 // goroutine creation [timestamp, new goroutine id, new stack id, stack id]
 	traceEvGoStart           = 14 // goroutine starts running [timestamp, goroutine id, seq]
 	traceEvGoEnd             = 15 // goroutine ends [timestamp]
@@ -932,12 +932,44 @@ func traceGCScanDone() {
 	traceEvent(traceEvGCScanDone, -1)
 }
 
+// traceGCSweepStart prepares to trace a sweep loop. This does not
+// emit any events until traceGCSweepSpan is called.
+//
+// traceGCSweepStart must be paired with traceGCSweepDone and there
+// must be no preemption points between these two calls.
 func traceGCSweepStart() {
-	traceEvent(traceEvGCSweepStart, 1)
+	// Delay the actual GCSweepStart event until the first span
+	// sweep. If we don't sweep anything, don't emit any events.
+	_p_ := getg().m.p.ptr()
+	if _p_.traceSweep {
+		throw("double traceGCSweepStart")
+	}
+	_p_.traceSweep, _p_.traceSwept, _p_.traceReclaimed = true, 0, 0
+}
+
+// traceGCSweepSpan traces the sweep of a single page.
+//
+// This may be called outside a traceGCSweepStart/traceGCSweepDone
+// pair; however, it will not emit any trace events in this case.
+func traceGCSweepSpan(bytesSwept uintptr) {
+	_p_ := getg().m.p.ptr()
+	if _p_.traceSweep {
+		if _p_.traceSwept == 0 {
+			traceEvent(traceEvGCSweepStart, 1)
+		}
+		_p_.traceSwept += bytesSwept
+	}
 }
 
 func traceGCSweepDone() {
-	traceEvent(traceEvGCSweepDone, -1)
+	_p_ := getg().m.p.ptr()
+	if !_p_.traceSweep {
+		throw("missing traceGCSweepStart")
+	}
+	if _p_.traceSwept != 0 {
+		traceEvent(traceEvGCSweepDone, -1, uint64(_p_.traceSwept), uint64(_p_.traceReclaimed))
+	}
+	_p_.traceSweep = false
 }
 
 func traceGCMarkAssistStart() {

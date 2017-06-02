@@ -128,6 +128,12 @@ func WriteObjFile(ctxt *Link, b *bufio.Writer) {
 		}
 	}
 	for _, s := range ctxt.Data {
+		if len(s.P) > 0 {
+			switch s.Type {
+			case objabi.SBSS, objabi.SNOPTRBSS, objabi.STLSBSS:
+				ctxt.Diag("cannot provide data for %v sym %v", s.Type, s.Name)
+			}
+		}
 		w.wr.Write(s.P)
 	}
 
@@ -151,17 +157,13 @@ func (w *objWriter) writeRef(s *LSym, isPath bool) {
 		return
 	}
 	var m map[string]int
-	switch s.Version {
-	case 0:
+	if !s.Static() {
 		m = w.refIdx
-	case 1:
+	} else {
 		m = w.vrefIdx
-	default:
-		log.Fatalf("%s: invalid version number %d", s.Name, s.Version)
 	}
 
-	idx := m[s.Name]
-	if idx != 0 {
+	if idx := m[s.Name]; idx != 0 {
 		s.RefIdx = idx
 		return
 	}
@@ -171,7 +173,12 @@ func (w *objWriter) writeRef(s *LSym, isPath bool) {
 	} else {
 		w.writeString(s.Name)
 	}
-	w.writeInt(int64(s.Version))
+	// Write "version".
+	if s.Static() {
+		w.writeInt(1)
+	} else {
+		w.writeInt(0)
+	}
 	w.nRefs++
 	s.RefIdx = w.nRefs
 	m[s.Name] = w.nRefs
@@ -194,13 +201,13 @@ func (w *objWriter) writeRefs(s *LSym) {
 			w.writeRef(d, false)
 		}
 		for _, f := range pc.File {
-			fsym := w.ctxt.Lookup(f, 0)
+			fsym := w.ctxt.Lookup(f)
 			w.writeRef(fsym, true)
 		}
 		for _, call := range pc.InlTree.nodes {
 			w.writeRef(call.Func, false)
 			f, _ := linkgetlineFromPos(w.ctxt, call.Pos)
-			fsym := w.ctxt.Lookup(f, 0)
+			fsym := w.ctxt.Lookup(f)
 			w.writeRef(fsym, true)
 		}
 	}
@@ -209,11 +216,11 @@ func (w *objWriter) writeRefs(s *LSym) {
 func (w *objWriter) writeSymDebug(s *LSym) {
 	ctxt := w.ctxt
 	fmt.Fprintf(ctxt.Bso, "%s ", s.Name)
-	if s.Version != 0 {
-		fmt.Fprintf(ctxt.Bso, "v=%d ", s.Version)
-	}
 	if s.Type != 0 {
 		fmt.Fprintf(ctxt.Bso, "%v ", s.Type)
+	}
+	if s.Static() {
+		fmt.Fprint(ctxt.Bso, "static ")
 	}
 	if s.DuplicateOK() {
 		fmt.Fprintf(ctxt.Bso, "dupok ")
@@ -282,7 +289,7 @@ func (w *objWriter) writeSym(s *LSym) {
 	}
 
 	w.wr.WriteByte(symPrefix)
-	w.writeInt(int64(s.Type))
+	w.wr.WriteByte(byte(s.Type))
 	w.writeRefIndex(s)
 	flags := int64(0)
 	if s.DuplicateOK() {
@@ -331,6 +338,9 @@ func (w *objWriter) writeSym(s *LSym) {
 	if s.ReflectMethod() {
 		flags |= 1 << 2
 	}
+	if ctxt.Flag_shared {
+		flags |= 1 << 3
+	}
 	w.writeInt(flags)
 	w.writeInt(int64(len(s.Func.Autom)))
 	for _, a := range s.Func.Autom {
@@ -364,14 +374,14 @@ func (w *objWriter) writeSym(s *LSym) {
 	}
 	w.writeInt(int64(len(pc.File)))
 	for _, f := range pc.File {
-		fsym := ctxt.Lookup(f, 0)
+		fsym := ctxt.Lookup(f)
 		w.writeRefIndex(fsym)
 	}
 	w.writeInt(int64(len(pc.InlTree.nodes)))
 	for _, call := range pc.InlTree.nodes {
 		w.writeInt(int64(call.Parent))
 		f, l := linkgetlineFromPos(w.ctxt, call.Pos)
-		fsym := ctxt.Lookup(f, 0)
+		fsym := ctxt.Lookup(f)
 		w.writeRefIndex(fsym)
 		w.writeInt(int64(l))
 		w.writeRefIndex(call.Func)
@@ -437,10 +447,14 @@ func (c dwCtxt) SymValue(s dwarf.Sym) int64 {
 	return 0
 }
 func (c dwCtxt) AddAddress(s dwarf.Sym, data interface{}, value int64) {
-	rsym := data.(*LSym)
 	ls := s.(*LSym)
 	size := c.PtrSize()
-	ls.WriteAddr(c.Link, ls.Size, size, rsym, value)
+	if data != nil {
+		rsym := data.(*LSym)
+		ls.WriteAddr(c.Link, ls.Size, size, rsym, value)
+	} else {
+		ls.WriteInt(c.Link, ls.Size, size, value)
+	}
 }
 func (c dwCtxt) AddSectionOffset(s dwarf.Sym, size int, t interface{}, ofs int64) {
 	ls := s.(*LSym)
@@ -450,27 +464,35 @@ func (c dwCtxt) AddSectionOffset(s dwarf.Sym, size int, t interface{}, ofs int64
 	r.Type = objabi.R_DWARFREF
 }
 
-// dwarfSym returns the DWARF symbol for TEXT symbol.
-func (ctxt *Link) dwarfSym(s *LSym) *LSym {
+// dwarfSym returns the DWARF symbols for TEXT symbol.
+func (ctxt *Link) dwarfSym(s *LSym) (dwarfInfoSym, dwarfRangesSym *LSym) {
 	if s.Type != objabi.STEXT {
 		ctxt.Diag("dwarfSym of non-TEXT %v", s)
 	}
 	if s.Func.dwarfSym == nil {
-		s.Func.dwarfSym = ctxt.Lookup(dwarf.InfoPrefix+s.Name, int(s.Version))
+		s.Func.dwarfSym = ctxt.LookupDerived(s, dwarf.InfoPrefix+s.Name)
+		s.Func.dwarfRangesSym = ctxt.LookupDerived(s, dwarf.RangePrefix+s.Name)
 	}
-	return s.Func.dwarfSym
+	return s.Func.dwarfSym, s.Func.dwarfRangesSym
 }
 
-// populateDWARF fills in the DWARF Debugging Information Entry for TEXT symbol s.
-// The DWARF symbol must already have been initialized in InitTextSym.
+func (s *LSym) Len() int64 {
+	return s.Size
+}
+
+// populateDWARF fills in the DWARF Debugging Information Entries for TEXT symbol s.
+// The DWARFs symbol must already have been initialized in InitTextSym.
 func (ctxt *Link) populateDWARF(curfn interface{}, s *LSym) {
-	dsym := ctxt.dwarfSym(s)
+	dsym, drsym := ctxt.dwarfSym(s)
 	if dsym.Size != 0 {
 		ctxt.Diag("makeFuncDebugEntry double process %v", s)
 	}
-	var vars []*dwarf.Var
+	var scopes []dwarf.Scope
 	if ctxt.DebugInfo != nil {
-		vars = ctxt.DebugInfo(s, curfn)
+		scopes = ctxt.DebugInfo(s, curfn)
 	}
-	dwarf.PutFunc(dwCtxt{ctxt}, dsym, s.Name, s.Version == 0, s, s.Size, vars)
+	err := dwarf.PutFunc(dwCtxt{ctxt}, dsym, drsym, s.Name, !s.Static(), s, s.Size, scopes)
+	if err != nil {
+		ctxt.Diag("emitting DWARF for %s failed: %v", s.Name, err)
+	}
 }

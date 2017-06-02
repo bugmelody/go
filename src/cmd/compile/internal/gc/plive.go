@@ -18,8 +18,12 @@ import (
 	"cmd/compile/internal/ssa"
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
+	"cmd/internal/objabi"
+	"cmd/internal/src"
 	"crypto/md5"
+	"crypto/sha1"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -113,6 +117,7 @@ type Liveness struct {
 	fn         *Node
 	f          *ssa.Func
 	vars       []*Node
+	idx        map[*Node]int32
 	stkptrsize int64
 
 	be []BlockEffects
@@ -121,8 +126,7 @@ type Liveness struct {
 	// index within the stack maps.
 	stackMapIndex map[*ssa.Value]int
 
-	// An array with a bit vector for each safe point tracking
-	// live variables, indexed by bb.rpo.
+	// An array with a bit vector for each safe point tracking live variables.
 	livevars []bvec
 
 	cache progeffectscache
@@ -142,34 +146,23 @@ type progeffectscache struct {
 // nor do we care about empty structs (handled by the pointer check),
 // nor do we care about the fake PAUTOHEAP variables.
 func livenessShouldTrack(n *Node) bool {
-	return n.Op == ONAME && (n.Class == PAUTO || n.Class == PPARAM || n.Class == PPARAMOUT) && types.Haspointers(n.Type)
+	return n.Op == ONAME && (n.Class() == PAUTO || n.Class() == PPARAM || n.Class() == PPARAMOUT) && types.Haspointers(n.Type)
 }
 
-// getvariables returns the list of on-stack variables that we need to track.
-func getvariables(fn *Node) []*Node {
+// getvariables returns the list of on-stack variables that we need to track
+// and a map for looking up indices by *Node.
+func getvariables(fn *Node) ([]*Node, map[*Node]int32) {
 	var vars []*Node
 	for _, n := range fn.Func.Dcl {
-		if n.Op == ONAME {
-			// The Node.opt field is available for use by optimization passes.
-			// We use it to hold the index of the node in the variables array
-			// (nil means the Node is not in the variables array).
-			// The Node.curfn field is supposed to be set to the current function
-			// already, but for some compiler-introduced names it seems not to be,
-			// so fix that here.
-			// Later, when we want to find the index of a node in the variables list,
-			// we will check that n.Curfn == lv.fn and n.Opt() != nil. Then n.Opt().(int32)
-			// is the index in the variables list.
-			n.SetOpt(nil)
-			n.Name.Curfn = fn
-		}
-
 		if livenessShouldTrack(n) {
-			n.SetOpt(int32(len(vars)))
 			vars = append(vars, n)
 		}
 	}
-
-	return vars
+	idx := make(map[*Node]int32, len(vars))
+	for i, n := range vars {
+		idx[n] = int32(i)
+	}
+	return vars, idx
 }
 
 func (lv *Liveness) initcache() {
@@ -180,7 +173,7 @@ func (lv *Liveness) initcache() {
 	lv.cache.initialized = true
 
 	for i, node := range lv.vars {
-		switch node.Class {
+		switch node.Class() {
 		case PPARAM:
 			// A return instruction with a p.to is a tail return, which brings
 			// the stack pointer back up (if it ever went down) and then jumps
@@ -235,9 +228,9 @@ const (
 // valueEffects returns the index of a variable in lv.vars and the
 // liveness effects v has on that variable.
 // If v does not affect any tracked variables, it returns -1, 0.
-func (lv *Liveness) valueEffects(v *ssa.Value) (pos int32, effect liveEffect) {
+func (lv *Liveness) valueEffects(v *ssa.Value) (int32, liveEffect) {
 	n, e := affectedNode(v)
-	if e == 0 {
+	if e == 0 || n == nil || n.Op != ONAME { // cheapest checks first
 		return -1, 0
 	}
 
@@ -247,16 +240,12 @@ func (lv *Liveness) valueEffects(v *ssa.Value) (pos int32, effect liveEffect) {
 	// variable" ICEs (issue 19632).
 	switch v.Op {
 	case ssa.OpVarDef, ssa.OpVarKill, ssa.OpVarLive, ssa.OpKeepAlive:
-		if !n.Used() {
+		if !n.Name.Used() {
 			return -1, 0
 		}
 	}
 
-	pos = lv.liveIndex(n)
-	if pos < 0 {
-		return -1, 0
-	}
-
+	var effect liveEffect
 	if n.Addrtaken() {
 		if v.Op != ssa.OpVarKill {
 			effect |= avarinit
@@ -280,7 +269,14 @@ func (lv *Liveness) valueEffects(v *ssa.Value) (pos int32, effect liveEffect) {
 		}
 	}
 
-	return
+	if effect == 0 {
+		return -1, 0
+	}
+
+	if pos, ok := lv.idx[n]; ok {
+		return pos, effect
+	}
+	return -1, 0
 }
 
 // affectedNode returns the *Node affected by v
@@ -323,32 +319,15 @@ func affectedNode(v *ssa.Value) (*Node, ssa.SymEffect) {
 	return n, e
 }
 
-// liveIndex returns the index of n in the set of tracked vars.
-// If n is not a tracked var, liveIndex returns -1.
-// If n is not a tracked var but should be tracked, liveIndex crashes.
-func (lv *Liveness) liveIndex(n *Node) int32 {
-	if n == nil || n.Name.Curfn != lv.fn || !livenessShouldTrack(n) {
-		return -1
-	}
-
-	pos, ok := n.Opt().(int32) // index in vars
-	if !ok {
-		Fatalf("lost track of variable in liveness: %v (%p, %p)", n, n, n.Orig)
-	}
-	if pos >= int32(len(lv.vars)) || lv.vars[pos] != n {
-		Fatalf("bad bookkeeping in liveness: %v (%p, %p)", n, n, n.Orig)
-	}
-	return pos
-}
-
 // Constructs a new liveness structure used to hold the global state of the
 // liveness computation. The cfg argument is a slice of *BasicBlocks and the
 // vars argument is a slice of *Nodes.
-func newliveness(fn *Node, f *ssa.Func, vars []*Node, stkptrsize int64) *Liveness {
+func newliveness(fn *Node, f *ssa.Func, vars []*Node, idx map[*Node]int32, stkptrsize int64) *Liveness {
 	lv := &Liveness{
 		fn:         fn,
 		f:          f,
 		vars:       vars,
+		idx:        idx,
 		stkptrsize: stkptrsize,
 		be:         make([]BlockEffects, f.NumBlocks()),
 	}
@@ -484,7 +463,7 @@ func onebitlivepointermap(lv *Liveness, liveout bvec, vars []*Node, args bvec, l
 			break
 		}
 		node := vars[i]
-		switch node.Class {
+		switch node.Class() {
 		case PAUTO:
 			xoffset = node.Xoffset + lv.stkptrsize
 			onebitwalktype1(node.Type, &xoffset, locals)
@@ -499,7 +478,7 @@ func onebitlivepointermap(lv *Liveness, liveout bvec, vars []*Node, args bvec, l
 // Returns true for instructions that are safe points that must be annotated
 // with liveness information.
 func issafepoint(v *ssa.Value) bool {
-	return v.Op.IsCall() || v.Op == ssa.OpARMCALLudiv
+	return v.Op.IsCall()
 }
 
 // Initializes the sets for solving the live variables. Visits all the
@@ -655,7 +634,7 @@ func livenessepilogue(lv *Liveness) {
 	// don't need to keep the stack copy live?
 	if lv.fn.Func.HasDefer() {
 		for i, n := range lv.vars {
-			if n.Class == PPARAMOUT {
+			if n.Class() == PPARAMOUT {
 				if n.IsOutputParamHeapAddr() {
 					// Just to be paranoid.  Heap addresses are PAUTOs.
 					Fatalf("variable %v both output param and heap output param", n)
@@ -711,7 +690,7 @@ func livenessepilogue(lv *Liveness) {
 			}
 
 			// Annotate ambiguously live variables so that they can
-			// be zeroed at function entry.
+			// be zeroed at function entry and at VARKILL points.
 			// liveout is dead here and used as a temporary.
 			liveout.AndNot(any, all)
 			if !liveout.IsEmpty() {
@@ -789,10 +768,169 @@ func livenessepilogue(lv *Liveness) {
 	// the only things that can possibly be live are the
 	// input parameters.
 	for j, n := range lv.vars {
-		if n.Class != PPARAM && lv.livevars[0].Get(int32(j)) {
+		if n.Class() != PPARAM && lv.livevars[0].Get(int32(j)) {
 			Fatalf("internal error: %v %L recorded as live on entry", lv.fn.Func.Nname, n)
 		}
 	}
+}
+
+func (lv *Liveness) clobber() {
+	// The clobberdead experiment inserts code to clobber all the dead variables (locals and args)
+	// before and after every safepoint. This experiment is useful for debugging the generation
+	// of live pointer bitmaps.
+	if objabi.Clobberdead_enabled == 0 {
+		return
+	}
+	var varSize int64
+	for _, n := range lv.vars {
+		varSize += n.Type.Size()
+	}
+	if len(lv.livevars) > 1000 || varSize > 10000 {
+		// Be careful to avoid doing too much work.
+		// Bail if >1000 safepoints or >10000 bytes of variables.
+		// Otherwise, giant functions make this experiment generate too much code.
+		return
+	}
+	if h := os.Getenv("GOCLOBBERDEADHASH"); h != "" {
+		// Clobber only functions where the hash of the function name matches a pattern.
+		// Useful for binary searching for a miscompiled function.
+		hstr := ""
+		for _, b := range sha1.Sum([]byte(lv.fn.funcname())) {
+			hstr += fmt.Sprintf("%08b", b)
+		}
+		if !strings.HasSuffix(hstr, h) {
+			return
+		}
+		fmt.Printf("\t\t\tCLOBBERDEAD %s\n", lv.fn.funcname())
+	}
+	if lv.f.Name == "forkAndExecInChild" {
+		// forkAndExecInChild calls vfork (on linux/amd64, anyway).
+		// The code we add here clobbers parts of the stack in the child.
+		// When the parent resumes, it is using the same stack frame. But the
+		// child has clobbered stack variables that the parent needs. Boom!
+		// In particular, the sys argument gets clobbered.
+		// Note to self: GOCLOBBERDEADHASH=011100101110
+		return
+	}
+
+	var oldSched []*ssa.Value
+	for _, b := range lv.f.Blocks {
+		// Copy block's values to a temporary.
+		oldSched = append(oldSched[:0], b.Values...)
+		b.Values = b.Values[:0]
+
+		// Clobber all dead variables at entry.
+		if b == lv.f.Entry {
+			for len(oldSched) > 0 && len(oldSched[0].Args) == 0 {
+				// Skip argless ops. We need to skip at least
+				// the lowered ClosurePtr op, because it
+				// really wants to be first. This will also
+				// skip ops like InitMem and SP, which are ok.
+				b.Values = append(b.Values, oldSched[0])
+				oldSched = oldSched[1:]
+			}
+			clobber(lv, b, lv.livevars[0])
+		}
+
+		// Copy values into schedule, adding clobbering around safepoints.
+		for _, v := range oldSched {
+			if !issafepoint(v) {
+				b.Values = append(b.Values, v)
+				continue
+			}
+			before := true
+			if v.Op.IsCall() && v.Aux != nil && v.Aux.(*obj.LSym) == typedmemmove {
+				// Can't put clobber code before the call to typedmemmove.
+				// The variable to-be-copied is marked as dead
+				// at the callsite. That is ok, though, as typedmemmove
+				// is marked as nosplit, and the first thing it does
+				// is to call memmove (also nosplit), after which
+				// the source value is dead.
+				// See issue 16026.
+				before = false
+			}
+			if before {
+				clobber(lv, b, lv.livevars[lv.stackMapIndex[v]])
+			}
+			b.Values = append(b.Values, v)
+			clobber(lv, b, lv.livevars[lv.stackMapIndex[v]])
+		}
+	}
+}
+
+// clobber generates code to clobber all dead variables (those not marked in live).
+// Clobbering instructions are added to the end of b.Values.
+func clobber(lv *Liveness, b *ssa.Block, live bvec) {
+	for i, n := range lv.vars {
+		if !live.Get(int32(i)) {
+			clobberVar(b, n)
+		}
+	}
+}
+
+// clobberVar generates code to trash the pointers in v.
+// Clobbering instructions are added to the end of b.Values.
+func clobberVar(b *ssa.Block, v *Node) {
+	clobberWalk(b, v, 0, v.Type)
+}
+
+// b = block to which we append instructions
+// v = variable
+// offset = offset of (sub-portion of) variable to clobber (in bytes)
+// t = type of sub-portion of v.
+func clobberWalk(b *ssa.Block, v *Node, offset int64, t *types.Type) {
+	if !types.Haspointers(t) {
+		return
+	}
+	switch t.Etype {
+	case TPTR32,
+		TPTR64,
+		TUNSAFEPTR,
+		TFUNC,
+		TCHAN,
+		TMAP:
+		clobberPtr(b, v, offset)
+
+	case TSTRING:
+		// struct { byte *str; int len; }
+		clobberPtr(b, v, offset)
+
+	case TINTER:
+		// struct { Itab *tab; void *data; }
+		// or, when isnilinter(t)==true:
+		// struct { Type *type; void *data; }
+		clobberPtr(b, v, offset)
+		clobberPtr(b, v, offset+int64(Widthptr))
+
+	case TSLICE:
+		// struct { byte *array; int len; int cap; }
+		clobberPtr(b, v, offset)
+
+	case TARRAY:
+		for i := int64(0); i < t.NumElem(); i++ {
+			clobberWalk(b, v, offset+i*t.Elem().Size(), t.Elem())
+		}
+
+	case TSTRUCT:
+		for _, t1 := range t.Fields().Slice() {
+			clobberWalk(b, v, offset+t1.Offset, t1.Type)
+		}
+
+	default:
+		Fatalf("clobberWalk: unexpected type, %v", t)
+	}
+}
+
+// clobberPtr generates a clobber of the pointer at offset offset in v.
+// The clobber instruction is added at the end of b.
+func clobberPtr(b *ssa.Block, v *Node, offset int64) {
+	var aux interface{}
+	if v.Class() == PAUTO {
+		aux = &ssa.AutoSymbol{Node: v}
+	} else {
+		aux = &ssa.ArgSymbol{Node: v}
+	}
+	b.NewValue0IA(src.NoXPos, ssa.OpClobber, types.TypeVoid, offset, aux)
 }
 
 func (lv *Liveness) avarinitanyall(b *ssa.Block, any, all bvec) {
@@ -925,7 +1063,7 @@ Outer:
 }
 
 func (lv *Liveness) showlive(v *ssa.Value, live bvec) {
-	if debuglive == 0 || lv.fn.Func.Nname.Sym.Name == "init" || strings.HasPrefix(lv.fn.Func.Nname.Sym.Name, ".") {
+	if debuglive == 0 || lv.fn.funcname() == "init" || strings.HasPrefix(lv.fn.funcname(), ".") {
 		return
 	}
 	if live.IsEmpty() {
@@ -939,7 +1077,7 @@ func (lv *Liveness) showlive(v *ssa.Value, live bvec) {
 
 	s := "live at "
 	if v == nil {
-		s += fmt.Sprintf("entry to %s:", lv.fn.Func.Nname.Sym.Name)
+		s += fmt.Sprintf("entry to %s:", lv.fn.funcname())
 	} else if sym, ok := v.Aux.(*obj.LSym); ok {
 		fn := sym.Name
 		if pos := strings.Index(fn, "."); pos >= 0 {
@@ -1001,7 +1139,7 @@ func (lv *Liveness) printeffect(printed bool, name string, pos int32, x bool) bo
 // This format synthesizes the information used during the multiple passes
 // into a single presentation.
 func livenessprintdebug(lv *Liveness) {
-	fmt.Printf("liveness: %s\n", lv.fn.Func.Nname.Sym.Name)
+	fmt.Printf("liveness: %s\n", lv.fn.funcname())
 
 	pcdata := 0
 	for i, b := range lv.f.Blocks {
@@ -1114,12 +1252,12 @@ func livenessprintdebug(lv *Liveness) {
 // remaining bytes are the raw bitmaps.
 func livenessemit(lv *Liveness, argssym, livesym *obj.LSym) {
 	args := bvalloc(argswords(lv))
-	aoff := duint32LSym(argssym, 0, uint32(len(lv.livevars))) // number of bitmaps
-	aoff = duint32LSym(argssym, aoff, uint32(args.n))         // number of bits in each bitmap
+	aoff := duint32(argssym, 0, uint32(len(lv.livevars))) // number of bitmaps
+	aoff = duint32(argssym, aoff, uint32(args.n))         // number of bits in each bitmap
 
 	locals := bvalloc(localswords(lv))
-	loff := duint32LSym(livesym, 0, uint32(len(lv.livevars))) // number of bitmaps
-	loff = duint32LSym(livesym, loff, uint32(locals.n))       // number of bits in each bitmap
+	loff := duint32(livesym, 0, uint32(len(lv.livevars))) // number of bitmaps
+	loff = duint32(livesym, loff, uint32(locals.n))       // number of bits in each bitmap
 
 	for _, live := range lv.livevars {
 		args.Clear()
@@ -1127,8 +1265,8 @@ func livenessemit(lv *Liveness, argssym, livesym *obj.LSym) {
 
 		onebitlivepointermap(lv, live, lv.vars, args, locals)
 
-		aoff = dbvecLSym(argssym, aoff, args)
-		loff = dbvecLSym(livesym, loff, locals)
+		aoff = dbvec(argssym, aoff, args)
+		loff = dbvec(livesym, loff, locals)
 	}
 
 	// Give these LSyms content-addressable names,
@@ -1146,14 +1284,15 @@ func livenessemit(lv *Liveness, argssym, livesym *obj.LSym) {
 // Returns a map from GC safe points to their corresponding stack map index.
 func liveness(e *ssafn, f *ssa.Func) map[*ssa.Value]int {
 	// Construct the global liveness state.
-	vars := getvariables(e.curfn)
-	lv := newliveness(e.curfn, f, vars, e.stkptrsize)
+	vars, idx := getvariables(e.curfn)
+	lv := newliveness(e.curfn, f, vars, idx, e.stkptrsize)
 
 	// Run the dataflow framework.
 	livenessprologue(lv)
 	livenesssolve(lv)
 	livenessepilogue(lv)
 	livenesscompact(lv)
+	lv.clobber()
 	if debuglive >= 2 {
 		livenessprintdebug(lv)
 	}

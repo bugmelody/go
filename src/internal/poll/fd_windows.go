@@ -153,14 +153,14 @@ func (s *ioSrv) ProcessRemoteIO() {
 // IO in the current thread for systems where Windows CancelIoEx API
 // is available. Alternatively, it passes the request onto
 // runtime netpoll and waits for completion or cancels request.
-func (s *ioSrv) ExecIO(o *operation, name string, submit func(o *operation) error) (int, error) {
+func (s *ioSrv) ExecIO(o *operation, submit func(o *operation) error) (int, error) {
 	if !canCancelIO {
 		onceStartServer.Do(startServer)
 	}
 
 	fd := o.fd
 	// Notify runtime netpoll about starting IO.
-	err := fd.pd.prepare(int(o.mode))
+	err := fd.pd.prepare(int(o.mode), fd.isFile)
 	if err != nil {
 		return 0, err
 	}
@@ -188,7 +188,7 @@ func (s *ioSrv) ExecIO(o *operation, name string, submit func(o *operation) erro
 		return 0, err
 	}
 	// Wait for our request to complete.
-	err = fd.pd.wait(int(o.mode))
+	err = fd.pd.wait(int(o.mode), fd.isFile)
 	if err == nil {
 		// All is good. Extract our IO results and return.
 		if o.errno != 0 {
@@ -200,7 +200,7 @@ func (s *ioSrv) ExecIO(o *operation, name string, submit func(o *operation) erro
 	// IO is interrupted by "close" or "timeout"
 	netpollErr := err
 	switch netpollErr {
-	case ErrClosing, ErrTimeout:
+	case ErrNetClosing, ErrFileClosing, ErrTimeout:
 		// will deal with those.
 	default:
 		panic("unexpected runtime.netpoll error: " + netpollErr.Error())
@@ -380,7 +380,7 @@ func (fd *FD) destroy() error {
 // the destroy method when there are no remaining references.
 func (fd *FD) Close() error {
 	if !fd.fdmu.increfAndClose() {
-		return ErrClosing
+		return errClosing(fd.isFile)
 	}
 	// unblock pending reader and writer
 	fd.pd.evict()
@@ -419,7 +419,7 @@ func (fd *FD) Read(buf []byte) (int, error) {
 	} else {
 		o := &fd.rop
 		o.InitBuf(buf)
-		n, err = rsrv.ExecIO(o, "WSARecv", func(o *operation) error {
+		n, err = rsrv.ExecIO(o, func(o *operation) error {
 			return syscall.WSARecv(o.fd.Sysfd, &o.buf, 1, &o.qty, &o.flags, &o.o, nil)
 		})
 		if race.Enabled {
@@ -509,10 +509,12 @@ func (fd *FD) readConsole(b []byte) (int, error) {
 
 // Pread emulates the Unix pread system call.
 func (fd *FD) Pread(b []byte, off int64) (int, error) {
-	if err := fd.readLock(); err != nil {
+	// Call incref, not readLock, because since pread specifies the
+	// offset it is independent from other reads.
+	if err := fd.incref(); err != nil {
 		return 0, err
 	}
-	defer fd.readUnlock()
+	defer fd.decref()
 
 	fd.l.Lock()
 	defer fd.l.Unlock()
@@ -550,7 +552,7 @@ func (fd *FD) ReadFrom(buf []byte) (int, syscall.Sockaddr, error) {
 	defer fd.readUnlock()
 	o := &fd.rop
 	o.InitBuf(buf)
-	n, err := rsrv.ExecIO(o, "WSARecvFrom", func(o *operation) error {
+	n, err := rsrv.ExecIO(o, func(o *operation) error {
 		if o.rsa == nil {
 			o.rsa = new(syscall.RawSockaddrAny)
 		}
@@ -591,7 +593,7 @@ func (fd *FD) Write(buf []byte) (int, error) {
 		}
 		o := &fd.wop
 		o.InitBuf(buf)
-		n, err = wsrv.ExecIO(o, "WSASend", func(o *operation) error {
+		n, err = wsrv.ExecIO(o, func(o *operation) error {
 			return syscall.WSASend(o.fd.Sysfd, &o.buf, 1, &o.qty, 0, &o.o, nil)
 		})
 	}
@@ -643,10 +645,12 @@ func (fd *FD) writeConsole(b []byte) (int, error) {
 
 // Pwrite emulates the Unix pwrite system call.
 func (fd *FD) Pwrite(b []byte, off int64) (int, error) {
-	if err := fd.writeLock(); err != nil {
+	// Call incref, not writeLock, because since pwrite specifies the
+	// offset it is independent from other writes.
+	if err := fd.incref(); err != nil {
 		return 0, err
 	}
-	defer fd.writeUnlock()
+	defer fd.decref()
 
 	fd.l.Lock()
 	defer fd.l.Unlock()
@@ -681,8 +685,8 @@ func (fd *FD) Writev(buf *[][]byte) (int64, error) {
 	}
 	o := &fd.wop
 	o.InitBufs(buf)
-	n, err := wsrv.ExecIO(o, "WSASend", func(o *operation) error {
-		return syscall.WSASend(o.fd.Sysfd, &o.bufs[0], uint32(len(*buf)), &o.qty, 0, &o.o, nil)
+	n, err := wsrv.ExecIO(o, func(o *operation) error {
+		return syscall.WSASend(o.fd.Sysfd, &o.bufs[0], uint32(len(o.bufs)), &o.qty, 0, &o.o, nil)
 	})
 	o.ClearBufs()
 	TestHookDidWritev(n)
@@ -702,7 +706,7 @@ func (fd *FD) WriteTo(buf []byte, sa syscall.Sockaddr) (int, error) {
 	o := &fd.wop
 	o.InitBuf(buf)
 	o.sa = sa
-	n, err := wsrv.ExecIO(o, "WSASendto", func(o *operation) error {
+	n, err := wsrv.ExecIO(o, func(o *operation) error {
 		return syscall.WSASendto(o.fd.Sysfd, &o.buf, 1, &o.qty, 0, o.sa, &o.o, nil)
 	})
 	return n, err
@@ -714,7 +718,7 @@ func (fd *FD) WriteTo(buf []byte, sa syscall.Sockaddr) (int, error) {
 func (fd *FD) ConnectEx(ra syscall.Sockaddr) error {
 	o := &fd.wop
 	o.sa = ra
-	_, err := wsrv.ExecIO(o, "ConnectEx", func(o *operation) error {
+	_, err := wsrv.ExecIO(o, func(o *operation) error {
 		return ConnectExFunc(o.fd.Sysfd, o.sa, nil, 0, nil, &o.o)
 	})
 	return err
@@ -724,7 +728,7 @@ func (fd *FD) acceptOne(s syscall.Handle, rawsa []syscall.RawSockaddrAny, o *ope
 	// Submit accept request.
 	o.handle = s
 	o.rsan = int32(unsafe.Sizeof(rawsa[0]))
-	_, err := rsrv.ExecIO(o, "AcceptEx", func(o *operation) error {
+	_, err := rsrv.ExecIO(o, func(o *operation) error {
 		return AcceptFunc(o.fd.Sysfd, o.handle, (*byte)(unsafe.Pointer(&rawsa[0])), 0, uint32(o.rsan), uint32(o.rsan), &o.qty, &o.o)
 	})
 	if err != nil {
@@ -828,4 +832,25 @@ func (fd *FD) GetFileInformationByHandle(data *syscall.ByHandleFileInformation) 
 	}
 	defer fd.decref()
 	return syscall.GetFileInformationByHandle(fd.Sysfd, data)
+}
+
+// RawControl invokes the user-defined function f for a non-IO
+// operation.
+func (fd *FD) RawControl(f func(uintptr)) error {
+	if err := fd.incref(); err != nil {
+		return err
+	}
+	defer fd.decref()
+	f(uintptr(fd.Sysfd))
+	return nil
+}
+
+// RawRead invokes the user-defined function f for a read operation.
+func (fd *FD) RawRead(f func(uintptr) bool) error {
+	return errors.New("not implemented")
+}
+
+// RawWrite invokes the user-defined function f for a write operation.
+func (fd *FD) RawWrite(f func(uintptr) bool) error {
+	return errors.New("not implemented")
 }

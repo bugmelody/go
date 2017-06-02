@@ -4,11 +4,20 @@
 
 package types
 
-import "cmd/internal/obj"
+import (
+	"cmd/internal/obj"
+	"cmd/internal/objabi"
+	"fmt"
+	"sort"
+	"sync"
+)
+
+// pkgMap maps a package path to a package.
+var pkgMap = make(map[string]*Pkg)
 
 type Pkg struct {
-	Name     string // package name, e.g. "sys"
 	Path     string // string literal used in import statement, e.g. "runtime/internal/sys"
+	Name     string // package name, e.g. "sys"
 	Pathsym  *obj.LSym
 	Prefix   string // escaped path for use in symbol table
 	Imported bool   // export data of this package was parsed
@@ -16,7 +25,47 @@ type Pkg struct {
 	Syms     map[string]*Sym
 }
 
-var Nopkg = &Pkg{
+// NewPkg returns a new Pkg for the given package path and name.
+// Unless name is the empty string, if the package exists already,
+// the existing package name and the provided name must match.
+func NewPkg(path, name string) *Pkg {
+	if p := pkgMap[path]; p != nil {
+		if name != "" && p.Name != name {
+			panic(fmt.Sprintf("conflicting package names %s and %s for path %q", p.Name, name, path))
+		}
+		return p
+	}
+
+	p := new(Pkg)
+	p.Path = path
+	p.Name = name
+	p.Prefix = objabi.PathToPrefix(path)
+	p.Syms = make(map[string]*Sym)
+	pkgMap[path] = p
+
+	return p
+}
+
+// ImportedPkgList returns the list of directly imported packages.
+// The list is sorted by package path.
+func ImportedPkgList() []*Pkg {
+	var list []*Pkg
+	for _, p := range pkgMap {
+		if p.Direct {
+			list = append(list, p)
+		}
+	}
+	sort.Sort(byPath(list))
+	return list
+}
+
+type byPath []*Pkg
+
+func (a byPath) Len() int           { return len(a) }
+func (a byPath) Less(i, j int) bool { return a[i].Path < a[j].Path }
+func (a byPath) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+var nopkg = &Pkg{
 	Syms: make(map[string]*Sym),
 }
 
@@ -29,8 +78,9 @@ var InitSyms []*Sym
 
 // LookupOK looks up name in pkg and reports whether it previously existed.
 func (pkg *Pkg) LookupOK(name string) (s *Sym, existed bool) {
+	// TODO(gri) remove this check in favor of specialized lookup
 	if pkg == nil {
-		pkg = Nopkg
+		pkg = nopkg
 	}
 	if s := pkg.Syms[name]; s != nil {
 		return s, true
@@ -48,8 +98,9 @@ func (pkg *Pkg) LookupOK(name string) (s *Sym, existed bool) {
 }
 
 func (pkg *Pkg) LookupBytes(name []byte) *Sym {
+	// TODO(gri) remove this check in favor of specialized lookup
 	if pkg == nil {
-		pkg = Nopkg
+		pkg = nopkg
 	}
 	if s := pkg.Syms[string(name)]; s != nil {
 		return s
@@ -58,13 +109,27 @@ func (pkg *Pkg) LookupBytes(name []byte) *Sym {
 	return pkg.Lookup(str)
 }
 
-var internedStrings = map[string]string{}
+var (
+	internedStringsmu sync.Mutex // protects internedStrings
+	internedStrings   = map[string]string{}
+)
 
 func InternString(b []byte) string {
+	internedStringsmu.Lock()
 	s, ok := internedStrings[string(b)] // string(b) here doesn't allocate
 	if !ok {
 		s = string(b)
 		internedStrings[s] = s
 	}
+	internedStringsmu.Unlock()
 	return s
+}
+
+// CleanroomDo invokes f in an environment with with no preexisting packages.
+// For testing of import/export only.
+func CleanroomDo(f func()) {
+	saved := pkgMap
+	pkgMap = make(map[string]*Pkg)
+	f()
+	pkgMap = saved
 }

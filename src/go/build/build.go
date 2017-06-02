@@ -529,10 +529,7 @@ func (ctxt *Context) Import(path string, srcDir string, mode ImportMode) (*Packa
 		if !ctxt.isAbsPath(path) {
 			p.Dir = ctxt.joinPath(srcDir, path)
 		}
-		if !ctxt.isDir(p.Dir) {
-			// package was not found
-			return p, fmt.Errorf("cannot find package %q in:\n\t%s", path, p.Dir)
-		}
+		// p.Dir directory may or may not exist. Gather partial information first, check if it exists later.
 		// Determine canonical import path, if any.
 		// Exclude results where the import path would include /testdata/.
 		inTestdata := func(sub string) bool {
@@ -685,6 +682,16 @@ Found:
 			p.PkgTargetRoot = ctxt.joinPath(p.Root, pkgtargetroot)
 			p.PkgObj = ctxt.joinPath(p.Root, pkga)
 		}
+	}
+
+	// If it's a local import path, by the time we get here, we still haven't checked
+	// that p.Dir directory exists. This is the right time to do that check.
+	// We can't do it earlier, because we want to gather partial information for the
+	// non-nil *Package returned when an error occurs.
+	// We need to do this before we return early on FindOnly flag.
+	if IsLocalImport(path) && !ctxt.isDir(p.Dir) {
+		// package was not found
+		return p, fmt.Errorf("cannot find package %q in:\n\t%s", path, p.Dir)
 	}
 
 	if mode&FindOnly != 0 {
@@ -1302,16 +1309,15 @@ func expandSrcDir(str string, srcdir string) (string, bool) {
 	// to "/" before starting (eg: on windows).
 	srcdir = filepath.ToSlash(srcdir)
 
-	// Spaces are tolerated in ${SRCDIR}, but not anywhere else.
 	chunks := strings.Split(str, "${SRCDIR}")
 	if len(chunks) < 2 {
-		return str, safeCgoName(str, false)
+		return str, safeCgoName(str)
 	}
 	ok := true
 	for _, chunk := range chunks {
-		ok = ok && (chunk == "" || safeCgoName(chunk, false))
+		ok = ok && (chunk == "" || safeCgoName(chunk))
 	}
-	ok = ok && (srcdir == "" || safeCgoName(srcdir, true))
+	ok = ok && (srcdir == "" || safeCgoName(srcdir))
 	res := strings.Join(chunks, srcdir)
 	return res, ok && res != ""
 }
@@ -1321,21 +1327,14 @@ func expandSrcDir(str string, srcdir string) (string, bool) {
 // See golang.org/issue/6038.
 // The @ is for OS X. See golang.org/issue/13720.
 // The % is for Jenkins. See golang.org/issue/16959.
-const safeString = "+-.,/0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz:$@%"
-const safeSpaces = " "
+const safeString = "+-.,/0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz:$@% "
 
-var safeBytes = []byte(safeSpaces + safeString)
-
-func safeCgoName(s string, spaces bool) bool {
+func safeCgoName(s string) bool {
 	if s == "" {
 		return false
 	}
-	safe := safeBytes
-	if !spaces {
-		safe = safe[len(safeSpaces):]
-	}
 	for i := 0; i < len(s); i++ {
-		if c := s[i]; c < utf8.RuneSelf && bytes.IndexByte(safe, c) < 0 {
+		if c := s[i]; c < utf8.RuneSelf && strings.IndexByte(safeString, c) < 0 {
 			return false
 		}
 	}

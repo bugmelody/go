@@ -2900,6 +2900,40 @@ func TestTransportResponseCancelRace(t *testing.T) {
 	res.Body.Close()
 }
 
+// Test for issue 19248: Content-Encoding's value is case insensitive.
+func TestTransportContentEncodingCaseInsensitive(t *testing.T) {
+	setParallel(t)
+	defer afterTest(t)
+	for _, ce := range []string{"gzip", "GZIP"} {
+		ce := ce
+		t.Run(ce, func(t *testing.T) {
+			const encodedString = "Hello Gopher"
+			ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+				w.Header().Set("Content-Encoding", ce)
+				gz := gzip.NewWriter(w)
+				gz.Write([]byte(encodedString))
+				gz.Close()
+			}))
+			defer ts.Close()
+
+			res, err := ts.Client().Get(ts.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			body, err := ioutil.ReadAll(res.Body)
+			res.Body.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if string(body) != encodedString {
+				t.Fatalf("Expected body %q, got: %q\n", encodedString, string(body))
+			}
+		})
+	}
+}
+
 func TestTransportDialCancelRace(t *testing.T) {
 	defer afterTest(t)
 

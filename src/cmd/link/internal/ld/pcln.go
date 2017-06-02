@@ -111,10 +111,10 @@ func ftabaddstring(ctxt *Link, ftab *Symbol, s string) int32 {
 
 // numberfile assigns a file number to the file if it hasn't been assigned already.
 func numberfile(ctxt *Link, file *Symbol) {
-	if file.Type != objabi.SFILEPATH {
+	if file.Type != SFILEPATH {
 		ctxt.Filesyms = append(ctxt.Filesyms, file)
 		file.Value = int64(len(ctxt.Filesyms))
-		file.Type = objabi.SFILEPATH
+		file.Type = SFILEPATH
 		path := file.Name[len(src.FileSymPrefix):]
 		file.Name = expandGoroot(path)
 	}
@@ -180,7 +180,7 @@ func container(s *Symbol) int {
 	}
 	// We want to generate func table entries only for the "lowest level" symbols,
 	// not containers of subsymbols.
-	if s.Type&objabi.SCONTAINER != 0 {
+	if s.Type&SCONTAINER != 0 {
 		return 1
 	}
 	return 0
@@ -201,7 +201,7 @@ var pclntabLastFunc *Symbol
 func (ctxt *Link) pclntab() {
 	funcdataBytes := int64(0)
 	ftab := ctxt.Syms.Lookup("runtime.pclntab", 0)
-	ftab.Type = objabi.SPCLNTAB
+	ftab.Type = SPCLNTAB
 	ftab.Attr |= AttrReachable
 
 	// See golang.org/s/go12symtab for the format. Briefly:
@@ -215,7 +215,7 @@ func (ctxt *Link) pclntab() {
 	// Find container symbols, mark them with SCONTAINER
 	for _, s := range ctxt.Textp {
 		if s.Outer != nil {
-			s.Outer.Type |= objabi.SCONTAINER
+			s.Outer.Type |= SCONTAINER
 		}
 	}
 
@@ -230,7 +230,7 @@ func (ctxt *Link) pclntab() {
 	setuint32(ctxt, ftab, 0, 0xfffffffb)
 	setuint8(ctxt, ftab, 6, uint8(SysArch.MinLC))
 	setuint8(ctxt, ftab, 7, uint8(SysArch.PtrSize))
-	setuintxx(ctxt, ftab, 8, uint64(nfunc), int64(SysArch.PtrSize))
+	setuint(ctxt, ftab, 8, uint64(nfunc))
 	pclntabPclntabOffset = int32(8 + SysArch.PtrSize)
 
 	funcnameoff := make(map[string]int32)
@@ -282,7 +282,7 @@ func (ctxt *Link) pclntab() {
 		funcstart += int32(-len(ftab.P)) & (int32(SysArch.PtrSize) - 1)
 
 		setaddr(ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize), s)
-		setuintxx(ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize)+int64(SysArch.PtrSize), uint64(funcstart), int64(SysArch.PtrSize))
+		setuint(ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize)+int64(SysArch.PtrSize), uint64(funcstart))
 
 		// Write runtime._func. Keep in sync with ../../../../runtime/runtime2.go:/_func
 		// and package debug/gosym.
@@ -334,7 +334,7 @@ func (ctxt *Link) pclntab() {
 
 		if len(pcln.InlTree) > 0 {
 			inlTreeSym := ctxt.Syms.Lookup("inltree."+s.Name, 0)
-			inlTreeSym.Type = objabi.SRODATA
+			inlTreeSym.Type = SRODATA
 			inlTreeSym.Attr |= AttrReachable | AttrDuplicateOK
 
 			for i, call := range pcln.InlTree {
@@ -375,7 +375,7 @@ func (ctxt *Link) pclntab() {
 			}
 			for i := 0; i < len(pcln.Funcdata); i++ {
 				if pcln.Funcdata[i] == nil {
-					setuintxx(ctxt, ftab, int64(off)+int64(SysArch.PtrSize)*int64(i), uint64(pcln.Funcdataoff[i]), int64(SysArch.PtrSize))
+					setuint(ctxt, ftab, int64(off)+int64(SysArch.PtrSize)*int64(i), uint64(pcln.Funcdataoff[i]))
 				} else {
 					// TODO: Dedup.
 					funcdataBytes += pcln.Funcdata[i].Size
@@ -443,7 +443,7 @@ const (
 // function for a pc. See src/runtime/symtab.go:findfunc for details.
 func (ctxt *Link) findfunctab() {
 	t := ctxt.Syms.Lookup("runtime.findfunctab", 0)
-	t.Type = objabi.SRODATA
+	t.Type = SRODATA
 	t.Attr |= AttrReachable
 	t.Attr |= AttrLocal
 

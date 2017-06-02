@@ -123,7 +123,7 @@ func sweepone() uintptr {
 	// last one print trace information.
 	if atomic.Xadd(&mheap_.sweepers, -1) == 0 && atomic.Load(&mheap_.sweepdone) != 0 {
 		if debug.gcpacertrace > 0 {
-			print("pacer: sweep done at heap size ", memstats.heap_live>>20, "MB; allocated ", mheap_.spanBytesAlloc>>20, "MB of spans; swept ", mheap_.pagesSwept, " pages at ", sweepRatio, " pages/byte\n")
+			print("pacer: sweep done at heap size ", memstats.heap_live>>20, "MB; allocated ", (memstats.heap_live-mheap_.sweepHeapLiveBasis)>>20, "MB during sweep; swept ", mheap_.pagesSwept, " pages at ", sweepRatio, " pages/byte\n")
 		}
 	}
 	_g_.m.locks--
@@ -190,12 +190,12 @@ func (s *mspan) sweep(preserve bool) bool {
 	}
 
 	if trace.enabled {
-		traceGCSweepStart()
+		traceGCSweepSpan(s.npages * _PageSize)
 	}
 
 	atomic.Xadd64(&mheap_.pagesSwept, int64(s.npages))
 
-	cl := s.sizeclass
+	spc := s.spanclass
 	size := s.elemsize
 	res := false
 
@@ -288,7 +288,7 @@ func (s *mspan) sweep(preserve bool) bool {
 
 	// Count the number of free objects in this span.
 	nalloc := uint16(s.countAlloc())
-	if cl == 0 && nalloc == 0 {
+	if spc.sizeclass() == 0 && nalloc == 0 {
 		s.needzero = 1
 		freeToHeap = true
 	}
@@ -301,6 +301,9 @@ func (s *mspan) sweep(preserve bool) bool {
 	s.allocCount = nalloc
 	wasempty := s.nextFreeIndex() == s.nelems
 	s.freeindex = 0 // reset allocation index to start of span.
+	if trace.enabled {
+		getg().m.p.ptr().traceReclaimed += uintptr(nfreed) * s.elemsize
+	}
 
 	// gcmarkBits becomes the allocBits.
 	// get a fresh cleared gcmarkBits in preparation for next GC
@@ -328,9 +331,9 @@ func (s *mspan) sweep(preserve bool) bool {
 		atomic.Store(&s.sweepgen, sweepgen)
 	}
 
-	if nfreed > 0 && cl != 0 {
-		c.local_nsmallfree[cl] += uintptr(nfreed)
-		res = mheap_.central[cl].mcentral.freeSpan(s, preserve, wasempty)
+	if nfreed > 0 && spc.sizeclass() != 0 {
+		c.local_nsmallfree[spc.sizeclass()] += uintptr(nfreed)
+		res = mheap_.central[spc].mcentral.freeSpan(s, preserve, wasempty)
 		// MCentral_FreeSpan updates sweepgen
 	} else if freeToHeap {
 		// Free large span to heap
@@ -364,9 +367,6 @@ func (s *mspan) sweep(preserve bool) bool {
 		// it on the swept in-use list.
 		mheap_.sweepSpans[sweepgen/2%2].push(s)
 	}
-	if trace.enabled {
-		traceGCSweepDone()
-	}
 	return res
 }
 
@@ -379,8 +379,7 @@ func (s *mspan) sweep(preserve bool) bool {
 //
 // deductSweepCredit makes a worst-case assumption that all spanBytes
 // bytes of the ultimately allocated span will be available for object
-// allocation. The caller should call reimburseSweepCredit if that
-// turns out not to be the case once the span is allocated.
+// allocation.
 //
 // deductSweepCredit is the core of the "proportional sweep" system.
 // It uses statistics gathered by the garbage collector to perform
@@ -394,31 +393,28 @@ func deductSweepCredit(spanBytes uintptr, callerSweepPages uintptr) {
 		return
 	}
 
-	// Account for this span allocation.
-	spanBytesAlloc := atomic.Xadd64(&mheap_.spanBytesAlloc, int64(spanBytes))
+	if trace.enabled {
+		traceGCSweepStart()
+	}
+
+retry:
+	sweptBasis := atomic.Load64(&mheap_.pagesSweptBasis)
 
 	// Fix debt if necessary.
-	pagesOwed := int64(mheap_.sweepPagesPerByte * float64(spanBytesAlloc))
-	for pagesOwed-int64(atomic.Load64(&mheap_.pagesSwept)) > int64(callerSweepPages) {
+	newHeapLive := uintptr(atomic.Load64(&memstats.heap_live)-mheap_.sweepHeapLiveBasis) + spanBytes
+	pagesTarget := int64(mheap_.sweepPagesPerByte*float64(newHeapLive)) - int64(callerSweepPages)
+	for pagesTarget > int64(atomic.Load64(&mheap_.pagesSwept)-sweptBasis) {
 		if gosweepone() == ^uintptr(0) {
 			mheap_.sweepPagesPerByte = 0
 			break
 		}
+		if atomic.Load64(&mheap_.pagesSweptBasis) != sweptBasis {
+			// Sweep pacing changed. Recompute debt.
+			goto retry
+		}
 	}
-}
 
-// reimburseSweepCredit records that unusableBytes bytes of a
-// just-allocated span are not available for object allocation. This
-// offsets the worst-case charge performed by deductSweepCredit.
-func reimburseSweepCredit(unusableBytes uintptr) {
-	if mheap_.sweepPagesPerByte == 0 {
-		// Nobody cares about the credit. Avoid the atomic.
-		return
-	}
-	nval := atomic.Xadd64(&mheap_.spanBytesAlloc, -int64(unusableBytes))
-	if int64(nval) < 0 {
-		// Debugging for #18043.
-		print("runtime: bad spanBytesAlloc=", nval, " (was ", nval+uint64(unusableBytes), ") unusableBytes=", unusableBytes, " sweepPagesPerByte=", mheap_.sweepPagesPerByte, "\n")
-		throw("spanBytesAlloc underflow")
+	if trace.enabled {
+		traceGCSweepDone()
 	}
 }

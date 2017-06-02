@@ -114,6 +114,7 @@
 package ssa
 
 import (
+	"cmd/compile/internal/types"
 	"cmd/internal/objabi"
 	"cmd/internal/src"
 	"fmt"
@@ -467,7 +468,7 @@ func (s *regAllocState) allocValToReg(v *Value, mask regMask, nospill bool, pos 
 		c = s.curBlock.NewValue1(pos, OpCopy, v.Type, s.regs[r2].c)
 	} else if v.rematerializeable() {
 		// Rematerialize instead of loading from the spill location.
-		c = v.copyInto(s.curBlock)
+		c = v.copyIntoNoXPos(s.curBlock)
 	} else {
 		// Load v from its spill location.
 		spill := s.makeSpill(v, s.curBlock)
@@ -698,12 +699,12 @@ func (s *regAllocState) setState(regs []endReg) {
 }
 
 // compatRegs returns the set of registers which can store a type t.
-func (s *regAllocState) compatRegs(t Type) regMask {
+func (s *regAllocState) compatRegs(t *types.Type) regMask {
 	var m regMask
 	if t.IsTuple() || t.IsFlags() {
 		return 0
 	}
-	if t.IsFloat() || t == TypeInt128 {
+	if t.IsFloat() || t == types.TypeInt128 {
 		m = s.f.Config.fpRegMask
 	} else {
 		m = s.f.Config.gpRegMask
@@ -1948,13 +1949,13 @@ func (e *edgeState) processDest(loc Location, vid ID, splice **Value, pos src.XP
 			e.s.f.Fatalf("can't find source for %s->%s: %s\n", e.p, e.b, v.LongString())
 		}
 		if dstReg {
-			x = v.copyInto(e.p)
+			x = v.copyIntoNoXPos(e.p)
 		} else {
 			// Rematerialize into stack slot. Need a free
 			// register to accomplish this.
 			e.erase(loc) // see pre-clobber comment below
 			r := e.findRegFor(v.Type)
-			x = v.copyInto(e.p)
+			x = v.copyIntoNoXPos(e.p)
 			e.set(r, vid, x, false, pos)
 			// Make sure we spill with the size of the slot, not the
 			// size of x (which might be wider due to our dropping
@@ -2078,7 +2079,7 @@ func (e *edgeState) erase(loc Location) {
 }
 
 // findRegFor finds a register we can use to make a temp copy of type typ.
-func (e *edgeState) findRegFor(typ Type) Location {
+func (e *edgeState) findRegFor(typ *types.Type) Location {
 	// Which registers are possibilities.
 	var m regMask
 	types := &e.s.f.Config.Types

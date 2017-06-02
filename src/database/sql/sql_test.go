@@ -139,6 +139,7 @@ func closeDB(t testing.TB, db *DB) {
 			t.Errorf("Error closing fakeConn: %v", err)
 		}
 	})
+	db.mu.Lock()
 	for i, dc := range db.freeConn {
 		if n := len(dc.openStmt); n > 0 {
 			// Just a sanity check. This is legal in
@@ -149,6 +150,8 @@ func closeDB(t testing.TB, db *DB) {
 			t.Errorf("while closing db, freeConn %d/%d had %d open stmts; want 0", i, len(db.freeConn), n)
 		}
 	}
+	db.mu.Unlock()
+
 	err := db.Close()
 	if err != nil {
 		t.Fatalf("error closing DB: %v", err)
@@ -1298,6 +1301,69 @@ func TestTxErrBadConn(t *testing.T) {
 	}
 }
 
+func TestConnQuery(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	var name string
+	err = conn.QueryRowContext(ctx, "SELECT|people|name|age=?", 3).Scan(&name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "Chris" {
+		t.Fatalf("unexpected result, got %q want Chris", name)
+	}
+
+	err = conn.PingContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConnTx(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	insertName, insertAge := "Nancy", 33
+	_, err = tx.ExecContext(ctx, "INSERT|people|name=?,age=?,photo=APHOTO", insertName, insertAge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var selectName string
+	err = conn.QueryRowContext(ctx, "SELECT|people|name|age=?", insertAge).Scan(&selectName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selectName != insertName {
+		t.Fatalf("got %q want %q", selectName, insertName)
+	}
+}
+
 // Tests fix for issue 2542, that we release a lock when querying on
 // a closed connection.
 func TestIssue2542Deadlock(t *testing.T) {
@@ -2268,8 +2334,12 @@ func TestStmtCloseOrder(t *testing.T) {
 // Test cases where there's more than maxBadConnRetries bad connections in the
 // pool (issue 8834)
 func TestManyErrBadConn(t *testing.T) {
-	manyErrBadConnSetup := func() *DB {
+	manyErrBadConnSetup := func(first ...func(db *DB)) *DB {
 		db := newTestDB(t, "people")
+
+		for _, f := range first {
+			f(db)
+		}
 
 		nconn := maxBadConnRetries + 1
 		db.SetMaxIdleConns(nconn)
@@ -2336,6 +2406,63 @@ func TestManyErrBadConn(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err = stmt.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stmt.Exec
+	db = manyErrBadConnSetup(func(db *DB) {
+		stmt, err = db.Prepare("INSERT|people|name=Julia,age=19")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	defer closeDB(t, db)
+	_, err = stmt.Exec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = stmt.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stmt.Query
+	db = manyErrBadConnSetup(func(db *DB) {
+		stmt, err = db.Prepare("SELECT|people|age,name|")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	defer closeDB(t, db)
+	rows, err = stmt.Query()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = stmt.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Conn
+	db = manyErrBadConnSetup()
+	defer closeDB(t, db)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ping
+	db = manyErrBadConnSetup()
+	defer closeDB(t, db)
+	err = db.PingContext(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2956,6 +3083,46 @@ func TestIssue18429(t *testing.T) {
 	wg.Wait()
 }
 
+// TestIssue20160 attempts to test a short context life on a stmt Query.
+func TestIssue20160(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
+	ctx := context.Background()
+	sem := make(chan bool, 20)
+	var wg sync.WaitGroup
+
+	const milliWait = 30
+
+	stmt, err := db.PrepareContext(ctx, "SELECT|people|name|")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+
+	for i := 0; i < 100; i++ {
+		sem <- true
+		wg.Add(1)
+		go func() {
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(rand.Intn(milliWait))*time.Millisecond)
+			defer cancel()
+
+			// This is expected to give a cancel error most, but not all the time.
+			// Test failure will happen with a panic or other race condition being
+			// reported.
+			rows, _ := stmt.QueryContext(ctx)
+			if rows != nil {
+				rows.Close()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 // TestIssue18719 closes the context right before use. The sql.driverConn
 // will nil out the ci on close in a lock, but if another process uses it right after
 // it will panic with on the nil ref.
@@ -3061,6 +3228,131 @@ func TestConnectionLeak(t *testing.T) {
 	// connection.
 	drv.waitCh <- struct{}{}
 	wg.Wait()
+}
+
+type nvcDriver struct {
+	fakeDriver
+	skipNamedValueCheck bool
+}
+
+func (d *nvcDriver) Open(dsn string) (driver.Conn, error) {
+	c, err := d.fakeDriver.Open(dsn)
+	fc := c.(*fakeConn)
+	fc.db.allowAny = true
+	return &nvcConn{fc, d.skipNamedValueCheck}, err
+}
+
+type nvcConn struct {
+	*fakeConn
+	skipNamedValueCheck bool
+}
+
+type decimal struct {
+	value int
+}
+
+type doNotInclude struct{}
+
+var _ driver.NamedValueChecker = &nvcConn{}
+
+func (c *nvcConn) CheckNamedValue(nv *driver.NamedValue) error {
+	if c.skipNamedValueCheck {
+		return driver.ErrSkip
+	}
+	switch v := nv.Value.(type) {
+	default:
+		return driver.ErrSkip
+	case Out:
+		switch ov := v.Dest.(type) {
+		default:
+			return errors.New("unkown NameValueCheck OUTPUT type")
+		case *string:
+			*ov = "from-server"
+			nv.Value = "OUT:*string"
+		}
+		return nil
+	case decimal, []int64:
+		return nil
+	case doNotInclude:
+		return driver.ErrRemoveArgument
+	}
+}
+
+func TestNamedValueChecker(t *testing.T) {
+	Register("NamedValueCheck", &nvcDriver{})
+	db, err := Open("NamedValueCheck", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "WIPE")
+	if err != nil {
+		t.Fatal("exec wipe", err)
+	}
+
+	_, err = db.ExecContext(ctx, "CREATE|keys|dec1=any,str1=string,out1=string,array1=any")
+	if err != nil {
+		t.Fatal("exec create", err)
+	}
+
+	o1 := ""
+	_, err = db.ExecContext(ctx, "INSERT|keys|dec1=?A,str1=?,out1=?O1,array1=?", Named("A", decimal{123}), "hello", Named("O1", Out{Dest: &o1}), []int64{42, 128, 707}, doNotInclude{})
+	if err != nil {
+		t.Fatal("exec insert", err)
+	}
+	var (
+		str1 string
+		dec1 decimal
+		arr1 []int64
+	)
+	err = db.QueryRowContext(ctx, "SELECT|keys|dec1,str1,array1|").Scan(&dec1, &str1, &arr1)
+	if err != nil {
+		t.Fatal("select", err)
+	}
+
+	list := []struct{ got, want interface{} }{
+		{o1, "from-server"},
+		{dec1, decimal{123}},
+		{str1, "hello"},
+		{arr1, []int64{42, 128, 707}},
+	}
+
+	for index, item := range list {
+		if !reflect.DeepEqual(item.got, item.want) {
+			t.Errorf("got %#v wanted %#v for index %d", item.got, item.want, index)
+		}
+	}
+}
+
+func TestNamedValueCheckerSkip(t *testing.T) {
+	Register("NamedValueCheckSkip", &nvcDriver{skipNamedValueCheck: true})
+	db, err := Open("NamedValueCheckSkip", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "WIPE")
+	if err != nil {
+		t.Fatal("exec wipe", err)
+	}
+
+	_, err = db.ExecContext(ctx, "CREATE|keys|dec1=any")
+	if err != nil {
+		t.Fatal("exec create", err)
+	}
+
+	_, err = db.ExecContext(ctx, "INSERT|keys|dec1=?A", Named("A", decimal{123}))
+	if err == nil {
+		t.Fatalf("expected error with bad argument, got %v", err)
+	}
 }
 
 // badConn implements a bad driver.Conn, for TestBadDriver.

@@ -37,11 +37,7 @@ import (
 	"cmd/internal/src"
 )
 
-var sharedProgArray *[10000]obj.Prog // *T instead of T to work around issue 19839
-
-func init() {
-	sharedProgArray = new([10000]obj.Prog)
-}
+var sharedProgArray *[10000]obj.Prog = new([10000]obj.Prog) // *T instead of T to work around issue 19839
 
 // Progs accumulates Progs for a function and converts them into machine code.
 type Progs struct {
@@ -55,10 +51,12 @@ type Progs struct {
 }
 
 // newProgs returns a new Progs for fn.
-func newProgs(fn *Node) *Progs {
+// worker indicates which of the backend workers will use the Progs.
+func newProgs(fn *Node, worker int) *Progs {
 	pp := new(Progs)
 	if Ctxt.CanReuseProgs() {
-		pp.progcache = sharedProgArray[:]
+		sz := len(sharedProgArray) / nBackendWorkers
+		pp.progcache = sharedProgArray[sz*worker : sz*(worker+1)]
 	}
 	pp.curfn = fn
 
@@ -177,7 +175,7 @@ func (f *Func) initLSym() {
 	}
 
 	if nam := f.Nname; !isblank(nam) {
-		f.lsym = Linksym(nam.Sym)
+		f.lsym = nam.Sym.Linksym()
 		if f.Pragma&Systemstack != 0 {
 			f.lsym.Set(obj.AttrCFunc, true)
 		}
@@ -217,8 +215,8 @@ func (f *Func) initLSym() {
 }
 
 func ggloblnod(nam *Node) {
-	s := Linksym(nam.Sym)
-	s.Gotype = Linksym(ngotype(nam))
+	s := nam.Sym.Linksym()
+	s.Gotype = ngotype(nam).Linksym()
 	flags := 0
 	if nam.Name.Readonly() {
 		flags = obj.RODATA
@@ -229,11 +227,7 @@ func ggloblnod(nam *Node) {
 	Ctxt.Globl(s, nam.Type.Width, flags)
 }
 
-func ggloblsym(s *types.Sym, width int32, flags int16) {
-	ggloblLSym(Linksym(s), width, flags)
-}
-
-func ggloblLSym(s *obj.LSym, width int32, flags int16) {
+func ggloblsym(s *obj.LSym, width int32, flags int16) {
 	if flags&obj.LOCAL != 0 {
 		s.Set(obj.AttrLocal, true)
 		flags &^= obj.LOCAL
@@ -257,119 +251,6 @@ func Addrconst(a *obj.Addr, v int64) {
 	a.Sym = nil
 	a.Type = obj.TYPE_CONST
 	a.Offset = v
-}
-
-// nodarg returns a Node for the function argument denoted by t,
-// which is either the entire function argument or result struct (t is a  struct *types.Type)
-// or a specific argument (t is a *types.Field within a struct *types.Type).
-//
-// If fp is 0, the node is for use by a caller invoking the given
-// function, preparing the arguments before the call
-// or retrieving the results after the call.
-// In this case, the node will correspond to an outgoing argument
-// slot like 8(SP).
-//
-// If fp is 1, the node is for use by the function itself
-// (the callee), to retrieve its arguments or write its results.
-// In this case the node will be an ONAME with an appropriate
-// type and offset.
-func nodarg(t interface{}, fp int) *Node {
-	var n *Node
-
-	var funarg types.Funarg
-	switch t := t.(type) {
-	default:
-		Fatalf("bad nodarg %T(%v)", t, t)
-
-	case *types.Type:
-		// Entire argument struct, not just one arg
-		if !t.IsFuncArgStruct() {
-			Fatalf("nodarg: bad type %v", t)
-		}
-		funarg = t.StructType().Funarg
-
-		// Build fake variable name for whole arg struct.
-		n = newname(lookup(".args"))
-		n.Type = t
-		first := t.Field(0)
-		if first == nil {
-			Fatalf("nodarg: bad struct")
-		}
-		if first.Offset == BADWIDTH {
-			Fatalf("nodarg: offset not computed for %v", t)
-		}
-		n.Xoffset = first.Offset
-
-	case *types.Field:
-		funarg = t.Funarg
-		if fp == 1 {
-			// NOTE(rsc): This should be using t.Nname directly,
-			// except in the case where t.Nname.Sym is the blank symbol and
-			// so the assignment would be discarded during code generation.
-			// In that case we need to make a new node, and there is no harm
-			// in optimization passes to doing so. But otherwise we should
-			// definitely be using the actual declaration and not a newly built node.
-			// The extra Fatalf checks here are verifying that this is the case,
-			// without changing the actual logic (at time of writing, it's getting
-			// toward time for the Go 1.7 beta).
-			// At some quieter time (assuming we've never seen these Fatalfs happen)
-			// we could change this code to use "expect" directly.
-			expect := asNode(t.Nname)
-			if expect.isParamHeapCopy() {
-				expect = expect.Name.Param.Stackcopy
-			}
-
-			for _, n := range Curfn.Func.Dcl {
-				if (n.Class == PPARAM || n.Class == PPARAMOUT) && !isblanksym(t.Sym) && n.Sym == t.Sym {
-					if n != expect {
-						Fatalf("nodarg: unexpected node: %v (%p %v) vs %v (%p %v)", n, n, n.Op, asNode(t.Nname), asNode(t.Nname), asNode(t.Nname).Op)
-					}
-					return n
-				}
-			}
-
-			if !isblanksym(expect.Sym) {
-				Fatalf("nodarg: did not find node in dcl list: %v", expect)
-			}
-		}
-
-		// Build fake name for individual variable.
-		// This is safe because if there was a real declared name
-		// we'd have used it above.
-		n = newname(lookup("__"))
-		n.Type = t.Type
-		if t.Offset == BADWIDTH {
-			Fatalf("nodarg: offset not computed for %v", t)
-		}
-		n.Xoffset = t.Offset
-		n.Orig = asNode(t.Nname)
-	}
-
-	// Rewrite argument named _ to __,
-	// or else the assignment to _ will be
-	// discarded during code generation.
-	if isblank(n) {
-		n.Sym = lookup("__")
-	}
-
-	switch fp {
-	default:
-		Fatalf("bad fp")
-
-	case 0: // preparing arguments for call
-		n.Op = OINDREGSP
-		n.Xoffset += Ctxt.FixedFrameSize()
-
-	case 1: // reading arguments inside call
-		n.Class = PPARAM
-		if funarg == types.FunargResults {
-			n.Class = PPARAMOUT
-		}
-	}
-
-	n.Typecheck = 1
-	n.SetAddrtaken(true) // keep optimizers at bay
-	return n
 }
 
 func Patch(p *obj.Prog, to *obj.Prog) {

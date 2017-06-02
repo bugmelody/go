@@ -341,7 +341,7 @@ func testDWARF(t *testing.T, linktype int) {
 	args = append(args, src)
 	out, err := exec.Command(testenv.GoToolPath(t), args...).CombinedOutput()
 	if err != nil {
-		t.Fatalf("building test executable failed: %s %s", err, out)
+		t.Fatalf("building test executable for linktype %d failed: %s %s", linktype, err, out)
 	}
 	out, err = exec.Command(exe).CombinedOutput()
 	if err != nil {
@@ -362,6 +362,16 @@ func testDWARF(t *testing.T, linktype int) {
 		t.Fatal(err)
 	}
 	defer f.Close()
+
+	var foundDebugGDBScriptsSection bool
+	for _, sect := range f.Sections {
+		if sect.Name == ".debug_gdb_scripts" {
+			foundDebugGDBScriptsSection = true
+		}
+	}
+	if !foundDebugGDBScriptsSection {
+		t.Error(".debug_gdb_scripts section is not found")
+	}
 
 	d, err := f.DWARF()
 	if err != nil {

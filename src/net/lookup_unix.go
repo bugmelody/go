@@ -8,6 +8,8 @@ package net
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"sync"
 )
 
@@ -16,28 +18,31 @@ var onceReadProtocols sync.Once
 // readProtocols loads contents of /etc/protocols into protocols map
 // for quick access.
 func readProtocols() {
-	if file, err := open("/etc/protocols"); err == nil {
-		for line, ok := file.readLine(); ok; line, ok = file.readLine() {
-			// tcp    6   TCP    # transmission control protocol
-			if i := byteIndex(line, '#'); i >= 0 {
-				line = line[0:i]
+	file, err := open("/etc/protocols")
+	if err != nil {
+		return
+	}
+	defer file.close()
+
+	for line, ok := file.readLine(); ok; line, ok = file.readLine() {
+		// tcp    6   TCP    # transmission control protocol
+		if i := byteIndex(line, '#'); i >= 0 {
+			line = line[0:i]
+		}
+		f := getFields(line)
+		if len(f) < 2 {
+			continue
+		}
+		if proto, _, ok := dtoi(f[1]); ok {
+			if _, ok := protocols[f[0]]; !ok {
+				protocols[f[0]] = proto
 			}
-			f := getFields(line)
-			if len(f) < 2 {
-				continue
-			}
-			if proto, _, ok := dtoi(f[1]); ok {
-				if _, ok := protocols[f[0]]; !ok {
-					protocols[f[0]] = proto
-				}
-				for _, alias := range f[2:] {
-					if _, ok := protocols[alias]; !ok {
-						protocols[alias] = proto
-					}
+			for _, alias := range f[2:] {
+				if _, ok := protocols[alias]; !ok {
+					protocols[alias] = proto
 				}
 			}
 		}
-		file.close()
 	}
 }
 
@@ -46,6 +51,31 @@ func readProtocols() {
 func lookupProtocol(_ context.Context, name string) (int, error) {
 	onceReadProtocols.Do(readProtocols)
 	return lookupProtocolMap(name)
+}
+
+func (r *Resolver) dial(ctx context.Context, network, server string) (dnsConn, error) {
+	// Calling Dial here is scary -- we have to be sure not to
+	// dial a name that will require a DNS lookup, or Dial will
+	// call back here to translate it. The DNS config parser has
+	// already checked that all the cfg.servers are IP
+	// addresses, which Dial will use without a DNS lookup.
+	var c Conn
+	var err error
+	if r.Dial != nil {
+		c, err = r.Dial(ctx, network, server)
+	} else {
+		var d Dialer
+		c, err = d.DialContext(ctx, network, server)
+	}
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	dc, ok := c.(dnsConn)
+	if !ok {
+		c.Close()
+		return nil, errors.New("net: Resolver.Dial returned unsupported connection type " + reflect.TypeOf(c).String())
+	}
+	return dc, nil
 }
 
 func (r *Resolver) lookupHost(ctx context.Context, host string) (addrs []string, err error) {

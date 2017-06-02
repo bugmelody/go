@@ -18,7 +18,6 @@ import (
 // allows using Sym pointer equality to test for Go identifier uniqueness when
 // handling selector expressions.
 type Sym struct {
-	Link      *Sym
 	Importdef *Pkg   // where imported definition was found
 	Linkname  string // link name
 
@@ -26,13 +25,12 @@ type Sym struct {
 	Pkg        *Pkg
 	Name       string   // object name
 	Def        *Node    // definition: ONAME OTYPE OPACK or OLITERAL
-	Lastlineno src.XPos // last declaration for diagnostic
 	Block      int32    // blocknumber to catch redeclaration
+	Lastlineno src.XPos // last declaration for diagnostic
 
 	flags   bitset8
 	Label   *Node // corresponding label (ephemeral)
 	Origpkg *Pkg  // original package for . import
-	Lsym    *obj.LSym
 }
 
 const (
@@ -60,3 +58,24 @@ func (sym *Sym) SetUniq(b bool)     { sym.flags.set(symUniq, b) }
 func (sym *Sym) SetSiggen(b bool)   { sym.flags.set(symSiggen, b) }
 func (sym *Sym) SetAsm(b bool)      { sym.flags.set(symAsm, b) }
 func (sym *Sym) SetAlgGen(b bool)   { sym.flags.set(symAlgGen, b) }
+
+func (sym *Sym) IsBlank() bool {
+	return sym != nil && sym.Name == "_"
+}
+
+func (sym *Sym) LinksymName() string {
+	if sym.IsBlank() {
+		return "_"
+	}
+	if sym.Linkname != "" {
+		return sym.Linkname
+	}
+	return sym.Pkg.Prefix + "." + sym.Name
+}
+
+func (sym *Sym) Linksym() *obj.LSym {
+	if sym == nil {
+		return nil
+	}
+	return Ctxt.Lookup(sym.LinksymName())
+}

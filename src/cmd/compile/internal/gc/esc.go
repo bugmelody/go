@@ -134,7 +134,7 @@ func (v *bottomUpVisitor) visitcode(n *Node, min uint32) uint32 {
 		if n.Op == OCALLMETH {
 			fn = asNode(n.Left.Sym.Def)
 		}
-		if fn != nil && fn.Op == ONAME && fn.Class == PFUNC && fn.Name.Defn != nil {
+		if fn != nil && fn.Op == ONAME && fn.Class() == PFUNC && fn.Name.Defn != nil {
 			m := v.visit(fn.Name.Defn)
 			if m < min {
 				min = m
@@ -413,7 +413,7 @@ func newEscState(recursive bool) *EscState {
 	e := new(EscState)
 	e.theSink.Op = ONAME
 	e.theSink.Orig = &e.theSink
-	e.theSink.Class = PEXTERN
+	e.theSink.SetClass(PEXTERN)
 	e.theSink.Sym = lookup(".sink")
 	e.nodeEscState(&e.theSink).Loopdepth = -1
 	e.recursive = recursive
@@ -557,7 +557,7 @@ func (e *EscState) escfunc(fn *Node) {
 			continue
 		}
 		lnE := e.nodeEscState(ln)
-		switch ln.Class {
+		switch ln.Class() {
 		// out params are in a loopdepth between the sink and all local variables
 		case PPARAMOUT:
 			lnE.Loopdepth = 0
@@ -579,7 +579,7 @@ func (e *EscState) escfunc(fn *Node) {
 	// in a mutually recursive group we lose track of the return values
 	if e.recursive {
 		for _, ln := range Curfn.Func.Dcl {
-			if ln.Op == ONAME && ln.Class == PPARAMOUT {
+			if ln.Op == ONAME && ln.Class() == PPARAMOUT {
 				e.escflows(&e.theSink, ln, e.stepAssign(nil, ln, ln, "returned from recursive function"))
 			}
 		}
@@ -860,7 +860,7 @@ func (e *EscState) esc(n *Node, parent *Node) {
 			if i >= retList.Len() {
 				break
 			}
-			if lrn.Op != ONAME || lrn.Class != PPARAMOUT {
+			if lrn.Op != ONAME || lrn.Class() != PPARAMOUT {
 				continue
 			}
 			e.escassignWhyWhere(lrn, retList.Index(i), "return", n)
@@ -988,7 +988,7 @@ func (e *EscState) esc(n *Node, parent *Node) {
 		// it should always be known, but if not, be conservative
 		// and keep the current loop depth.
 		if n.Left.Op == ONAME {
-			switch n.Left.Class {
+			switch n.Left.Class() {
 			case PAUTO:
 				nE := e.nodeEscState(n)
 				leftE := e.nodeEscState(n.Left)
@@ -1083,7 +1083,7 @@ func (e *EscState) escassign(dst, src *Node, step *EscStep) {
 		OCALLPART:
 
 	case ONAME:
-		if dst.Class == PEXTERN {
+		if dst.Class() == PEXTERN {
 			dstwhy = "assigned to top level variable"
 			dst = &e.theSink
 		}
@@ -1440,10 +1440,10 @@ func (e *EscState) initEscRetval(call *Node, fntype *types.Type) {
 		ret := newname(lookup(buf))
 		ret.SetAddable(false) // TODO(mdempsky): Seems suspicious.
 		ret.Type = f.Type
-		ret.Class = PAUTO
+		ret.SetClass(PAUTO)
 		ret.Name.Curfn = Curfn
 		e.nodeEscState(ret).Loopdepth = e.loopdepth
-		ret.SetUsed(true)
+		ret.Name.SetUsed(true)
 		ret.Pos = call.Pos
 		cE.Retval.Append(ret)
 	}
@@ -1466,7 +1466,7 @@ func (e *EscState) esccall(call *Node, parent *Node) {
 	case OCALLFUNC:
 		fn = call.Left
 		fntype = fn.Type
-		indirect = fn.Op != ONAME || fn.Class != PFUNC
+		indirect = fn.Op != ONAME || fn.Class() != PFUNC
 
 	case OCALLMETH:
 		fn = asNode(call.Left.Sym.Def)
@@ -1519,7 +1519,7 @@ func (e *EscState) esccall(call *Node, parent *Node) {
 	}
 
 	cE := e.nodeEscState(call)
-	if fn != nil && fn.Op == ONAME && fn.Class == PFUNC &&
+	if fn != nil && fn.Op == ONAME && fn.Class() == PFUNC &&
 		fn.Name.Defn != nil && fn.Name.Defn.Nbody.Len() != 0 && fn.Name.Param.Ntype != nil && fn.Name.Defn.Esc < EscFuncTagged {
 		if Debug['m'] > 3 {
 			fmt.Printf("%v::esccall:: %S in recursive group\n", linestr(lineno), call)
@@ -1533,7 +1533,7 @@ func (e *EscState) esccall(call *Node, parent *Node) {
 
 		sawRcvr := false
 		for _, n := range fn.Name.Defn.Func.Dcl {
-			switch n.Class {
+			switch n.Class() {
 			case PPARAM:
 				if call.Op != OCALLFUNC && !sawRcvr {
 					e.escassignWhyWhere(n, call.Left.Left, "call receiver", call)
@@ -1725,8 +1725,8 @@ func (e *EscState) escflood(dst *Node) {
 // funcOutputAndInput reports whether dst and src correspond to output and input parameters of the same function.
 func funcOutputAndInput(dst, src *Node) bool {
 	// Note if dst is marked as escaping, then "returned" is too weak.
-	return dst.Op == ONAME && dst.Class == PPARAMOUT &&
-		src.Op == ONAME && src.Class == PPARAM && src.Name.Curfn == dst.Name.Curfn
+	return dst.Op == ONAME && dst.Class() == PPARAMOUT &&
+		src.Op == ONAME && src.Class() == PPARAM && src.Name.Curfn == dst.Name.Curfn
 }
 
 func (es *EscStep) describe(src *Node) {
@@ -1830,7 +1830,7 @@ func (e *EscState) escwalkBody(level Level, dst *Node, src *Node, step *EscStep,
 	// If parameter content escapes to heap, set EscContentEscapes
 	// Note minor confusion around escape from pointer-to-struct vs escape from struct
 	if dst.Esc == EscHeap &&
-		src.Op == ONAME && src.Class == PPARAM && src.Esc&EscMask < EscHeap &&
+		src.Op == ONAME && src.Class() == PPARAM && src.Esc&EscMask < EscHeap &&
 		level.int() > 0 {
 		src.Esc = escMax(EscContentEscapes|src.Esc, EscNone)
 		if Debug['m'] != 0 {
@@ -1845,7 +1845,7 @@ func (e *EscState) escwalkBody(level Level, dst *Node, src *Node, step *EscStep,
 	osrcesc = src.Esc
 	switch src.Op {
 	case ONAME:
-		if src.Class == PPARAM && (leaks || dstE.Loopdepth < 0) && src.Esc&EscMask < EscHeap {
+		if src.Class() == PPARAM && (leaks || dstE.Loopdepth < 0) && src.Esc&EscMask < EscHeap {
 			if level.guaranteedDereference() > 0 {
 				src.Esc = escMax(EscContentEscapes|src.Esc, EscNone)
 				if Debug['m'] != 0 {
@@ -2014,6 +2014,158 @@ recurse:
 	e.pdepth--
 }
 
+// addrescapes tags node n as having had its address taken
+// by "increasing" the "value" of n.Esc to EscHeap.
+// Storage is allocated as necessary to allow the address
+// to be taken.
+func addrescapes(n *Node) {
+	switch n.Op {
+	default:
+		// Unexpected Op, probably due to a previous type error. Ignore.
+
+	case OIND, ODOTPTR:
+		// Nothing to do.
+
+	case ONAME:
+		if n == nodfp {
+			break
+		}
+
+		// if this is a tmpname (PAUTO), it was tagged by tmpname as not escaping.
+		// on PPARAM it means something different.
+		if n.Class() == PAUTO && n.Esc == EscNever {
+			break
+		}
+
+		// If a closure reference escapes, mark the outer variable as escaping.
+		if n.IsClosureVar() {
+			addrescapes(n.Name.Defn)
+			break
+		}
+
+		if n.Class() != PPARAM && n.Class() != PPARAMOUT && n.Class() != PAUTO {
+			break
+		}
+
+		// This is a plain parameter or local variable that needs to move to the heap,
+		// but possibly for the function outside the one we're compiling.
+		// That is, if we have:
+		//
+		//	func f(x int) {
+		//		func() {
+		//			global = &x
+		//		}
+		//	}
+		//
+		// then we're analyzing the inner closure but we need to move x to the
+		// heap in f, not in the inner closure. Flip over to f before calling moveToHeap.
+		oldfn := Curfn
+		Curfn = n.Name.Curfn
+		if Curfn.Func.Closure != nil && Curfn.Op == OCLOSURE {
+			Curfn = Curfn.Func.Closure
+		}
+		ln := lineno
+		lineno = Curfn.Pos
+		moveToHeap(n)
+		Curfn = oldfn
+		lineno = ln
+
+	// ODOTPTR has already been introduced,
+	// so these are the non-pointer ODOT and OINDEX.
+	// In &x[0], if x is a slice, then x does not
+	// escape--the pointer inside x does, but that
+	// is always a heap pointer anyway.
+	case ODOT, OINDEX, OPAREN, OCONVNOP:
+		if !n.Left.Type.IsSlice() {
+			addrescapes(n.Left)
+		}
+	}
+}
+
+// moveToHeap records the parameter or local variable n as moved to the heap.
+func moveToHeap(n *Node) {
+	if Debug['r'] != 0 {
+		Dump("MOVE", n)
+	}
+	if compiling_runtime {
+		yyerror("%v escapes to heap, not allowed in runtime.", n)
+	}
+	if n.Class() == PAUTOHEAP {
+		Dump("n", n)
+		Fatalf("double move to heap")
+	}
+
+	// Allocate a local stack variable to hold the pointer to the heap copy.
+	// temp will add it to the function declaration list automatically.
+	heapaddr := temp(types.NewPtr(n.Type))
+	heapaddr.Sym = lookup("&" + n.Sym.Name)
+	heapaddr.Orig.Sym = heapaddr.Sym
+
+	// Unset AutoTemp to persist the &foo variable name through SSA to
+	// liveness analysis.
+	// TODO(mdempsky/drchase): Cleaner solution?
+	heapaddr.Name.SetAutoTemp(false)
+
+	// Parameters have a local stack copy used at function start/end
+	// in addition to the copy in the heap that may live longer than
+	// the function.
+	if n.Class() == PPARAM || n.Class() == PPARAMOUT {
+		if n.Xoffset == BADWIDTH {
+			Fatalf("addrescapes before param assignment")
+		}
+
+		// We rewrite n below to be a heap variable (indirection of heapaddr).
+		// Preserve a copy so we can still write code referring to the original,
+		// and substitute that copy into the function declaration list
+		// so that analyses of the local (on-stack) variables use it.
+		stackcopy := newname(n.Sym)
+		stackcopy.SetAddable(false)
+		stackcopy.Type = n.Type
+		stackcopy.Xoffset = n.Xoffset
+		stackcopy.SetClass(n.Class())
+		stackcopy.Name.Param.Heapaddr = heapaddr
+		if n.Class() == PPARAMOUT {
+			// Make sure the pointer to the heap copy is kept live throughout the function.
+			// The function could panic at any point, and then a defer could recover.
+			// Thus, we need the pointer to the heap copy always available so the
+			// post-deferreturn code can copy the return value back to the stack.
+			// See issue 16095.
+			heapaddr.SetIsOutputParamHeapAddr(true)
+		}
+		n.Name.Param.Stackcopy = stackcopy
+
+		// Substitute the stackcopy into the function variable list so that
+		// liveness and other analyses use the underlying stack slot
+		// and not the now-pseudo-variable n.
+		found := false
+		for i, d := range Curfn.Func.Dcl {
+			if d == n {
+				Curfn.Func.Dcl[i] = stackcopy
+				found = true
+				break
+			}
+			// Parameters are before locals, so can stop early.
+			// This limits the search even in functions with many local variables.
+			if d.Class() == PAUTO {
+				break
+			}
+		}
+		if !found {
+			Fatalf("cannot find %v in local variable list", n)
+		}
+		Curfn.Func.Dcl = append(Curfn.Func.Dcl, n)
+	}
+
+	// Modify n in place so that uses of n now mean indirection of the heapaddr.
+	n.SetClass(PAUTOHEAP)
+	n.Xoffset = 0
+	n.Name.Param.Heapaddr = heapaddr
+	n.Esc = EscHeap
+	if Debug['m'] != 0 {
+		fmt.Printf("%v: moved to heap: %v\n", n.Line(), n)
+	}
+}
+
 // This special tag is applied to uintptr variables
 // that we believe may hold unsafe.Pointers for
 // calls into assembly functions.
@@ -2109,7 +2261,7 @@ func (e *EscState) esctag(fn *Node) {
 	// (Unnamed parameters are not in the Dcl list in the loop above
 	// so we need to mark them separately.)
 	for _, f := range fn.Type.Params().Fields().Slice() {
-		if f.Sym == nil || isblanksym(f.Sym) {
+		if f.Sym == nil || f.Sym.IsBlank() {
 			f.Note = mktag(EscNone)
 		}
 	}

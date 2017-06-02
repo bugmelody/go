@@ -94,11 +94,23 @@ type mstats struct {
 	last_gc_nanotime uint64 // last gc (monotonic time)
 	tinyallocs       uint64 // number of tiny allocations that didn't cause actual allocation; not exported to go directly
 
+	// triggerRatio is the heap growth ratio that triggers marking.
+	//
+	// E.g., if this is 0.6, then GC should start when the live
+	// heap has reached 1.6 times the heap size marked by the
+	// previous cycle. This should be ≤ GOGC/100 so the trigger
+	// heap size is less than the goal heap size. This is set
+	// during mark termination for the next cycle's trigger.
+	triggerRatio float64
+
 	// gc_trigger is the heap size that triggers marking.
 	//
 	// When heap_live ≥ gc_trigger, the mark phase will start.
 	// This is also the heap size by which proportional sweeping
 	// must be complete.
+	//
+	// This is computed from triggerRatio during mark termination
+	// for the next cycle's trigger.
 	gc_trigger uint64
 
 	// heap_live is the number of bytes considered live by the GC.
@@ -120,6 +132,8 @@ type mstats struct {
 	// necessary rather than potentially too late and 2) this
 	// leads to a conservative GC rate rather than a GC rate that
 	// is potentially too low.
+	//
+	// Reads should likewise be atomic (or during STW).
 	//
 	// Whenever this is updated, call traceHeapAlloc() and
 	// gcController.revise().
@@ -538,7 +552,18 @@ func updatememstats() {
 	// Collect allocation stats. This is safe and consistent
 	// because the world is stopped.
 	var smallFree, totalAlloc, totalFree uint64
-	for i := range mheap_.central {
+	// Collect per-spanclass stats.
+	for spc := range mheap_.central {
+		// The mcaches are now empty, so mcentral stats are
+		// up-to-date.
+		c := &mheap_.central[spc].mcentral
+		memstats.nmalloc += c.nmalloc
+		i := spanClass(spc).sizeclass()
+		memstats.by_size[i].nmalloc += c.nmalloc
+		totalAlloc += c.nmalloc * uint64(class_to_size[i])
+	}
+	// Collect per-sizeclass stats.
+	for i := 0; i < _NumSizeClasses; i++ {
 		if i == 0 {
 			memstats.nmalloc += mheap_.nlargealloc
 			totalAlloc += mheap_.largealloc
@@ -546,12 +571,6 @@ func updatememstats() {
 			memstats.nfree += mheap_.nlargefree
 			continue
 		}
-		// The mcaches are now empty, so mcentral stats are
-		// up-to-date.
-		c := &mheap_.central[i].mcentral
-		memstats.nmalloc += c.nmalloc
-		memstats.by_size[i].nmalloc += c.nmalloc
-		totalAlloc += c.nmalloc * uint64(class_to_size[i])
 
 		// The mcache stats have been flushed to mheap_.
 		memstats.nfree += mheap_.nsmallfree[i]
