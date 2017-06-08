@@ -23,12 +23,18 @@ ul li { margin: 0.5em 0; }
 </strong></p>
 
 <p>
-  The latest Go release, version 1.9, arrives six months after <a href="go1.8">Go 1.8</a>
-  and is the tenth release in the <a href="https://golang.org/doc/devel/release.html">Go 1.x series</a>.
-  Most of its changes are in the implementation of the toolchain, runtime, and libraries.
-  There are no changes to the language specification.
-  As always, the release maintains the Go 1 <a href="/doc/go1compat.html">promise of compatibility</a>.
-  We expect almost all Go programs to continue to compile and run as before.
+  The latest Go release, version 1.9, arrives six months
+  after <a href="go1.8">Go 1.8</a> and is the tenth release in
+  the <a href="https://golang.org/doc/devel/release.html">Go 1.x
+  series</a>.
+  There is one <a href="#language">change to the language</a>, adding
+  support for type aliases.
+  Most of the changes are in the implementation of the toolchain,
+  runtime, and libraries.
+  As always, the release maintains the Go 1
+  <a href="/doc/go1compat.html">promise of compatibility</a>.
+  We expect almost all Go programs to continue to compile and run as
+  before.
 </p>
 
 <p>
@@ -37,6 +43,29 @@ ul li { margin: 0.5em 0; }
   <a href="#parallel-compile">parallelizes compilation of functions</a> within a package,
   better supports <a href="#test-helper">test helper functions</a>,
   and includes a new <a href="#math-bits">bit manipulation package</a>.
+</p>
+
+<h2 id="language">Changes to the language</h2>
+
+<p>
+  There is one change to the language.
+  Go now supports type aliases to support gradual code repair while
+  moving a type between packages.
+  The <a href="https://golang.org/design/18130-type-alias">type alias
+  design document</a>
+  and <a href="https://talks.golang.org/2016/refactor.article">an
+  article on refactoring</a> cover the problem in detail.
+  In short, a type alias declaration has the form:
+</p>
+
+<pre>
+type T1 = T2
+</pre>
+
+<p>
+  This declaration introduces an alias name <code>T1</code>—an
+  alternate spelling—for the type denoted by <code>T2</code>; that is,
+  both <code>T1</code> and <code>T2</code> denote the same type.
 </p>
 
 <h2 id="ports">Ports</h2>
@@ -76,6 +105,16 @@ ul li { margin: 0.5em 0; }
   Parallel compilation is on by default, but can be disabled by setting the
   environment variable <code>GO19CONCURRENTCOMPILATION</code> to <code>0</code>.
 </p>
+
+<h3 id="go-test-list">Go test</h3>
+
+<p> <!-- CL 41195 -->
+  The <a href="/cmd/go/#hdr-Description_of_testing_flags"><code>go</code> <code>test</code></a>
+  command accepts a new <code>-list</code> flag, which takes a regular
+  expression as an argument and prints to stdout the name of any
+  tests, benchmarks, or examples that match it, without running them.
+</p>
+
 
 <!-- CL 42028: https://golang.org/cl/42028: cmd/asm: fix operand order of ARM's MULA instruction -->
 <!-- CL 36031: https://golang.org/cl/36031: cmd/doc: truncate long lists of arguments -->
@@ -133,7 +172,7 @@ ul li { margin: 0.5em 0; }
 
 <h3 id="math-bits">New bit manipulation package</h3>
 
-<p>
+<p> <!-- CL 36315 -->
   Go 1.9 includes a new package,
   <a href="/pkg/math/bits/"><code>math/bits</code></a>, with optimized
   implementations for manipulating bits. On most architectures
@@ -147,7 +186,7 @@ ul li { margin: 0.5em 0; }
   The
   new <a href="/pkg/testing/#T.Helper"><code>(*T).Helper</code></a>
   an <a href="/pkg/testing/#B.Helper"><code>(*B).Helper</code></a>
-  methods marks the calling function as a test helper function.  When
+  methods mark the calling function as a test helper function.  When
   printing file and line information, that function will be skipped.
   This permits writing test helper functions while still having useful
   line numbers for users.
@@ -324,14 +363,6 @@ ul li { margin: 0.5em 0; }
     </p>
 
 </dl><!-- math/big -->
-
-<dl id="math/bits"><dt><a href="/pkg/math/bits/">math/bits</a></dt>
-  <dd>
-    <p><!-- CL 36315 -->
-      TODO: <a href="https://golang.org/cl/36315">https://golang.org/cl/36315</a>: added package for bit-level counting and manipulation
-    </p>
-
-</dl><!-- math/bits -->
 
 <dl id="mime/multipart"><dt><a href="/pkg/mime/multipart/">mime/multipart</a></dt>
   <dd>
@@ -537,18 +568,14 @@ ul li { margin: 0.5em 0; }
 
 </dl><!-- syscall -->
 
-<dl id="testing"><dt><a href="/pkg/testing/">testing</a></dt>
-  <dd>
-    <p><!-- CL 41195 -->
-      TODO: <a href="https://golang.org/cl/41195">https://golang.org/cl/41195</a>: add argument to list tests, benchmarks, and examples
-    </p>
-
-</dl><!-- testing -->
 
 <dl id="testing/quick"><dt><a href="/pkg/testing/quick/">testing/quick</a></dt>
   <dd>
     <p><!-- CL 39152 -->
-      TODO: <a href="https://golang.org/cl/39152">https://golang.org/cl/39152</a>: generate all possible int64, uint64 values
+	  The package now chooses values in the full range when
+	  generating <code>int64</code> and <code>uint64</code> random
+	  numbers; in earlier releases generated values were always
+	  limited to the [-2<sup>62</sup>, 2<sup>62</sup>) range.
     </p>
 
 </dl><!-- testing/quick -->

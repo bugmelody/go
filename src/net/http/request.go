@@ -333,9 +333,11 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	// Deep copy the URL because it isn't
 	// a map and the URL is mutable by users
 	// of WithContext.
-	r2URL := new(url.URL)
-	*r2URL = *r.URL
-	r2.URL = r2URL
+	if r.URL != nil {
+		r2URL := new(url.URL)
+		*r2URL = *r.URL
+		r2.URL = r2URL
+	}
 
 	return r2
 }
@@ -1039,11 +1041,6 @@ type maxBytesReader struct {
 	r   io.ReadCloser // underlying reader
 	n   int64         // max bytes remaining
 	err error         // sticky error
-}
-
-func (l *maxBytesReader) tooLarge() (n int, err error) {
-	l.err = errors.New("http: request body too large")
-	return 0, l.err
 }
 
 func (l *maxBytesReader) Read(p []byte) (n int, err error) {
