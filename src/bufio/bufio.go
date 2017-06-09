@@ -719,6 +719,7 @@ func (b *Reader) ReadString(delim byte) (string, error) {
 }
 
 // WriteTo implements io.WriterTo.
+// This may make multiple calls to the Read method of the underlying Reader.
 //
 // 将 b(bufio.Reader) 中的数据读出来写入 w
 // 注意: io.WriterTo期望将源数据写完
