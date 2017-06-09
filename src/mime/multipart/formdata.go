@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-6-9 11:19:33
 
 package multipart
 
@@ -27,6 +29,8 @@ var ErrMessageTooLarge = errors.New("multipart: message too large")
 // disk in temporary files.
 // It returns ErrMessageTooLarge if all non-file parts can't be stored in
 // memory.
+//
+// Content-Disposition 是 "form-data" 是什么意思 ??
 func (r *Reader) ReadForm(maxMemory int64) (*Form, error) {
 	return r.readForm(maxMemory)
 }
@@ -114,12 +118,15 @@ func (r *Reader) readForm(maxMemory int64) (_ *Form, err error) {
 // and are accessible via the *FileHeader's Open method.
 // Its Value parts are stored as strings.
 // Both are keyed by field name.
+//
+// Form是一个已解析的multipart form.
 type Form struct {
 	Value map[string][]string
 	File  map[string][]*FileHeader
 }
 
 // RemoveAll removes any temporary files associated with a Form.
+// @see
 func (f *Form) RemoveAll() error {
 	var err error
 	for _, fhs := range f.File {

@@ -1,6 +1,7 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// [[[2-over]]] 2017-6-9 14:12:11
 
 package multipart
 
@@ -16,12 +17,16 @@ func TestWriter(t *testing.T) {
 	fileContents := []byte("my file contents")
 
 	var b bytes.Buffer
+	// 这是multipart.NewWriter
 	w := NewWriter(&b)
+	// 注意下面这种写法,通过{}构造一个block,限定了变量的作用域
 	{
 		part, err := w.CreateFormFile("myfile", "my-file.txt")
 		if err != nil {
+			// w.CreateFormFile 失败
 			t.Fatalf("CreateFormFile: %v", err)
 		}
+		// 写入body
 		part.Write(fileContents)
 		err = w.WriteField("key", "val")
 		if err != nil {
@@ -50,6 +55,7 @@ func TestWriter(t *testing.T) {
 	if g, e := part.FormName(), "myfile"; g != e {
 		t.Errorf("part 1: want form name %q, got %q", e, g)
 	}
+	// 读取body
 	slurp, err := ioutil.ReadAll(part)
 	if err != nil {
 		t.Fatalf("part 1: ReadAll: %v", err)
@@ -63,6 +69,7 @@ func TestWriter(t *testing.T) {
 		t.Fatalf("part 2: %v", err)
 	}
 	if g, e := part.FormName(), "key"; g != e {
+		// 期望part2的 FormName=="key"
 		t.Errorf("part 2: want form name %q, got %q", e, g)
 	}
 	slurp, err = ioutil.ReadAll(part)
@@ -70,26 +77,41 @@ func TestWriter(t *testing.T) {
 		t.Fatalf("part 2: ReadAll: %v", err)
 	}
 	if e, g := "val", string(slurp); e != g {
+		// 期望part2的 body=="val"
 		t.Errorf("part 2: want contents %q, got %q", e, g)
 	}
 
 	part, err = r.NextPart()
 	if part != nil || err == nil {
+		// 期望part结束
 		t.Fatalf("expected end of parts; got %v, %v", part, err)
 	}
 }
 
 func TestWriterSetBoundary(t *testing.T) {
+	/**
+	SetBoundary文档中提到
+	// SetBoundary must be called before any parts are created, may only
+	// contain certain ASCII characters, and must be non-empty and
+	// at most 70 bytes long.
+	 */
 	tests := []struct {
+		// w.SetBoundary的参数
 		b  string
+		// w.SetBoundary返回是否成功
 		ok bool
 	}{
 		{"abc", true},
 		{"", false},
+		// 根据文档: may only contain certain ASCII characters
 		{"ungültig", false},
+		// 根据文档: may only contain certain ASCII characters
 		{"!", false},
+		// 根据文档: must be non-empty and at most 70 bytes long
 		{strings.Repeat("x", 70), true},
+		// 根据文档: must be non-empty and at most 70 bytes long
 		{strings.Repeat("x", 71), false},
+		// 根据文档: may only contain certain ASCII characters
 		{"bad!ascii!", false},
 		{"my-separator", true},
 		{"with space", true},
@@ -103,19 +125,23 @@ func TestWriterSetBoundary(t *testing.T) {
 		if got != tt.ok {
 			t.Errorf("%d. boundary %q = %v (%v); want %v", i, tt.b, got, err, tt.ok)
 		} else if tt.ok {
+			// 获取刚刚设置的Boundary
 			got := w.Boundary()
 			if got != tt.b {
+				// 获取的应该等于刚刚设置的
 				t.Errorf("boundary = %q; want %q", got, tt.b)
 			}
 			w.Close()
 			wantSub := "\r\n--" + tt.b + "--\r\n"
 			if got := b.String(); !strings.Contains(got, wantSub) {
+				// 这里想做什么,参考上面w.Close()的源码
 				t.Errorf("expected %q in output. got: %q", wantSub, got)
 			}
 		}
 	}
 }
 
+// @see
 func TestWriterBoundaryGoroutines(t *testing.T) {
 	// Verify there's no data race accessing any lazy boundary if it's used by
 	// different goroutines. This was previously broken by
@@ -150,6 +176,7 @@ func TestSortedHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create part: %v", err)
 	}
+	// 写入body
 	part.Write([]byte("foo"))
 
 	w.Close()

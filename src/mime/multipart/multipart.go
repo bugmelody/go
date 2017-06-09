@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
+// [[[3-over]]] 2017-6-9 10:35:53
 
 /*
 Package multipart implements MIME multipart parsing, as defined in RFC
@@ -40,6 +41,8 @@ type Part struct {
 	// has a value of "quoted-printable", that header is instead
 	// hidden from this map and the body is transparently decoded
 	// during Read calls.
+	//
+	// ?????? Content-Transfer-Encoding 头部是干什么的 ??????
 	Header textproto.MIMEHeader
 
 	mr *Reader
@@ -60,6 +63,17 @@ type Part struct {
 
 // FormName returns the name parameter if p has a Content-Disposition
 // of type "form-data".  Otherwise it returns the empty string.
+//
+// 比如,文件上传的时候请求如下:
+//
+// --9e4333
+// Content-Disposition: form-data; name="logo"; filename="upload_logo_test.go"
+// Content-Type: application/octet-stream
+//
+//
+// 文件内容
+//
+// 此时调用 *Part.FormName() == "logo"
 func (p *Part) FormName() string {
 	// See http://tools.ietf.org/html/rfc2183 section 2 for EBNF
 	// of Content-Disposition value format.
@@ -74,6 +88,17 @@ func (p *Part) FormName() string {
 
 // FileName returns the filename parameter of the Part's
 // Content-Disposition header.
+//
+// 比如,文件上传的时候请求如下:
+//
+// --9e4333
+// Content-Disposition: form-data; name="logo"; filename="upload_logo_test.go"
+// Content-Type: application/octet-stream
+//
+//
+// 文件内容
+//
+// 此时调用 *Part.FileName() == "upload_logo_test.go"
 func (p *Part) FileName() string {
 	if p.dispositionParams == nil {
 		p.parseContentDisposition()
@@ -81,6 +106,7 @@ func (p *Part) FileName() string {
 	return p.dispositionParams["filename"]
 }
 
+// @see
 func (p *Part) parseContentDisposition() {
 	v := p.Header.Get("Content-Disposition")
 	var err error
@@ -96,6 +122,19 @@ func (p *Part) parseContentDisposition() {
 // The boundary is usually obtained from the "boundary" parameter of
 // the message's "Content-Type" header. Use mime.ParseMediaType to
 // parse such headers.
+//
+// 在上传文件的时候,http头部会包含
+// Content-Type: multipart/form-data; boundary=9e433327
+//
+//
+// 如何从header中获取boundary呢?如下:
+// mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+// if err != nil {
+// 	log.Fatal(err)
+// }
+// if strings.HasPrefix(mediaType, "multipart/") {
+// 	mr := multipart.NewReader(msg.Body, params["boundary"])
+// }
 func NewReader(r io.Reader, boundary string) *Reader {
 	b := []byte("\r\n--" + boundary + "--")
 	return &Reader{
@@ -153,6 +192,8 @@ func (bp *Part) populateHeaders() error {
 
 // Read reads the body of a part, after its headers and before the
 // next part (if any) begins.
+//
+// 注意,part.Read读取时是读取body, 跟header没有关系.
 func (p *Part) Read(d []byte) (n int, err error) {
 	return p.r.Read(d)
 }
@@ -278,6 +319,7 @@ func matchAfterPrefix(buf, prefix []byte, readErr error) int {
 }
 
 func (p *Part) Close() error {
+	// 注意: *Part有Read方法,用于读取对应Part的body
 	io.Copy(ioutil.Discard, p)
 	return nil
 }

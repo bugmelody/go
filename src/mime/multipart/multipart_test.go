@@ -1,6 +1,7 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// [[[2-over]]] 2017-6-9 14:36:21
 
 package multipart
 
@@ -50,17 +51,24 @@ func expectEq(t *testing.T, expected, actual, what string) {
 }
 
 func TestNameAccessors(t *testing.T) {
+	// 索引0 是 Content-Disposition 的值. 会使用它来构造 multipart.Part p
+	// 索引1 是 期望通过  p.FormName() 得到的值.
+	// 索引2 是 期望通过  p.FileName() 得到的值.
 	tests := [...][3]string{
 		{`form-data; name="foo"`, "foo", ""},
+		// 前后有空格
 		{` form-data ; name=foo`, "foo", ""},
+		// 大写
 		{`FORM-DATA;name="foo"`, "foo", ""},
 		{` FORM-DATA ; name="foo"`, "foo", ""},
 		{` FORM-DATA ; name="foo"`, "foo", ""},
+		// name=foo中foo没有引号
 		{` FORM-DATA ; name=foo`, "foo", ""},
 		{` FORM-DATA ; filename="foo.txt"; name=foo; baz=quux`, "foo", "foo.txt"},
 		{` not-form-data ; filename="bar.txt"; name=foo; baz=quux`, "", "bar.txt"},
 	}
 	for i, test := range tests {
+		// 这是在构造multipart.Part
 		p := &Part{Header: make(map[string][]string)}
 		p.Header.Set("Content-Disposition", test[0])
 		if g, e := p.FormName(), test[1]; g != e {
@@ -125,6 +133,7 @@ func TestMultipartSlowInput(t *testing.T) {
 }
 
 func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
+	// ??????
 	t.Parallel()
 	reader := NewReader(r, "MyBoundary")
 	buf := new(bytes.Buffer)
@@ -132,6 +141,7 @@ func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
 	// Part1
 	part, err := reader.NextPart()
 	if part == nil || err != nil {
+		// 期望 part1 成功读取
 		t.Error("Expected part1")
 		return
 	}
@@ -142,9 +152,13 @@ func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
 		t.Errorf("part.Header.Get(%q) = %q, want %q", "foo-bar", x, "baz")
 	}
 	if x := part.Header.Get("Foo-Bar"); x != "baz" {
+		// 不区分大小写,因此应该跟上面一样
 		t.Errorf("part.Header.Get(%q) = %q, want %q", "Foo-Bar", x, "baz")
 	}
 	buf.Reset()
+	// Read reads the body of a part, after its headers and before the next part (if any) begins.
+	// ### func (p *Part) Read(d []byte) (n int, err error) {
+	// 注意,part.Read读取时是读取body
 	if _, err := io.Copy(buf, part); err != nil {
 		t.Errorf("part 1 copy: %v", err)
 	}
@@ -161,10 +175,12 @@ func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
 	// Part2
 	part, err = reader.NextPart()
 	if err != nil {
+		// 期望 part2 成功读取
 		t.Fatalf("Expected part2; got: %v", err)
 		return
 	}
 	if e, g := "bigsection", part.Header.Get("name"); e != g {
+		// 期望header["name"]=="bigsection"
 		t.Errorf("part2's name header: expected %q, got %q", e, g)
 	}
 	buf.Reset()
@@ -183,6 +199,7 @@ func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
 	// Part3
 	part, err = reader.NextPart()
 	if part == nil || err != nil {
+		// 期望 part3 成功读取
 		t.Error("Expected part3")
 		return
 	}
@@ -199,6 +216,7 @@ func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
 	// Part4
 	part, err = reader.NextPart()
 	if part == nil || err != nil {
+		// 期望 part4 成功读取
 		t.Error("Expected part 4 without errors")
 		return
 	}
@@ -206,9 +224,11 @@ func testMultipart(t *testing.T, r io.Reader, onlyNewlines bool) {
 	// Non-existent part5
 	part, err = reader.NextPart()
 	if part != nil {
+		// part5 不存在
 		t.Error("Didn't expect a fifth part.")
 	}
 	if err != io.EOF {
+		// 期望 EOF
 		t.Errorf("On fifth part expected io.EOF; got %v", err)
 	}
 }
@@ -236,13 +256,18 @@ func TestVariousTextLineEndings(t *testing.T) {
 		buf := new(bytes.Buffer)
 		part, err := reader.NextPart()
 		if part == nil {
+			// 期望NextPart()读取到part
 			t.Errorf("Expected a body part on text %d", testNum)
 			continue
 		}
 		if err != nil {
+			// 期望NextPart()成功
 			t.Errorf("Unexpected error on text %d: %v", testNum, err)
 			continue
 		}
+		// Read reads the body of a part, after its headers and before the next part (if any) begins.
+		// ### func (p *Part) Read(d []byte) (n int, err error) {
+		// 注意,part.Read读取时是读取body
 		written, err := io.Copy(buf, part)
 		expectEq(t, expectedBody, buf.String(), fmt.Sprintf("test %d", testNum))
 		if err != nil {
@@ -251,6 +276,7 @@ func TestVariousTextLineEndings(t *testing.T) {
 
 		part, err = reader.NextPart()
 		if part != nil {
+			// 期望EOF结束
 			t.Errorf("Unexpected part in test %d", testNum)
 		}
 		if err != io.EOF {
@@ -259,7 +285,7 @@ func TestVariousTextLineEndings(t *testing.T) {
 
 	}
 }
-
+// 下面的暂时不看了,以后再说
 type maliciousReader struct {
 	t *testing.T
 	n int

@@ -1,6 +1,9 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[2-over]]] 2017-6-9 15:58:06
+// 本文件全部代码都看看
 
 package multipart
 
@@ -14,12 +17,18 @@ import (
 
 func TestReadForm(t *testing.T) {
 	b := strings.NewReader(strings.Replace(message, "\n", "\r\n", -1))
+	// 是 multipart.NewReader
 	r := NewReader(b, boundary)
+	// r.ReadForm(25) 返回 *multipart.Form
+	// 读取25字节到内存,25字节之外的到磁盘文件
 	f, err := r.ReadForm(25)
 	if err != nil {
 		t.Fatal("ReadForm:", err)
 	}
+	// 函数结束时清理磁盘上的临时文件
+	// 文档: RemoveAll removes any temporary files associated with a Form.
 	defer f.RemoveAll()
+	// g是get, e是expect
 	if g, e := f.Value["texta"][0], textaValue; g != e {
 		t.Errorf("texta value = %q, want %q", g, e)
 	}
@@ -28,16 +37,22 @@ func TestReadForm(t *testing.T) {
 	}
 	fd := testFile(t, f.File["filea"][0], "filea.txt", fileaContents)
 	if _, ok := fd.(*os.File); ok {
+		// 期望f不是*os.File
+		// ??????????????
 		t.Error("file is *os.File, should not be")
 	}
 	fd.Close()
 	fd = testFile(t, f.File["fileb"][0], "fileb.txt", filebContents)
 	if _, ok := fd.(*os.File); !ok {
+		// 期望f是*os.File
+		// ??????????????
 		t.Errorf("file has unexpected underlying type %T", fd)
 	}
 	fd.Close()
 }
 
+// efn: expected file name
+// econtent: expected content
 func testFile(t *testing.T, fh *FileHeader, efn, econtent string) File {
 	if fh.Filename != efn {
 		t.Errorf("filename = %q, want %q", fh.Filename, efn)
@@ -52,6 +67,7 @@ func testFile(t *testing.T, fh *FileHeader, efn, econtent string) File {
 	b := new(bytes.Buffer)
 	_, err = io.Copy(b, f)
 	if err != nil {
+		// 期望io.Copy成功
 		t.Fatal("copying contents:", err)
 	}
 	if g := b.String(); g != econtent {
@@ -106,6 +122,7 @@ Content-Disposition: form-data; name="version"
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 下面会输出: Got: &multipart.Form{Value:map[string][]string{"version":[]string{"171"}}, File:map[string][]*multipart.FileHeader{}}
 	t.Logf("Got: %#v", f)
 }
 
