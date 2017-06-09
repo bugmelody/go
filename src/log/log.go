@@ -1,6 +1,7 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// [[[5-over]]] 2017-6-8 17:42:17
 
 // Package log implements a simple logging package. It defines a type, Logger,
 // with methods for formatting output. It also has a predefined 'standard'
@@ -12,6 +13,8 @@
 // printed does not end in a newline, the logger will add one.
 // The Fatal functions call os.Exit(1) after writing the log message.
 // The Panic functions call panic after writing the log message.
+//
+// 上文的That logger指predefined 'standard' Logger
 package log
 
 import (
@@ -34,6 +37,10 @@ const (
 	//	2009/01/23 01:23:23 message
 	// while flags Ldate | Ltime | Lmicroseconds | Llongfile produce,
 	//	2009/01/23 01:23:23.123123 /a/b/c/d.go:23: message
+	//
+	//当 Llongfile or Lshortfile 被指定的时候, prefix 后面(或者说 message 前面),会有个冒号.
+	//
+	// 1 << iota 是 01, Ltime 是 10
 	Ldate         = 1 << iota     // the date in the local time zone: 2009/01/23
 	Ltime                         // the time in the local time zone: 01:23:23
 	Lmicroseconds                 // microsecond resolution: 01:23:23.123123.  assumes Ltime.
@@ -47,6 +54,8 @@ const (
 // output to an io.Writer. Each logging operation makes a single call to
 // the Writer's Write method. A Logger can be used simultaneously from
 // multiple goroutines; it guarantees to serialize access to the Writer.
+//
+// prefix: 每一行日志的前缀
 type Logger struct {
 	mu     sync.Mutex // ensures atomic writes; protects the following fields
 	prefix string     // prefix to write at beginning of each line
@@ -64,26 +73,82 @@ func New(out io.Writer, prefix string, flag int) *Logger {
 }
 
 // SetOutput sets the output destination for the logger.
+//
+// SetOutput 设置 logger 的输出目标
 func (l *Logger) SetOutput(w io.Writer) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.out = w
 }
 
+// std 是一个 *Logger
+// LstdFlags 会生成这样格式的日志: '2009/01/23 01:23:23 message'
 var std = New(os.Stderr, "", LstdFlags)
 
 // Cheap integer to fixed-width decimal ASCII. Give a negative width to avoid zero-padding.
+//
+// 将整数 i 转换为固定宽度 wid 的十进制 ascii 数字
+// 我的测试如下
+//func main() {
+//	var buf = []byte("");
+//	itoa(&buf, 12345, 5)
+//	fmt.Printf("%v\n", buf) // [49 50 51 52 53]
+//	buf = []byte("");
+//	itoa(&buf, 2345, 4)
+//	fmt.Printf("%v\n", buf) // [50 51 52 53]
+//	buf = []byte("");
+//	itoa(&buf, 345, 3)
+//	fmt.Printf("%v\n", buf) // [51 52 53]
+//}
+// 
+// 本函数是把int类型的i转换为了[]byte,append到buf中
 func itoa(buf *[]byte, i int, wid int) {
+	/**
+	[root@qc ~]# yum install -y ascii
+	[root@qc ~]# ascii -d
+    0 NUL    16 DLE    32      48 0    64 @    80 P    96 `   112 p 
+    1 SOH    17 DC1    33 !    49 1    65 A    81 Q    97 a   113 q 
+    2 STX    18 DC2    34 "    50 2    66 B    82 R    98 b   114 r 
+    3 ETX    19 DC3    35 #    51 3    67 C    83 S    99 c   115 s 
+    4 EOT    20 DC4    36 $    52 4    68 D    84 T   100 d   116 t 
+    5 ENQ    21 NAK    37 %    53 5    69 E    85 U   101 e   117 u 
+    6 ACK    22 SYN    38 &    54 6    70 F    86 V   102 f   118 v 
+    7 BEL    23 ETB    39 '    55 7    71 G    87 W   103 g   119 w 
+    8 BS     24 CAN    40 (    56 8    72 H    88 X   104 h   120 x 
+    9 HT     25 EM     41 )    57 9    73 I    89 Y   105 i   121 y 
+   10 LF     26 SUB    42 *    58 :    74 J    90 Z   106 j   122 z 
+   11 VT     27 ESC    43 +    59 ;    75 K    91 [   107 k   123 { 
+   12 FF     28 FS     44 ,    60 <    76 L    92 \   108 l   124 | 
+   13 CR     29 GS     45 -    61 =    77 M    93 ]   109 m   125 } 
+   14 SO     30 RS     46 .    62 >    78 N    94 ^   110 n   126 ~ 
+   15 SI     31 US     47 /    63 ?    79 O    95 _   111 o   127 DEL 
+	 */
 	// Assemble decimal in reverse order.
+	// 从尾部向头部组合十进制数字
+	// 声明一个20个元素的byte数组
 	var b [20]byte
+	// bp: position of b, 初始时 b[bp] 指向 b[19]
 	bp := len(b) - 1
+	// i 是整个函数的参数,代表要添加的十进制数字
+	// wid 代表要添加数字的宽度
 	for i >= 10 || wid > 1 {
 		wid--
+		// q: quotient   ['kwəuʃənt] n. 1.【数学】商 2.份额
 		q := i / 10
+		// 如果假设 i=12345
+		// 第1轮循环,q 这时是 1234
+		// 第2轮循环,q 这时是 123
+		// 第3轮循环,q 这时是 12
+
+		// i - q*10 : 是最低位的数字
+
+		// ('0' + i - q*10) : 是最低位的数字的十进制 ascii 是多少
+		// byte('0' + i - q*10) : 是最低位的数字的十进制是多少
 		b[bp] = byte('0' + i - q*10)
 		bp--
 		i = q
 	}
+	// 上面的 for 循环中处理了大于10的位, 现在处理个位数
 	// i < 10
 	b[bp] = byte('0' + i)
 	*buf = append(*buf, b[bp:]...)
@@ -93,22 +158,40 @@ func itoa(buf *[]byte, i int, wid int) {
 //   * l.prefix (if it's not blank),
 //   * date and/or time (if corresponding flags are provided),
 //   * file and line number (if corresponding flags are provided).
+//
+// buf: buffer
+// t: 当前时间
+// file: 文件名
+// line: 行数
 func (l *Logger) formatHeader(buf *[]byte, t time.Time, file string, line int) {
+	// 添加 l.prefix 到 buf
+
+	// append(*buf, l.prefix...) 这种用法请参考 $ go doc builtin.append
+	// As a special case, it is legal to append a string to a byte slice, like this:
+	//	slice = append([]byte("hello "), "world"...)
 	*buf = append(*buf, l.prefix...)
 	if l.flag&(Ldate|Ltime|Lmicroseconds) != 0 {
 		if l.flag&LUTC != 0 {
+			// 如果 LUTC 设置了 LUTC flag,表示 // if Ldate or Ltime is set, use UTC rather than the local time zone
 			t = t.UTC()
 		}
+		// 先处理 Ldate
 		if l.flag&Ldate != 0 {
+			// 如果设置了 Ldate
 			year, month, day := t.Date()
 			itoa(buf, year, 4)
+			// 文档:Append returns the updated slice. It is therefore necessary to store the
+			// result of append, often in the variable holding the slice itself:
 			*buf = append(*buf, '/')
+			// 需要使用 int(month) 转型
 			itoa(buf, int(month), 2)
 			*buf = append(*buf, '/')
 			itoa(buf, day, 2)
 			*buf = append(*buf, ' ')
 		}
+		// 现在的*buf中格式为: '2009/01/23 '
 		if l.flag&(Ltime|Lmicroseconds) != 0 {
+			// 如果设置了 (Ltime|Lmicroseconds) 中的其中一个
 			hour, min, sec := t.Clock()
 			itoa(buf, hour, 2)
 			*buf = append(*buf, ':')
@@ -116,28 +199,39 @@ func (l *Logger) formatHeader(buf *[]byte, t time.Time, file string, line int) {
 			*buf = append(*buf, ':')
 			itoa(buf, sec, 2)
 			if l.flag&Lmicroseconds != 0 {
+				// 如果设置了 Lmicroseconds
 				*buf = append(*buf, '.')
+				// t.Nanosecond()/1e3 : 将纳秒转换为微秒, 微秒是6位,纳秒是9位
 				itoa(buf, t.Nanosecond()/1e3, 6)
 			}
 			*buf = append(*buf, ' ')
 		}
 	}
+	// 现在的格式为: '2009/01/23 01:23:23.123123 '
 	if l.flag&(Lshortfile|Llongfile) != 0 {
+		// Lshortfile 优先于 Llongfile, 这也是 Lshortfile 文档中提到的
 		if l.flag&Lshortfile != 0 {
+			// 如果定义了 Lshortfile, 将 file 设置为 short(文件名)
+			// [start: 计算不含路径的文件名, 这里直接处理slice,避免引入额外的path包]
 			short := file
 			for i := len(file) - 1; i > 0; i-- {
+				// 从后往前推,遇到的第一个路径分隔符
 				if file[i] == '/' {
 					short = file[i+1:]
 					break
 				}
 			}
+			// 重设file变量
 			file = short
+			// [end: 计算不含路径的文件名, 这里直接处理slice,避免引入额外的path包]
 		}
 		*buf = append(*buf, file...)
 		*buf = append(*buf, ':')
+		// line 代表文件行数
 		itoa(buf, line, -1)
 		*buf = append(*buf, ": "...)
 	}
+	// 现在的格式为: //	'2009/01/23 01:23:23.123123 /a/b/c/d.go:23: '
 }
 
 // Output writes the output for a logging event. The string s contains
@@ -158,21 +252,37 @@ func (l *Logger) Output(calldepth int, s string) error {
 	defer l.mu.Unlock()
 	if l.flag&(Lshortfile|Llongfile) != 0 {
 		// release lock while getting caller info - it's expensive.
+		// 在获取 caller info 的过程中释放锁.
 		l.mu.Unlock()
+		// 注意在unlock和lock之间并没有对l.xxx有写操作
+		// ok: 是否获取到file和line
 		var ok bool
+		// $ go doc runtime.Caller
+		// 返回值 ok: The boolean ok is false if it was not possible to recover the information
 		_, file, line, ok = runtime.Caller(calldepth)
 		if !ok {
+			// if it was not possible to recover the information
+			// 无法恢复调用信息
 			file = "???"
 			line = 0
 		}
+		// caller info 获取完毕,重新加锁
 		l.mu.Lock()
 	}
+	// 重置 l.buf
 	l.buf = l.buf[:0]
+	// 输出 log header
 	l.formatHeader(&l.buf, now, file, line)
+	// 下面输出真正的日志字符串
+	// 首先将日志字符串写入缓冲
 	l.buf = append(l.buf, s...)
 	if len(s) == 0 || s[len(s)-1] != '\n' {
+		// s为空 || s不为空且最后一个字符不是换行符 
+		// 根据函数说明: A newline is appended if the last character of s is not already a newline
+		// 注意 '\n' 是单引号
 		l.buf = append(l.buf, '\n')
 	}
+	// 将 l.buf 写入 l.out,缓冲数据落地
 	_, err := l.out.Write(l.buf)
 	return err
 }
@@ -259,6 +369,8 @@ func (l *Logger) SetPrefix(prefix string) {
 }
 
 // SetOutput sets the output destination for the standard logger.
+//
+// 默认情况下,log.std.out 指向 os.Stderr, 参考 std 定义处
 func SetOutput(w io.Writer) {
 	std.mu.Lock()
 	defer std.mu.Unlock()
@@ -286,6 +398,7 @@ func SetPrefix(prefix string) {
 }
 
 // These functions write to the standard logger.
+// 这里的 the standard logger 就是值 std 变量
 
 // Print calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Print.
