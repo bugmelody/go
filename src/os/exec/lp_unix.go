@@ -1,6 +1,8 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-12 15:46:10
 
 // +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
 
@@ -21,7 +23,11 @@ func findExecutable(file string) error {
 	if err != nil {
 		return err
 	}
+	// linux不像windows只需要判断是否是目录,还需要判断rwx
 	if m := d.Mode(); !m.IsDir() && m&0111 != 0 {
+		// 0111是8进制,对应二进制是 001001001
+		//                      rwxrwxrwx
+		// 也就是需要ugo任何一个有x运行权限
 		return nil
 	}
 	return os.ErrPermission
@@ -37,12 +43,14 @@ func LookPath(file string) (string, error) {
 	// but that would not match all the Unix shells.
 
 	if strings.Contains(file, "/") {
+		// 文档:If file contains a slash, it is tried directly and the PATH is not consulted.
 		err := findExecutable(file)
 		if err == nil {
 			return file, nil
 		}
 		return "", &Error{file, err}
 	}
+	// 文档:searches for an executable binary named file in the directories named by the PATH environment variable.
 	path := os.Getenv("PATH")
 	for _, dir := range filepath.SplitList(path) {
 		if dir == "" {

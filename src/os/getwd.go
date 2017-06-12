@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-6-12 10:39:54
 
 package os
 
@@ -23,8 +25,13 @@ var useSyscallwd = func(error) bool { return true }
 // current directory. If the current directory can be
 // reached via multiple paths (due to symbolic links),
 // Getwd may return any one of them.
+//
+// 获取当前工作目录
+// rooted path name 应该是指以 '/' 开始的路径
+// 不看细节
 func Getwd() (dir string, err error) {
 	if runtime.GOOS == "windows" {
+		// 如果是windows系统
 		return syscall.Getwd()
 	}
 

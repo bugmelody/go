@@ -41,6 +41,10 @@ func Stat(name string) (FileInfo, error) {
 // If the file is a symbolic link, the returned FileInfo
 // describes the symbolic link. Lstat makes no attempt to follow the link.
 // If there is an error, it will be of type *PathError.
+//
+// 照这个描述来看
+// Stat 会跟踪符号链接,最后返回的是真正的 FileInfo
+// LStat 不会跟踪符号链接,最后返回的是符号链接的 FileInfo
 func Lstat(name string) (FileInfo, error) {
 	var fs fileStat
 	err := syscall.Lstat(name, &fs.sys)

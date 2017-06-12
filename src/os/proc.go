@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-6-12 11:24:48
 
 // Process etc.
 
@@ -45,6 +47,8 @@ func Getgroups() ([]int, error) {
 // Exit causes the current program to exit with the given status code.
 // Conventionally, code zero indicates success, non-zero an error.
 // The program terminates immediately; deferred functions are not run.
+//
+// 注意: deferred functions are not run.
 func Exit(code int) {
 	if code == 0 {
 		// Give race detector a chance to fail the program.

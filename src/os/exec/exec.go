@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-6-12 13:29:34 ★★★★★
 
 // Package exec runs external commands. It wraps os.StartProcess to make it
 // easier to remap stdin and stdout, connect I/O with pipes, and do other
@@ -33,6 +35,7 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	// 注意strconv.Quote(e.Name)的使用
 	return "exec: " + strconv.Quote(e.Name) + ": " + e.Err.Error()
 }
 
@@ -40,6 +43,8 @@ func (e *Error) Error() string {
 //
 // A Cmd cannot be reused after calling its Run, Output or CombinedOutput
 // methods.
+//
+// 在调用Cmd的Run,Output,CombinedOutput方法后,Cmd不能再被重用.
 type Cmd struct {
 	// Path is the path of the command to run.
 	//
@@ -52,6 +57,10 @@ type Cmd struct {
 	// If the Args field is empty or nil, Run uses {Path}.
 	//
 	// In typical use, both Path and Args are set by calling Command.
+	//
+	// 命令本身是作为 Args[0].
+	// 如果 Args 字段是 empty 或 nil, Run 会使用 Path 作为 Args[0].
+	// 参考 : 'func Command(name string, arg ...string) *Cmd {' 的实现
 	Args []string
 
 	// Env specifies the environment of the process.
@@ -60,6 +69,8 @@ type Cmd struct {
 	// environment.
 	// If Env contains duplicate environment keys, only the last
 	// value in the slice for each duplicate key is used.
+	//
+	// 格式参考: go doc os.Environ
 	Env []string
 
 	// Dir specifies the working directory of the command.
@@ -98,6 +109,8 @@ type Cmd struct {
 
 	// SysProcAttr holds optional, operating system-specific attributes.
 	// Run passes it to os.StartProcess as the os.ProcAttr's Sys field.
+	//
+	// 参考: go doc os.ProcAttr
 	SysProcAttr *syscall.SysProcAttr
 
 	// Process is the underlying process, once started.
@@ -115,6 +128,7 @@ type Cmd struct {
 	closeAfterWait  []io.Closer
 	goroutine       []func() error
 	errch           chan error // one send per goroutine
+	// 当Cmd.Wait方法调用中的c.Process.Wait()已经完毕,waitDone会被close
 	waitDone        chan struct{}
 }
 
@@ -131,15 +145,23 @@ type Cmd struct {
 // followed by the elements of arg, so arg should not include the
 // command name itself. For example, Command("echo", "hello").
 // Args[0] is always name, not the possibly resolved Path.
+//
+// 上文中的so arg(这里指Command函数的arg参数) should not include the command name itself
 func Command(name string, arg ...string) *Cmd {
+	// 注意下面,可以在Struct的literal中直接使用append
+	// 而append中可以直接使用[]string{name}
 	cmd := &Cmd{
 		Path: name,
 		Args: append([]string{name}, arg...),
 	}
 	if filepath.Base(name) == name {
+		// 根据 Command 函数文档: If name contains no path separators, Command uses LookPath to
+		// resolve the path to a complete name if possible. Otherwise it uses name directly.
 		if lp, err := LookPath(name); err != nil {
+			// LookPath出错
 			cmd.lookPathErr = err
 		} else {
+			// LookPath成功
 			cmd.Path = lp
 		}
 	}
@@ -151,6 +173,8 @@ func Command(name string, arg ...string) *Cmd {
 // The provided context is used to kill the process (by calling
 // os.Process.Kill) if the context becomes done before the command
 // completes on its own.
+//
+// 上文中the process指返回的Cmd进程
 func CommandContext(ctx context.Context, name string, arg ...string) *Cmd {
 	if ctx == nil {
 		panic("nil Context")
@@ -162,6 +186,12 @@ func CommandContext(ctx context.Context, name string, arg ...string) *Cmd {
 
 // interfaceEqual protects against panics from doing equality tests on
 // two interfaces with non-comparable underlying types.
+//
+// 注意这里的技巧
+//
+// 当比较两个 interface 的时候(相等性测试), 如果两个 interface 的 underlying types 是 non-comparable
+// 会发生 panic
+// 这里通过 defer 和 recover 来解决
 func interfaceEqual(a, b interface{}) bool {
 	defer func() {
 		recover()
@@ -169,6 +199,8 @@ func interfaceEqual(a, b interface{}) bool {
 	return a == b
 }
 
+// 如果 c.Env 不是 nil, 返回 c.Env
+// 否则,返回当前进程的环境(os.Environ())
 func (c *Cmd) envv() []string {
 	if c.Env != nil {
 		return c.Env
@@ -188,8 +220,10 @@ func (c *Cmd) argv() []string {
 // It is non-nil everywhere but Plan 9, which lacks EPIPE. See exec_posix.go.
 var skipStdinCopyError func(error) bool
 
+// stdin 会返回一个 *os.File f, 从f可以读取到stdin中的内容
 func (c *Cmd) stdin() (f *os.File, err error) {
 	if c.Stdin == nil {
+		// c.Stdin文档: If Stdin is nil, the process reads from the null device (os.DevNull).
 		f, err = os.Open(os.DevNull)
 		if err != nil {
 			return
@@ -199,9 +233,15 @@ func (c *Cmd) stdin() (f *os.File, err error) {
 	}
 
 	if f, ok := c.Stdin.(*os.File); ok {
+		// c.Stdin文档:If Stdin is an *os.File, the process's standard input is connected directly to that file.
 		return f, nil
 	}
 
+	// 根据c.Stdin文档: Otherwise, during the execution of the command a separate
+	// goroutine reads from Stdin and delivers that data to the command
+	// over a pipe. In this case, Wait does not complete until the goroutine
+	// stops copying, either because it has reached the end of Stdin
+	// (EOF or a read error) or because writing to the pipe returned an error.
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return
@@ -210,17 +250,27 @@ func (c *Cmd) stdin() (f *os.File, err error) {
 	c.closeAfterStart = append(c.closeAfterStart, pr)
 	c.closeAfterWait = append(c.closeAfterWait, pw)
 	c.goroutine = append(c.goroutine, func() error {
+		// 注意: Copy copies from src to dst until either EOF is reached on src or an error occurs.
+		// 向 pw 写入数据, 由于是 os.Pipe() 创建的, 后续可以从 pr 中读取此时写入到 pw 中的数据.
 		_, err := io.Copy(pw, c.Stdin)
 		if skip := skipStdinCopyError; skip != nil && skip(err) {
+			// 进行skip
 			err = nil
 		}
 		if err1 := pw.Close(); err == nil {
+			// err和err1之间优先使用err
 			err = err1
 		}
 		return err
 	})
+	// 可以从pr读取到写入pw的内容,而写入pw的内容就是来源于c.Stdin的内容
 	return pr, nil
 }
+
+// 根据 Cmd.Stdout 和 Cmd.Stderr 的文档
+// Stdout and Stderr specify the process's standard output and error.
+// If either is nil, Run connects the corresponding file descriptor to the null device (os.DevNull).
+// If Stdout and Stderr are the same writer, at most one goroutine at a time will call Write.
 
 func (c *Cmd) stdout() (f *os.File, err error) {
 	return c.writerDescriptor(c.Stdout)
@@ -230,11 +280,13 @@ func (c *Cmd) stderr() (f *os.File, err error) {
 	if c.Stderr != nil && interfaceEqual(c.Stderr, c.Stdout) {
 		return c.childFiles[1], nil
 	}
+	// 现在,c.Stderr=nil ||  !interfaceEqual(c.Stderr, c.Stdout)
 	return c.writerDescriptor(c.Stderr)
 }
 
 func (c *Cmd) writerDescriptor(w io.Writer) (f *os.File, err error) {
 	if w == nil {
+		// 文档:If either is nil, Run connects the corresponding file descriptor to the null device (os.DevNull).
 		f, err = os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 		if err != nil {
 			return
@@ -255,10 +307,12 @@ func (c *Cmd) writerDescriptor(w io.Writer) (f *os.File, err error) {
 	c.closeAfterStart = append(c.closeAfterStart, pw)
 	c.closeAfterWait = append(c.closeAfterWait, pr)
 	c.goroutine = append(c.goroutine, func() error {
+		// 注意: Copy copies from src to dst until either EOF is reached on src or an error occurs.
 		_, err := io.Copy(w, pr)
 		pr.Close() // in case io.Copy stopped due to write error
 		return err
 	})
+	// 向 pw写入的数据 => pr => w
 	return pw, nil
 }
 
@@ -278,25 +332,38 @@ func (c *Cmd) closeDescriptors(closers []io.Closer) {
 // type *ExitError. Other error types may be returned for other situations.
 func (c *Cmd) Run() error {
 	if err := c.Start(); err != nil {
+		// 启动失败,返回err
 		return err
 	}
+	// 现在,启动成功
+	// 等待 Cmd 完成
 	return c.Wait()
 }
 
 // lookExtensions finds windows executable by its dir and path.
 // It uses LookPath to try appropriate extensions.
 // lookExtensions does not search PATH, instead it converts `prog` into `.\prog`.
+//
+// 返回path + ext
 func lookExtensions(path, dir string) (string, error) {
 	if filepath.Base(path) == path {
+		// 如果满足本分支,必然是这样的情况: dir = '/dir1/dir2', path = 'filename.ext'
+		// 根据文档:lookExtensions does not search PATH, instead it converts `prog` into `.\prog`.
 		path = filepath.Join(".", path)
 	}
 	if dir == "" {
+		// PATH environment variable 中查找
 		return LookPath(path)
 	}
+	// 现在,dir不为空
 	if filepath.VolumeName(path) != "" {
+		// path以VolumeName开头
+		// 可以获取到VolumeName
 		return LookPath(path)
 	}
+	// 现在,path不以VolumeName开头
 	if len(path) > 1 && os.IsPathSeparator(path[0]) {
+		// path[0]是路径分隔符
 		return LookPath(path)
 	}
 	dirandpath := filepath.Join(dir, path)
@@ -329,28 +396,37 @@ func (c *Cmd) Start() error {
 		c.Path = lp
 	}
 	if c.Process != nil {
+		// 进程已经启动
 		return errors.New("exec: already started")
 	}
 	if c.ctx != nil {
 		select {
 		case <-c.ctx.Done():
+			// c.ctx.Done()返回一个chan,从返回的chan中接收到值说明工作应该结束了
 			c.closeDescriptors(c.closeAfterStart)
 			c.closeDescriptors(c.closeAfterWait)
 			return c.ctx.Err()
 		default:
+			// 程序往下执行,不阻塞
 		}
 	}
 
 	type F func(*Cmd) (*os.File, error)
+	// (*Cmd).stdin, (*Cmd).stdout, (*Cmd).stderr 都满足 F 的函数签名
+	// (*Cmd).stdin 是上面已经定义好的函数
 	for _, setupFd := range []F{(*Cmd).stdin, (*Cmd).stdout, (*Cmd).stderr} {
+		// setupFd是类型F的值
+		// 这里setupFd(c)其实是调用(*Cmd).stdin,(*Cmd).stdout,(*Cmd).stderr
 		fd, err := setupFd(c)
 		if err != nil {
 			c.closeDescriptors(c.closeAfterStart)
 			c.closeDescriptors(c.closeAfterWait)
 			return err
 		}
+		// 子进程继承
 		c.childFiles = append(c.childFiles, fd)
 	}
+	// 子进程继承
 	c.childFiles = append(c.childFiles, c.ExtraFiles...)
 
 	var err error
@@ -366,6 +442,8 @@ func (c *Cmd) Start() error {
 		return err
 	}
 
+	// c.closeAfterStart,c.closeAfterWait 在任何出错的情况下都要close
+	// c.closeAfterStart在成功的情况下close
 	c.closeDescriptors(c.closeAfterStart)
 
 	c.errch = make(chan error, len(c.goroutine))
@@ -380,6 +458,7 @@ func (c *Cmd) Start() error {
 		go func() {
 			select {
 			case <-c.ctx.Done():
+				// c.ctx.Done()返回一个chan,从返回的chan中接收到值说明工作应该结束了
 				c.Process.Kill()
 			case <-c.waitDone:
 			}
@@ -428,15 +507,18 @@ func (e *ExitError) Error() string {
 // Wait releases any resources associated with the Cmd.
 func (c *Cmd) Wait() error {
 	if c.Process == nil {
+		// 进程还未启动(Start还未调用过)
 		return errors.New("exec: not started")
 	}
 	if c.finished {
 		return errors.New("exec: Wait was already called")
 	}
+	// 标记Wait已经被调用
 	c.finished = true
 
 	state, err := c.Process.Wait()
 	if c.waitDone != nil {
+		// 标记Cmd.Wait方法调用中的c.Process.Wait()已经完毕
 		close(c.waitDone)
 	}
 	c.ProcessState = state
@@ -456,17 +538,23 @@ func (c *Cmd) Wait() error {
 		return &ExitError{ProcessState: state}
 	}
 
+	// err比copyError优先级高
 	return copyError
 }
 
 // Output runs the command and returns its standard output.
 // Any returned error will usually be of type *ExitError.
 // If c.Stderr was nil, Output populates ExitError.Stderr.
+//
+// 此方法内部调用了Run.
+// 观察源码,此方法不应该被重复调用.
 func (c *Cmd) Output() ([]byte, error) {
 	if c.Stdout != nil {
+		// 不应该重复调用此方法
 		return nil, errors.New("exec: Stdout already set")
 	}
 	var stdout bytes.Buffer
+	// *bytes.Buffer实现了io.Writer
 	c.Stdout = &stdout
 
 	captureErr := c.Stderr == nil
@@ -477,6 +565,7 @@ func (c *Cmd) Output() ([]byte, error) {
 	err := c.Run()
 	if err != nil && captureErr {
 		if ee, ok := err.(*ExitError); ok {
+			// 根据文档:If c.Stderr was nil, Output populates ExitError.Stderr.
 			ee.Stderr = c.Stderr.(*prefixSuffixSaver).Bytes()
 		}
 	}
@@ -485,6 +574,9 @@ func (c *Cmd) Output() ([]byte, error) {
 
 // CombinedOutput runs the command and returns its combined standard
 // output and standard error.
+//
+// 此方法内部调用了Run.
+// 观察源码,此方法不应该被重复调用.
 func (c *Cmd) CombinedOutput() ([]byte, error) {
 	if c.Stdout != nil {
 		return nil, errors.New("exec: Stdout already set")
@@ -493,6 +585,8 @@ func (c *Cmd) CombinedOutput() ([]byte, error) {
 		return nil, errors.New("exec: Stderr already set")
 	}
 	var b bytes.Buffer
+	// 注意: c.Stdout , c.Stderr 文档中提到
+	// If Stdout and Stderr are the same writer, at most one goroutine at a time will call Write.
 	c.Stdout = &b
 	c.Stderr = &b
 	err := c.Run()
@@ -505,6 +599,10 @@ func (c *Cmd) CombinedOutput() ([]byte, error) {
 // A caller need only call Close to force the pipe to close sooner.
 // For example, if the command being run will not exit until standard input
 // is closed, the caller must close the pipe.
+//
+// 向返回的io.WriteCloser写入数据,之后会从c.Stdin被读取到.
+// 观察源码,此方法不应该被重复调用.
+// 观察源码,此方法应该在子进程启动之前被调用,否则会返回错误.
 func (c *Cmd) StdinPipe() (io.WriteCloser, error) {
 	if c.Stdin != nil {
 		return nil, errors.New("exec: Stdin already set")
@@ -523,6 +621,7 @@ func (c *Cmd) StdinPipe() (io.WriteCloser, error) {
 	return wc, nil
 }
 
+// closeOnce.Close 即使多次被调用只会有一次有效
 type closeOnce struct {
 	*os.File
 
@@ -597,6 +696,10 @@ func (c *closeOnce) WriteString(s string) (int, error) {
 // it is incorrect to call Wait before all reads from the pipe have completed.
 // For the same reason, it is incorrect to call Run when using StdoutPipe.
 // See the example for idiomatic usage.
+//
+// 从返回的io.ReadCloser读取数据,会读取到写入c.Stdout的数据(数据=>c.Stdout=>io.ReadCloser)
+// 观察源码,此方法不应该被重复调用.
+// 观察源码,此方法应该在子进程启动之前被调用,否则会返回错误.
 func (c *Cmd) StdoutPipe() (io.ReadCloser, error) {
 	if c.Stdout != nil {
 		return nil, errors.New("exec: Stdout already set")
@@ -622,6 +725,10 @@ func (c *Cmd) StdoutPipe() (io.ReadCloser, error) {
 // it is incorrect to call Wait before all reads from the pipe have completed.
 // For the same reason, it is incorrect to use Run when using StderrPipe.
 // See the StdoutPipe example for idiomatic usage.
+//
+// 从返回的io.ReadCloser读取数据,会读取到写入c.Stderr的数据(数据=>c.Stderr=>io.ReadCloser)
+// 观察源码,此方法不应该被重复调用.
+// 观察源码,此方法应该在子进程启动之前被调用,否则会返回错误.
 func (c *Cmd) StderrPipe() (io.ReadCloser, error) {
 	if c.Stderr != nil {
 		return nil, errors.New("exec: Stderr already set")
@@ -638,6 +745,8 @@ func (c *Cmd) StderrPipe() (io.ReadCloser, error) {
 	c.closeAfterWait = append(c.closeAfterWait, pr)
 	return pr, nil
 }
+
+// prefixSuffixSaver相关的暂时不看
 
 // prefixSuffixSaver is an io.Writer which retains the first N bytes
 // and the last N bytes written to it. The Bytes() methods reconstructs
@@ -719,30 +828,42 @@ func minInt(a, b int) int {
 // dedupEnv returns a copy of env with any duplicates removed, in favor of
 // later values.
 // Items not of the normal environment "key=value" form are preserved unchanged.
+//
+// @see
 func dedupEnv(env []string) []string {
 	return dedupEnvCase(runtime.GOOS == "windows", env)
 }
 
 // dedupEnvCase is dedupEnv with a case option for testing.
 // If caseInsensitive is true, the case of keys is ignored.
+//
+// @see
 func dedupEnvCase(caseInsensitive bool, env []string) []string {
+	// out:函数最终的返回值
 	out := make([]string, 0, len(env))
+	// saw:见过的
 	saw := map[string]int{} // key => index into out
 	for _, kv := range env {
+		// eq代表=号的位置
 		eq := strings.Index(kv, "=")
 		if eq < 0 {
+			// 不存在=号
 			out = append(out, kv)
 			continue
 		}
+		// 现在,找到了=号
 		k := kv[:eq]
 		if caseInsensitive {
 			k = strings.ToLower(k)
 		}
 		if dupIdx, isDup := saw[k]; isDup {
+			// 如果重复,使用最后出现的值
 			out[dupIdx] = kv
 			continue
 		}
+		// 记录见过
 		saw[k] = len(out)
+		// append到结果
 		out = append(out, kv)
 	}
 	return out

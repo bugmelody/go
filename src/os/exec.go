@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-6-12 09:46:09
 
 package os
 
@@ -14,6 +16,7 @@ import (
 
 // Process stores the information about a process created by StartProcess.
 type Process struct {
+	// 进程id
 	Pid    int
 	handle uintptr      // handle is accessed atomically on Windows
 	isdone uint32       // process has been successfully waited on, non zero if true
@@ -39,10 +42,13 @@ func (p *Process) done() bool {
 type ProcAttr struct {
 	// If Dir is non-empty, the child changes into the directory before
 	// creating the process.
+	// 上文的the child指子进程
 	Dir string
 	// If Env is non-nil, it gives the environment variables for the
 	// new process in the form returned by Environ.
 	// If it is nil, the result of Environ will be used.
+	//
+	// 参考: $ go doc os.Environ
 	Env []string
 	// Files specifies the open files inherited by the new process. The
 	// first three entries correspond to standard input, standard output, and
@@ -67,9 +73,13 @@ type Signal interface {
 }
 
 // Getpid returns the process id of the caller.
+//
+// Getpid返回当前进程id.
 func Getpid() int { return syscall.Getpid() }
 
 // Getppid returns the process id of the caller's parent.
+//
+// Getppid返回当前进程的父进程id.
 func Getppid() int { return syscall.Getppid() }
 
 // FindProcess looks for a running process by its pid.

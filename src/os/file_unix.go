@@ -1,6 +1,7 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// [[[5-over]]] 2017-6-12 17:12:37
 
 // +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
 
@@ -137,6 +138,8 @@ func epipecheck(file *File, e error) {
 
 // DevNull is the name of the operating system's ``null device.''
 // On Unix-like systems, it is "/dev/null"; on Windows, "NUL".
+//
+// linux和windows的null设备是不同的
 const DevNull = "/dev/null"
 
 // OpenFile is the generalized open call; most users will use Open
@@ -270,10 +273,13 @@ func Remove(name string) error {
 	// whether name is a file or directory.
 	// Try both: it is cheaper on average than
 	// doing a Stat plus the right one.
+	// 这样尝试删除 比 Stat 方案平均来说更优.
+	// 尝试删除文件的系统调用
 	e := syscall.Unlink(name)
 	if e == nil {
 		return nil
 	}
+	// 尝试删除目录的系统调用
 	e1 := syscall.Rmdir(name)
 	if e1 == nil {
 		return nil
@@ -295,12 +301,17 @@ func Remove(name string) error {
 }
 
 // TempDir returns the default directory to use for temporary files.
+//
+// TempDir 返回系统默认的临时文件目录
 func TempDir() string {
+	// 获取"TMPDIR"这个环境变量的值
 	dir := Getenv("TMPDIR")
 	if dir == "" {
+		// 如果环境变量TMPDIR没有指定值
 		if runtime.GOOS == "android" {
 			dir = "/data/local/tmp"
 		} else {
+			// linux 的默认临时目录
 			dir = "/tmp"
 		}
 	}
@@ -309,6 +320,8 @@ func TempDir() string {
 
 // Link creates newname as a hard link to the oldname file.
 // If there is an error, it will be of type *LinkError.
+//
+// Link创建newname作为oldname的硬连接
 func Link(oldname, newname string) error {
 	e := syscall.Link(oldname, newname)
 	if e != nil {
@@ -319,6 +332,8 @@ func Link(oldname, newname string) error {
 
 // Symlink creates newname as a symbolic link to oldname.
 // If there is an error, it will be of type *LinkError.
+//
+// Symlink创建newname作为oldname的符号连接
 func Symlink(oldname, newname string) error {
 	e := syscall.Symlink(oldname, newname)
 	if e != nil {

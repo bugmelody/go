@@ -1,6 +1,8 @@
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]] 2017-6-12 10:00:45
 
 package os
 
@@ -18,6 +20,8 @@ package os
 //
 // Executable is not supported on nacl or OpenBSD (unless procfs is
 // mounted.)
+//
+// 参考: $ go doc filepath.EvalSymlinks
 func Executable() (string, error) {
 	return executable()
 }

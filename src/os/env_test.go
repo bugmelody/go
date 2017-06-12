@@ -1,6 +1,8 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[2-over]]] 2017-3-22 21:08:14
 
 package os_test
 
@@ -53,6 +55,9 @@ var expandTests = []struct {
 
 func TestExpand(t *testing.T) {
 	for _, test := range expandTests {
+		// test.in是输入
+		// test.out是期望的输出
+		// testGetenv 是 Expand 需要的 mapping 函数
 		result := Expand(test.in, testGetenv)
 		if result != test.out {
 			t.Errorf("Expand(%q)=%q; expected %q", test.in, result, test.out)
@@ -60,6 +65,7 @@ func TestExpand(t *testing.T) {
 	}
 }
 
+// 确保多次调用Environ()返回的结果是DeepEqual
 func TestConsistentEnviron(t *testing.T) {
 	e0 := Environ()
 	for i := 0; i < 10; i++ {
@@ -72,6 +78,7 @@ func TestConsistentEnviron(t *testing.T) {
 
 func TestUnsetenv(t *testing.T) {
 	const testKey = "GO_TEST_UNSETENV"
+	// set返回环境变量中是否设置了"GO_TEST_UNSETENV"
 	set := func() bool {
 		prefix := testKey + "="
 		for _, key := range Environ() {
@@ -100,6 +107,8 @@ func TestClearenv(t *testing.T) {
 	const testValue = "1"
 
 	// reset env
+	// 传递给匿名函数的Environ()是当前状态的环境变量
+	// 这里通过defer func在函数退出时候还原环境变量设置
 	defer func(origEnv []string) {
 		for _, pair := range origEnv {
 			// Environment variables on Windows can begin with =
@@ -124,12 +133,15 @@ func TestClearenv(t *testing.T) {
 }
 
 func TestLookupEnv(t *testing.T) {
+	// No one has smallpox(n. [内科] 天花).
 	const smallpox = "SMALLPOX"      // No one has smallpox.
+	// ok代表是否存在SMALLPOX这个环境变量
 	value, ok := LookupEnv(smallpox) // Should not exist.
 	if ok || value != "" {
 		t.Fatalf("%s=%q", smallpox, value)
 	}
 	defer Unsetenv(smallpox)
+	// virus ['vaɪrəs] n. [病毒] 病毒；恶毒；毒害
 	err := Setenv(smallpox, "virus")
 	if err != nil {
 		t.Fatalf("failed to release smallpox virus")

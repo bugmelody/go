@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-6-12 10:07:10
 
 // Package os provides a platform-independent interface to operating system
 // functionality. The design is Unix-like, although the error handling is
@@ -10,8 +12,12 @@
 // will include the failing file name when printed and will be of type
 // *PathError, which may be unpacked for more information.
 //
+// platform-independent interface(跨平台的接口)
+//
 // The os interface is intended to be uniform across all operating systems.
 // Features not generally available appear in the system-specific package syscall.
+//
+// uniform ['juːnɪfɔːm] adj. 统一的；一致的；相同的；均衡的；始终如一的 n. 制服 vt. 使穿制服；使成一样
 //
 // Here is a simple example, opening a file and reading some of it.
 //
@@ -26,6 +32,8 @@
 //
 // The file's data can then be read into a slice of bytes. Read and
 // Write take their byte counts from the length of the argument slice.
+//
+// Read和Write会使用length of the argument slice作为要读取的字节数或是要写入的字节数.
 //
 //	data := make([]byte, 100)
 //	count, err := file.Read(data)
@@ -44,6 +52,8 @@ import (
 )
 
 // Name returns the name of the file as presented to Open.
+//
+// Name 返回的就是 os.Open 中传入的
 func (f *File) Name() string { return f.name }
 
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,
@@ -52,6 +62,8 @@ func (f *File) Name() string { return f.name }
 // Note that the Go runtime writes to standard error for panics and crashes;
 // closing Stderr may cause those messages to go elsewhere, perhaps
 // to a file opened later.
+//
+// 因此,最好不要 closing Stderr
 var (
 	Stdin  = NewFile(uintptr(syscall.Stdin), "/dev/stdin")
 	Stdout = NewFile(uintptr(syscall.Stdout), "/dev/stdout")
@@ -96,10 +108,13 @@ func (e *LinkError) Error() string {
 // Read reads up to len(b) bytes from the File.
 // It returns the number of bytes read and any error encountered.
 // At end of file, Read returns 0, io.EOF.
+//
+// 如何判断文件读取完毕: (n==0 && err==io.EOF)
 func (f *File) Read(b []byte) (n int, err error) {
 	if err := f.checkValid("read"); err != nil {
 		return 0, err
 	}
+	// f.read(b) 是每个操作系统特定的读取函数
 	n, e := f.read(b)
 	return n, f.wrapErr("read", e)
 }
@@ -108,6 +123,8 @@ func (f *File) Read(b []byte) (n int, err error) {
 // It returns the number of bytes read and the error, if any.
 // ReadAt always returns a non-nil error when n < len(b).
 // At end of file, that error is io.EOF.
+//
+// 将f从off之后的所有数据读入b
 func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 	if err := f.checkValid("read"); err != nil {
 		return 0, err
@@ -117,14 +134,20 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 		return 0, &PathError{"readat", f.name, errors.New("negative offset")}
 	}
 
+	// len(b): 剩余需要读取的字节数, 变量 b 在每个循环中会重新 slice
+	// 只要 len(b) > 0 , 说明还需要再读取数据
 	for len(b) > 0 {
 		m, e := f.pread(b, off)
 		if e != nil {
 			err = f.wrapErr("read", e)
 			break
 		}
+		// n 是整个函数的已读取字节数, m 是本次循环中 f.pread 读取到的字节数
+		// 更新 n
 		n += m
+		// 对 b 重新 slice,因为每次for循环的时候,都要用 len(b) 来判断是否还有操作需要继续
 		b = b[m:]
+		// 更新偏移量,下次for循环从off开始读取
 		off += int64(m)
 	}
 	return
@@ -133,10 +156,14 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 // Write writes len(b) bytes to the File.
 // It returns the number of bytes written and an error, if any.
 // Write returns a non-nil error when n != len(b).
+//
+// 注意: 当写入的字节数 != len(b) 的时候,会返回非空的err
+// Write要求将b全部写入f,没有全部写入算作错误.
 func (f *File) Write(b []byte) (n int, err error) {
 	if err := f.checkValid("write"); err != nil {
 		return 0, err
 	}
+	// f.write 是每个操作系统独立的写入函数
 	n, e := f.write(b)
 	if n < 0 {
 		n = 0
@@ -157,6 +184,9 @@ func (f *File) Write(b []byte) (n int, err error) {
 // WriteAt writes len(b) bytes to the File starting at byte offset off.
 // It returns the number of bytes written and an error, if any.
 // WriteAt returns a non-nil error when n != len(b).
+//
+// 注意: off 是指 receiver f 的位移
+// Write要求将b全部写入f的off位移,没有全部写入算作错误.
 func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 	if err := f.checkValid("write"); err != nil {
 		return 0, err
@@ -167,13 +197,17 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 	}
 
 	for len(b) > 0 {
+		// b 中还有待写入的数据
 		m, e := f.pwrite(b, off)
 		if e != nil {
 			err = f.wrapErr("write", e)
 			break
 		}
+		// n 是整个函数的已写入字节数, m 是本次循环中 f.pwrite 写入的字节数
 		n += m
+		// 待写入的数据
 		b = b[m:]
+		// 更新偏移量,下次for循环从off开始写入
 		off += int64(m)
 	}
 	return
@@ -184,12 +218,17 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 // relative to the current offset, and 2 means relative to the end.
 // It returns the new offset and an error, if any.
 // The behavior of Seek on a file opened with O_APPEND is not specified.
+//
+// 如果一个file是通过O_APPEND打开的,则不应该在这个file上面调用Seek(行为未定义).
 func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	if err := f.checkValid("seek"); err != nil {
 		return 0, err
 	}
 	r, e := f.seek(offset, whence)
 	if e == nil && f.dirinfo != nil && r != 0 {
+		// f.dirinfo != nil : 读取的是目录
+		// 操作的是目录,但是目录不应该有 seek 操作
+		// 修正 e
 		e = syscall.EISDIR
 	}
 	if e != nil {

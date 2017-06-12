@@ -1,6 +1,7 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// [[[6-over]]] 2017-6-12 09:12:45
 
 package os
 
@@ -9,6 +10,8 @@ import (
 )
 
 // Portable analogs of some common system call errors.
+// analogs n. 类似物（analog的复数）；同型物
+// analog ['ænəlɒɡ] n. [自] 模拟；类似物 adj. [自] 模拟的；有长短针的
 var (
 	ErrInvalid    = errors.New("invalid argument") // methods on File will return this error when the receiver is nil
 	ErrPermission = errors.New("permission denied")
@@ -19,8 +22,11 @@ var (
 
 // PathError records an error and the operation and file path that caused it.
 type PathError struct {
+	// 什么操作
 	Op   string
+	// 在什么路径上
 	Path string
+	// 引发了什么错误
 	Err  error
 }
 

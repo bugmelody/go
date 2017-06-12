@@ -1,6 +1,8 @@
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-6-9 17:34:39
 
 package os
 
@@ -19,7 +21,11 @@ package os
 // nil error. If it encounters an error before the end of the
 // directory, Readdir returns the FileInfo read until that point
 // and a non-nil error.
+//
+// 参考: $ go doc os.Lstat , os.Lstat 不会跟踪符号链接.
+// 对f.Readdir(100)进行多次调用可以返回不同的数据
 func (f *File) Readdir(n int) ([]FileInfo, error) {
+	// 注意这里在将receiver跟nil做比较
 	if f == nil {
 		return nil, ErrInvalid
 	}
@@ -38,9 +44,15 @@ func (f *File) Readdir(n int) ([]FileInfo, error) {
 // nil error. If it encounters an error before the end of the
 // directory, Readdirnames returns the names read until that point and
 // a non-nil error.
+//
+// 其实 File.Readdirnames 和 File.Readdir 一样, 只是返回值是 name 而不是 FileInfo.
+// 研究源码后发现,这里所谓的name是指base name of the file.
+// 对f.Readdirnames(100)进行多次调用可以返回不同的数据
 func (f *File) Readdirnames(n int) (names []string, err error) {
+	// 注意这里在将receiver跟nil做比较
 	if f == nil {
 		return nil, ErrInvalid
 	}
+	// 跟进去看看源码
 	return f.readdirnames(n)
 }
