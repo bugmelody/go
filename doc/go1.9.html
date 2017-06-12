@@ -106,6 +106,17 @@ type T1 = T2
   environment variable <code>GO19CONCURRENTCOMPILATION</code> to <code>0</code>.
 </p>
 
+<h3 id="compiler">Compiler Toolchain</h3>
+
+<p><!-- CL 37441 -->
+  Complex division is now C99-compatible. This has always been the
+  case in gccgo and is now fixed in the gc toolchain.
+</p>
+
+<p> <!-- CL 36983 -->
+  The linker will now generate DWARF information for cgo executables on Windows.
+</p>
+
 <h3 id="go-test-list">Go test</h3>
 
 <p> <!-- CL 41195 -->
@@ -125,10 +136,8 @@ type T1 = T2
 <!-- CL 43855: https://golang.org/cl/43855: cmd/go: include GOARM and GO386 in computed build ID -->
 <!-- CL 44210: https://golang.org/cl/44210: cmd/internal/dwarf: update to DWARF4, emit frame_base -->
 <!-- CL 42990: https://golang.org/cl/42990: cmd/internal/obj/x86: add ADDSUBPS/PD -->
-<!-- CL 36983: https://golang.org/cl/36983: cmd/link: write dwarf sections -->
 <!-- CL 40331: https://golang.org/cl/40331: cmd/link,runtime/cgo: enable PT_TLS generation on OpenBSD -->
 <!-- CL 38343: https://golang.org/cl/38343: cmd/pprof: use proxy from environment -->
-<!-- CL 36015: https://golang.org/cl/36015: cmd/trace: Record mark assists in execution traces -->
 
 
 <h2 id="performance">Performance</h2>
@@ -152,8 +161,35 @@ type T1 = T2
 
 <h3 id="gc">Garbage Collector</h3>
 
-<p>
-  TODO(austin): give update.
+<p> <!-- CL 37520 -->
+  Library functions that used to trigger stop-the-world garbage
+  collection now trigger concurrent garbage collection.
+
+  Specifically, <a href="/pkg/runtime/#GC"><code>runtime.GC</code></a>,
+  <a href="/pkg/runtime/debug/#SetGCPercent"><code>debug.SetGCPercent</code></a>,
+  and
+  <a href="/pkg/runtime/debug/#FreeOSMemory"><code>debug.FreeOSMemory</code></a>,
+  now trigger concurrent garbage collection, blocking only the calling
+  goroutine until the garbage collection is done.
+</p>
+
+<p> <!-- CL 34103, CL 39835 -->
+  The
+  <a href="/pkg/runtime/debug/#SetGCPercent"><code>debug.SetGCPercent</code></a>
+  function only triggers a garbage collection if one is immediately
+  necessary because of the new GOGC value.
+  This makes it possible to adjust GOGC on-the-fly.
+</p>
+
+<p> <!-- CL 38732 -->
+  Large object allocation performance is significantly improved in
+  applications using large (&gt;50GB) heaps containing many large
+  objects.
+</p>
+
+<p> <!-- CL 34937 -->
+  The <a href="/pkg/runtime/#ReadMemStats"><code>runtime.ReadMemStats</code></a>
+  function now takes less than 100µs even for very large heaps.
 </p>
 
 <h2 id="library">Core library</h2>
@@ -331,7 +367,11 @@ type T1 = T2
 <dl id="image"><dt><a href="/pkg/image/">image</a></dt>
   <dd>
     <p><!-- CL 36734 -->
-      TODO: <a href="https://golang.org/cl/36734">https://golang.org/cl/36734</a>: fix the overlap check in Rectangle.Intersect.
+	  The <a href="/pkg/image/#Rectangle.Intersect"><code>Rectangle.Intersect</code></a>
+	  method now returns a zero <code>Rectangle</code> when called on
+	  adjacent but non-overlapping rectangles, as documented. In
+	  earlier releases it would incorrectly return an empty but
+	  non-zero <code>Rectangle</code>.
     </p>
 
 </dl><!-- image -->
@@ -339,7 +379,9 @@ type T1 = T2
 <dl id="image/color"><dt><a href="/pkg/image/color/">image/color</a></dt>
   <dd>
     <p><!-- CL 36732 -->
-      TODO: <a href="https://golang.org/cl/36732">https://golang.org/cl/36732</a>: tweak the YCbCr to RGBA conversion formula again.
+	  The YCbCr to RGBA conversion formula has been tweaked to ensure
+	  that rounding adjustments span the complete [0, 0xffff] RGBA
+	  range.
     </p>
 
 </dl><!-- image/color -->
@@ -347,11 +389,18 @@ type T1 = T2
 <dl id="image/png"><dt><a href="/pkg/image/png/">image/png</a></dt>
   <dd>
     <p><!-- CL 34150 -->
-      TODO: <a href="https://golang.org/cl/34150">https://golang.org/cl/34150</a>: reduce memory allocs encoding images by reusing buffers
+	  The new <a href="/pkg/image/png/#Encoder.BufferPool"><code>Encoder.BufferPool</code></a>
+	  field allows specifying an <a href="/pkg/image/png/#EncoderBufferPool"><code>EncoderBufferPool</code></a>,
+	  that will be used by the encoder to get temporary <code>EncoderBuffer</code>
+	  buffers when encoding a PNG image.
+
+	  The use of a <code>BufferPool</code> reduces the number of
+	  memory allocations performed while encoding multiple images.
     </p>
 
     <p><!-- CL 38271 -->
-      TODO: <a href="https://golang.org/cl/38271">https://golang.org/cl/38271</a>: decode Gray8 transparent images.
+	  The package now supports the decoding of transparent 8-bit
+	  grayscale ("Gray8") images.
     </p>
 
 </dl><!-- image/png -->
@@ -478,59 +527,33 @@ type T1 = T2
 
 <dl id="runtime"><dt><a href="/pkg/runtime/">runtime</a></dt>
   <dd>
-    <p><!-- CL 29341 -->
-      TODO: <a href="https://golang.org/cl/29341">https://golang.org/cl/29341</a>: use cpuset_getaffinity for runtime.NumCPU() on FreeBSD
-    </p>
-
-    <p><!-- CL 34937 -->
-      TODO: <a href="https://golang.org/cl/34937">https://golang.org/cl/34937</a>: make ReadMemStats STW for &lt; 25µs
-    </p>
-
-    <p><!-- CL 35710 -->
-      TODO: <a href="https://golang.org/cl/35710">https://golang.org/cl/35710</a>: make time correctly update on Wine
-    </p>
-
-    <p><!-- CL 37233 -->
-      TODO: <a href="https://golang.org/cl/37233">https://golang.org/cl/37233</a>: use inlining tables to generate accurate tracebacks
-    </p>
-
-    <p><!-- CL 37441 -->
-      TODO: <a href="https://golang.org/cl/37441">https://golang.org/cl/37441</a>: make complex division c99 compatible
-    </p>
-
-    <p><!-- CL 37520 -->
-      TODO: <a href="https://golang.org/cl/37520">https://golang.org/cl/37520</a>: make runtime.GC() trigger a concurrent GC
-    </p>
-
-    <p><!-- CL 37726 -->
-      TODO: <a href="https://golang.org/cl/37726">https://golang.org/cl/37726</a>: strongly encourage CallersFrames with the result of Callers
+    <p><!-- CL 37233, CL 37726 -->
+      Tracebacks generated by the runtime and recorded in profiles are
+      now accurate in the presence of inlining.
+      To retrieve tracebacks programmatically, applications should use
+      <a href="/pkg/runtime/#CallersFrames"><code>runtime.CallersFrames</code></a>
+      rather than directly iterating over the results of
+      <a href="/pkg/runtime/#Callers"><code>runtime.Callers</code></a>.
     </p>
 
     <p><!-- CL 38403 -->
-      TODO: <a href="https://golang.org/cl/38403">https://golang.org/cl/38403</a>: reduce Windows timer resolution when idle
+      On Windows, Go no longer forces the system timer to run at high
+      resolution when the program is idle.
+      This should reduce the impact of Go programs on battery life.
     </p>
 
-    <p><!-- CL 40810 -->
-      TODO: <a href="https://golang.org/cl/40810">https://golang.org/cl/40810</a>: make sweep trace events encompass entire sweep loop
+    <p><!-- CL 29341 -->
+      On FreeBSD, <code>GOMAXPROCS</code> and
+      <a href="/pkg/runtime/#NumCPU"><code>runtime.NumCPU</code></a>
+      are now based on the process' CPU mask, rather than the total
+      number of CPUs.
     </p>
 
     <p><!-- CL 43641 -->
-      TODO: <a href="https://golang.org/cl/43641">https://golang.org/cl/43641</a>: use pselect6 for usleep on linux/amd64 and linux/arm
+      The runtime has preliminary support for Android O.
     </p>
 
 </dl><!-- runtime -->
-
-<dl id="runtime/debug"><dt><a href="/pkg/runtime/debug/">runtime/debug</a></dt>
-  <dd>
-    <p><!-- CL 34013 -->
-      TODO: <a href="https://golang.org/cl/34013">https://golang.org/cl/34013</a>: don&#39;t run a GC when setting SetGCPercent negative
-    </p>
-
-    <p><!-- CL 39835 -->
-      TODO: <a href="https://golang.org/cl/39835">https://golang.org/cl/39835</a>: don&#39;t trigger a GC on SetGCPercent
-    </p>
-
-</dl><!-- runtime/debug -->
 
 <dl id="runtime/pprof"><dt><a href="/pkg/runtime/pprof/">runtime/pprof</a></dt>
   <dd>
@@ -539,6 +562,26 @@ type T1 = T2
     </p>
 
 </dl><!-- runtime/pprof -->
+
+<dl id="runtime/trace"><dt><a href="/pkg/runtime/trace/">runtime/trace</a></dt>
+  <dd>
+    <p><!-- CL 36015 -->
+      The execution trace now displays mark assist events, which
+      indicate when an application goroutine is forced to assist
+      garbage collection because it is allocating too quickly.
+    </p>
+
+    <p><!-- CL 40810 -->
+      "Sweep" events now encompass the entire process of finding free
+      space for an allocation, rather than recording each individual
+      span that is swept.
+      This reduces allocation latency when tracing allocation-heavy
+      programs.
+      The sweep event shows how many bytes were swept and how many
+      were reclaimed.
+    </p>
+
+</dl><!-- runtime/trace -->
 
 <dl id="sync"><dt><a href="/pkg/sync/">sync</a></dt>
   <dd>
@@ -592,6 +635,10 @@ type T1 = T2
   <dd>
     <p><!-- CL 36615 -->
       TODO: <a href="https://golang.org/cl/36615">https://golang.org/cl/36615</a>: add Duration.Truncate and Duration.Round
+    </p>
+
+    <p><!-- CL 35710 -->
+      Retrieving the time and sleeping now work correctly under Wine.
     </p>
 
 </dl><!-- time -->
