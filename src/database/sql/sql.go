@@ -1352,6 +1352,9 @@ func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn fu
 // QueryRowContext executes a query that is expected to return at most one row.
 // QueryRowContext always returns a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+// If the query selects no rows, the *Row's Scan will return ErrNoRows.
+// Otherwise, the *Row's Scan scans the first selected row and discards
+// the rest.
 func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
 	rows, err := db.QueryContext(ctx, query, args...)
 	return &Row{rows: rows, err: err}
@@ -1360,6 +1363,9 @@ func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interfa
 // QueryRow executes a query that is expected to return at most one row.
 // QueryRow always returns a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+// If the query selects no rows, the *Row's Scan will return ErrNoRows.
+// Otherwise, the *Row's Scan scans the first selected row and discards
+// the rest.
 func (db *DB) QueryRow(query string, args ...interface{}) *Row {
 	return db.QueryRowContext(context.Background(), query, args...)
 }
@@ -1540,6 +1546,9 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args ...interface
 // QueryRowContext executes a query that is expected to return at most one row.
 // QueryRowContext always returns a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+// If the query selects no rows, the *Row's Scan will return ErrNoRows.
+// Otherwise, the *Row's Scan scans the first selected row and discards
+// the rest.
 func (c *Conn) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
 	rows, err := c.QueryContext(ctx, query, args...)
 	return &Row{rows: rows, err: err}
@@ -1830,7 +1839,7 @@ func (tx *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
 //
 // To use an existing prepared statement on this transaction, see Tx.Stmt.
 func (tx *Tx) Prepare(query string) (*Stmt, error) {
-	return tx.PrepareContext(tx.ctx, query)
+	return tx.PrepareContext(context.Background(), query)
 }
 
 // StmtContext returns a transaction-specific prepared statement from
@@ -1928,7 +1937,7 @@ func (tx *Tx) StmtContext(ctx context.Context, stmt *Stmt) *Stmt {
 // The returned statement operates within the transaction and will be closed
 // when the transaction has been committed or rolled back.
 func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
-	return tx.StmtContext(tx.ctx, stmt)
+	return tx.StmtContext(context.Background(), stmt)
 }
 
 // ExecContext executes a query that doesn't return rows.
@@ -1947,7 +1956,7 @@ func (tx *Tx) ExecContext(ctx context.Context, query string, args ...interface{}
 // Exec executes a query that doesn't return rows.
 // For example: an INSERT and UPDATE.
 func (tx *Tx) Exec(query string, args ...interface{}) (Result, error) {
-	return tx.ExecContext(tx.ctx, query, args...)
+	return tx.ExecContext(context.Background(), query, args...)
 }
 
 // QueryContext executes a query that returns rows, typically a SELECT.
@@ -1965,12 +1974,15 @@ func (tx *Tx) QueryContext(ctx context.Context, query string, args ...interface{
 
 // Query executes a query that returns rows, typically a SELECT.
 func (tx *Tx) Query(query string, args ...interface{}) (*Rows, error) {
-	return tx.QueryContext(tx.ctx, query, args...)
+	return tx.QueryContext(context.Background(), query, args...)
 }
 
 // QueryRowContext executes a query that is expected to return at most one row.
 // QueryRowContext always returns a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+// If the query selects no rows, the *Row's Scan will return ErrNoRows.
+// Otherwise, the *Row's Scan scans the first selected row and discards
+// the rest.
 func (tx *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
 	rows, err := tx.QueryContext(ctx, query, args...)
 	return &Row{rows: rows, err: err}
@@ -1979,8 +1991,11 @@ func (tx *Tx) QueryRowContext(ctx context.Context, query string, args ...interfa
 // QueryRow executes a query that is expected to return at most one row.
 // QueryRow always returns a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+// If the query selects no rows, the *Row's Scan will return ErrNoRows.
+// Otherwise, the *Row's Scan scans the first selected row and discards
+// the rest.
 func (tx *Tx) QueryRow(query string, args ...interface{}) *Row {
-	return tx.QueryRowContext(tx.ctx, query, args...)
+	return tx.QueryRowContext(context.Background(), query, args...)
 }
 
 // connStmt is a prepared statement on a particular connection.
@@ -2700,7 +2715,9 @@ func (rs *Rows) close(err error) error {
 		rs.lasterr = err
 	}
 
-	err = rs.rowsi.Close()
+	withLock(rs.dc, func() {
+		err = rs.rowsi.Close()
+	})
 	if fn := rowsCloseHook(); fn != nil {
 		fn(rs, &err)
 	}

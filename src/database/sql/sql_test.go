@@ -439,35 +439,6 @@ func TestTxContextWait(t *testing.T) {
 	waitForFree(t, db, 5*time.Second, 0)
 }
 
-// TestTxUsesContext tests the transaction behavior when the tx was created by context,
-// but for query execution used methods without context
-func TestTxUsesContext(t *testing.T) {
-	db := newTestDB(t, "people")
-	defer closeDB(t, db)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Millisecond)
-	defer cancel()
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		// Guard against the context being canceled before BeginTx completes.
-		if err == context.DeadlineExceeded {
-			t.Skip("tx context canceled prior to first use")
-		}
-		t.Fatal(err)
-	}
-
-	// This will trigger the *fakeConn.Prepare method which will take time
-	// performing the query. The ctxDriverPrepare func will check the context
-	// after this and close the rows and return an error.
-	_, err = tx.Query("WAIT|1s|SELECT|people|age,name|")
-	if err != context.DeadlineExceeded {
-		t.Fatalf("expected QueryContext to error with context deadline exceeded but returned %v", err)
-	}
-
-	waitForFree(t, db, 5*time.Second, 0)
-}
-
 func TestMultiResultSetQuery(t *testing.T) {
 	db := newTestDB(t, "people")
 	defer closeDB(t, db)
@@ -2500,6 +2471,8 @@ func TestManyErrBadConn(t *testing.T) {
 // closing a transaction. Ensure Rows is closed while closing a trasaction.
 func TestIssue20575(t *testing.T) {
 	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatal(err)
@@ -2520,6 +2493,43 @@ func TestIssue20575(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("timeout: failed to rollback query without closing rows:", ctx.Err())
 	}
+}
+
+// TestIssue20622 tests closing the transaction before rows is closed, requires
+// the race detector to fail.
+func TestIssue20622(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := tx.Query("SELECT|people|age,name|")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := 0
+	for rows.Next() {
+		count++
+		var age int
+		var name string
+		if err := rows.Scan(&age, &name); err != nil {
+			t.Fatal("scan failed", err)
+		}
+
+		if count == 1 {
+			cancel()
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	rows.Close()
+	tx.Commit()
 }
 
 // golang.org/issue/5718
@@ -3222,15 +3232,25 @@ func TestIssue18719(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	doConcurrentTest(t, new(concurrentDBQueryTest))
-	doConcurrentTest(t, new(concurrentDBExecTest))
-	doConcurrentTest(t, new(concurrentStmtQueryTest))
-	doConcurrentTest(t, new(concurrentStmtExecTest))
-	doConcurrentTest(t, new(concurrentTxQueryTest))
-	doConcurrentTest(t, new(concurrentTxExecTest))
-	doConcurrentTest(t, new(concurrentTxStmtQueryTest))
-	doConcurrentTest(t, new(concurrentTxStmtExecTest))
-	doConcurrentTest(t, new(concurrentRandomTest))
+	list := []struct {
+		name string
+		ct   concurrentTest
+	}{
+		{"Query", new(concurrentDBQueryTest)},
+		{"Exec", new(concurrentDBExecTest)},
+		{"StmtQuery", new(concurrentStmtQueryTest)},
+		{"StmtExec", new(concurrentStmtExecTest)},
+		{"TxQuery", new(concurrentTxQueryTest)},
+		{"TxExec", new(concurrentTxExecTest)},
+		{"TxStmtQuery", new(concurrentTxStmtQueryTest)},
+		{"TxStmtExec", new(concurrentTxStmtExecTest)},
+		{"Random", new(concurrentRandomTest)},
+	}
+	for _, item := range list {
+		t.Run(item.name, func(t *testing.T) {
+			doConcurrentTest(t, item.ct)
+		})
+	}
 }
 
 func TestConnectionLeak(t *testing.T) {
