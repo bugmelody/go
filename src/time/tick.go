@@ -18,6 +18,10 @@ type Ticker struct {
 // It adjusts the intervals or drops ticks to make up for slow receivers.
 // The duration d must be greater than zero; if not, NewTicker will panic.
 // Stop the ticker to release associated resources.
+//
+// 当不再需要ticker的时候应当调用Stop来释放ticker的相关资源.
+//
+// make up for: 补偿,弥补
 func NewTicker(d Duration) *Ticker {
 	if d <= 0 {
 		panic(errors.New("non-positive interval for NewTicker"))
@@ -51,6 +55,9 @@ func (t *Ticker) Stop() {
 // the Ticker, be aware that without a way to shut it down the underlying
 // Ticker cannot be recovered by the garbage collector; it "leaks".
 // Unlike NewTicker, Tick will return nil if d <= 0.
+//
+// 上文中While Tick(指本函数)
+// 上文中without a way to shut it down(无法通过 Stop 关闭底层的 Ticker)
 func Tick(d Duration) <-chan Time {
 	if d <= 0 {
 		return nil

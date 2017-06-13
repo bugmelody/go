@@ -7,11 +7,16 @@ package time
 import "errors"
 
 // These are predefined layouts for use in Time.Format and Time.Parse.
+//
+// time.Format说明: Format returns a textual representation of the time value formatted according to layout
+// time.Parse说明: Parse parses a formatted string and returns the time value it represents.
+//
 // The reference time used in the layouts is the specific time:
 //	Mon Jan 2 15:04:05 MST 2006
 // which is Unix time 1136239445. Since MST is GMT-0700,
 // the reference time can be thought of as
 //	01/02 03:04:05PM '06 -0700
+//
 // To define your own format, write down what the reference time would look
 // like formatted your way; see the values of constants like ANSIC,
 // StampMicro or Kitchen for examples. The model is to demonstrate what the
@@ -22,6 +27,8 @@ import "errors"
 // replaced by a digit if the following number (a day) has two digits; for
 // compatibility with fixed-width Unix time formats.
 //
+// 在format string中,下划线'_'代表一个空格,如果day有两位,这个空格会被一个数字替换
+//
 // A decimal point followed by one or more zeros represents a fractional
 // second, printed to the given number of decimal places. A decimal point
 // followed by one or more nines represents a fractional second, printed to
@@ -30,6 +37,13 @@ import "errors"
 // field immediately after the seconds field, even if the layout does not
 // signify its presence. In that case a decimal point followed by a maximal
 // series of digits is parsed as a fractional second.
+//
+// decimal point:小数点
+// maximal ['mæksiməl] adj. 1.最大的；最高的；最全的 2.极为可能的 n.【数学】 极大元
+// 小数点后跟1到多个0,表示秒数的小数部分,输出时会生成和0一样多的小数位;
+// 小数点后跟1到多个9,表示秒数的小数部分,输出时会生成和9一样多的小数位但会将拖尾的0去掉.
+// (只有)解析时,输入可以在秒字段后面紧跟一个小数部分,即使格式字符串里没有指明该部分.此时,小数点及其后全部的数字都会成为秒的小数部分.
+// signify ['sɪgnɪfaɪ] vt. 表示；意味；预示 vi. 有重要性；要紧；冒充内行
 //
 // Numeric time zone offsets format as follows:
 //	-0700  ±hhmm
@@ -41,6 +55,10 @@ import "errors"
 //	Z0700  Z or ±hhmm
 //	Z07:00 Z or ±hh:mm
 //	Z07    Z or ±hh
+//
+// 参考下面两篇文章
+// https://segmentfault.com/a/1190000004292140 讲述了 ISO 8601 格式
+// https://en.wikipedia.org/wiki/ISO_8601 ISO_8601
 //
 // The recognized day of week formats are "Mon" and "Monday".
 // The recognized month formats are "Jan" and "January".
@@ -62,7 +80,16 @@ import "errors"
 // when used with time.Parse they do not accept all the time formats
 // permitted by the RFCs.
 const (
+	// 参考格式是: Mon Jan 2 15:04:05 MST 2006 , 看做: 06年1月2日下午3点4分5秒 (时区-7)
+	//
+	// 在format string中,下划线'_'代表一个空格,如果day有两位,这个空格会被一个数字替换, 可以把 下划线 '_' 看做对齐效果
+	//
+	// 小数点后跟1到多个0,表示秒数的小数部分,输出时会生成和0一样多的小数位;
+	// 小数点后跟1到多个9,表示秒数的小数部分,输出时会生成和9一样多的小数位但会将拖尾的0去掉.
+	// (只有)当解析时,输入可以在秒字段后面紧跟一个小数部分,即使格式字符串里没有指明该部分.此时,小数点及其后全部的数字都会被解析成为秒的小数部分.
+	// Mon 表示周一, _2 表示使用空格将 day 对齐
 	ANSIC       = "Mon Jan _2 15:04:05 2006"
+	// Mon 表示周一, _2 表示使用空格将 day 对齐
 	UnixDate    = "Mon Jan _2 15:04:05 MST 2006"
 	RubyDate    = "Mon Jan 02 15:04:05 -0700 2006"
 	RFC822      = "02 Jan 06 15:04 MST"
@@ -70,13 +97,22 @@ const (
 	RFC850      = "Monday, 02-Jan-06 15:04:05 MST"
 	RFC1123     = "Mon, 02 Jan 2006 15:04:05 MST"
 	RFC1123Z    = "Mon, 02 Jan 2006 15:04:05 -0700" // RFC1123 with numeric zone
+	// T 也可以用空格表示，但是这两种表示有点不一样，T 其实表示 UTC，而空格会被认为是本地时区（前提是不通过 Z 指定时区）。比如下面的例子：
+	// Z 用来表示传入时间的时区（zone），不指定并且没有使用 T 分隔而是使用空格分隔时，就按本地时区处理
 	RFC3339     = "2006-01-02T15:04:05Z07:00"
 	RFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 	Kitchen     = "3:04PM"
 	// Handy time stamps.
+	// _2 表示使用空格将 day 对齐
 	Stamp      = "Jan _2 15:04:05"
+	// 显示到毫秒
+	// _2 表示使用空格将 day 对齐
 	StampMilli = "Jan _2 15:04:05.000"
+	// 显示到微秒
+	// _2 表示使用空格将 day 对齐
 	StampMicro = "Jan _2 15:04:05.000000"
+	// 显示到纳秒
+	// _2 表示使用空格将 day 对齐
 	StampNano  = "Jan _2 15:04:05.000000000"
 )
 
@@ -428,6 +464,8 @@ func formatNano(b []byte, nanosec uint, n int, trim bool) []byte {
 // If the time has a monotonic clock reading, the returned string
 // includes a final field "m=±<value>", where value is the monotonic
 // clock reading formatted as a decimal number of seconds.
+//
+// UTC-7 MST 山地标准时区
 func (t Time) String() string {
 	s := t.Format("2006-01-02 15:04:05.999999999 -0700 MST")
 
@@ -747,12 +785,19 @@ func skip(value, prefix string) (string, error) {
 // Years must be in the range 0000..9999. The day of the week is checked
 // for syntax but it is otherwise ignored.
 //
+// 周1-周日(如Mon)只会被语法检查,实际的值会被忽略.
+//
 // In the absence of a time zone indicator, Parse returns a time in UTC.
+//
+// 如果缺少时区指示,Parse会返回一个UTC时间.
 //
 // When parsing a time with a zone offset like -0700, if the offset corresponds
 // to a time zone used by the current location (Local), then Parse uses that
 // location and zone in the returned time. Otherwise it records the time as
 // being in a fabricated location with time fixed at the given zone offset.
+//
+// fabricate ['fæbrɪkeɪt] vt. 制造；伪造；装配
+// [ 过去式 fabricated 过去分词 fabricated 现在分词 fabricating ]
 //
 // When parsing a time with a zone abbreviation like MST, if the zone abbreviation
 // has a defined offset in the current location, then that offset is used.
@@ -763,6 +808,7 @@ func skip(value, prefix string) (string, error) {
 // same layout losslessly, but the exact instant used in the representation will
 // differ by the actual zone offset. To avoid such problems, prefer time layouts
 // that use a numeric zone offset, or use ParseInLocation.
+//
 func Parse(layout, value string) (Time, error) {
 	return parse(layout, value, UTC, Local)
 }
@@ -772,6 +818,8 @@ func Parse(layout, value string) (Time, error) {
 // ParseInLocation interprets the time as in the given location.
 // Second, when given a zone offset or abbreviation, Parse tries to match it
 // against the Local location; ParseInLocation uses the given location.
+//
+// 参考 parse 函数的实现就能知道 Parse 和 ParseInLocation 的区别.
 func ParseInLocation(layout, value string, loc *Location) (Time, error) {
 	return parse(layout, value, loc, loc)
 }
@@ -1253,6 +1301,8 @@ var unitMap = map[string]int64{
 // decimal numbers, each with optional fraction and a unit suffix,
 // such as "300ms", "-1.5h" or "2h45m".
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+//
+// Valid time units are "ns"纳秒, "us" (or "µs")微秒, "ms"毫秒, "s"秒, "m"分, "h"小时.
 func ParseDuration(s string) (Duration, error) {
 	// [-+]?([0-9]*(\.[0-9]*)?[a-z]+)+
 	orig := s

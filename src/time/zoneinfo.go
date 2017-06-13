@@ -15,6 +15,14 @@ import (
 // A Location maps time instants to the zone in use at that time.
 // Typically, the Location represents the collection of time offsets
 // in use in a geographical area, such as CEST and CET for central Europe.
+//
+// Location可能包含多个time offsets.
+//
+// geographical [dʒiə'ɡræfikəl] adj.
+// 1.(按照)地理(学)的2.关于某地区的地理学的，地区(性)的[亦作 geographic]
+//
+// CEST +02:00 中欧夏令时
+// CET +01:00 中欧时间
 type Location struct {
 	name string
 	zone []zone
@@ -34,7 +42,14 @@ type Location struct {
 	cacheZone  *zone
 }
 
+// abbreviated [ə'briːvɪeɪtɪd] adj. 简短的；小型的；服装超短的 v. 缩写；节略（abbreviate的过去分词）
+// daylight savings time: 夏时制，日光节约时间
+
 // A zone represents a single time zone such as CEST or CET.
+//
+// 一个 zone struct 代表了一个单独的 time zone(比如代表 CEST 或者代表了 CET)
+// CEST +02:00 中欧夏令时
+// CET +01:00 中欧时间
 type zone struct {
 	name   string // abbreviated name, "CET"
 	offset int    // seconds east of UTC
@@ -83,6 +98,8 @@ func (l *Location) get() *Location {
 
 // String returns a descriptive name for the time zone information,
 // corresponding to the argument to LoadLocation.
+//
+// 返回的name其实就是LoadLocation的参数.
 func (l *Location) String() string {
 	return l.get().name
 }

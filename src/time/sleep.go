@@ -6,6 +6,12 @@ package time
 
 // Sleep pauses the current goroutine for at least the duration d.
 // A negative or zero duration causes Sleep to return immediately.
+//
+// go语言示例-Timer计时器的用法: http://studygolang.com/articles/2479
+// golang中使用timer的三种方式: http://www.sharejs.com/codes/go/7720
+// 正确使用Go的Timer: http://studygolang.com/articles/1881
+//
+// at least??? 可能会多吗???
 func Sleep(d Duration)
 
 // runtimeNano returns the current value of the runtime clock in nanoseconds.
@@ -44,6 +50,8 @@ func stopTimer(*runtimeTimer) bool
 // When the Timer expires, the current time will be sent on C,
 // unless the Timer was created by AfterFunc.
 // A Timer must be created with NewTimer or AfterFunc.
+//
+// AfterFunc用于当指定时间到达后调用一个回调
 type Timer struct {
 	C <-chan Time
 	r runtimeTimer
@@ -80,6 +88,8 @@ func (t *Timer) Stop() bool {
 
 // NewTimer creates a new Timer that will send
 // the current time on its channel after at least duration d.
+//
+// NewTimer创建一个新的Timer t,当至少d的时间过去后,会向t.C这个chan发送当前时间
 func NewTimer(d Duration) *Timer {
 	c := make(chan Time, 1)
 	t := &Timer{
@@ -114,10 +124,15 @@ func NewTimer(d Duration) *Timer {
 // This should not be done concurrent to other receives from the Timer's
 // channel.
 //
+// in concert with 和…相呼应；与…合作；和…一致
+//
 // Note that it is not possible to use Reset's return value correctly, as there
 // is a race condition between draining the channel and the new timer expiring.
 // Reset should always be invoked on stopped or expired channels, as described above.
 // The return value exists to preserve compatibility with existing programs.
+//
+// 不可能正确使用Reset的返回值,因为在喝光channel和新建timer过期之间会存在race condition.
+// Reset应该总是和Stop一起使用. Reset的返回值是为了与老版本兼容.
 func (t *Timer) Reset(d Duration) bool {
 	if t.r.f == nil {
 		panic("time: Reset called on uninitialized Timer")
@@ -147,6 +162,12 @@ func sendTime(c interface{}, seq uintptr) {
 // The underlying Timer is not recovered by the garbage collector
 // until the timer fires. If efficiency is a concern, use NewTimer
 // instead and call Timer.Stop if the timer is no longer needed.
+//
+// After 会返回一个 chan, 当指定的时间 d 到达后, 发送当时时间到返回的 chan.
+// 他与 NewTimer(d).C 等价.
+// After 内部创建的 Timer 在 timer fire 之前不会被垃圾回收.
+//
+// 如果效率非常重要,不应该使用After.而应该使用NewTimer,并当不需要timer的时候调用Timer.Stop进行垃圾回收.
 func After(d Duration) <-chan Time {
 	return NewTimer(d).C
 }
@@ -154,6 +175,8 @@ func After(d Duration) <-chan Time {
 // AfterFunc waits for the duration to elapse and then calls f
 // in its own goroutine. It returns a Timer that can
 // be used to cancel the call using its Stop method.
+//
+// 注意: waits for the duration to elapse and then calls f in its own goroutine
 func AfterFunc(d Duration, f func()) *Timer {
 	t := &Timer{
 		r: runtimeTimer{

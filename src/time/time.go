@@ -1,13 +1,25 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-13 11:15:32 本包以这个为准
 
 // Package time provides functionality for measuring and displaying time.
+//
+// calendrical [kə'lendrikəl] adj. 日历的；历法的（calendar的形容词形式）
+// Gregorian calendar 公历；格里高里历
 //
 // The calendrical calculations always assume a Gregorian calendar, with
 // no leap seconds.
 //
+// 日历的计算总是使用公历,没有闰秒.
+// 闰秒参考:
+// http://blog.jobbole.com/22714/
+// https://www.zhihu.com/question/27531445
+//
 // Monotonic Clocks
+//
+// Monotonic Clocks 参考: http://blog.csdn.net/tangchenchan/article/details/47989473
 //
 // Operating systems provide both a “wall clock,” which is subject to
 // changes for clock synchronization, and a “monotonic clock,” which is
@@ -74,11 +86,69 @@
 // clock reading if present. If t != u because of different monotonic clock readings,
 // that difference will be visible when printing t.String() and u.String().
 //
+//
+// 参考资料:
+// https://en.wikipedia.org/wiki/Time_zone
+// https://en.wikipedia.org/wiki/UTC_offset
+// https://en.wikipedia.org/wiki/Tz_database
+// https://en.wikipedia.org/wiki/List_of_time_zone_abbreviations
+// The Difference Between GMT and UTC: http://www.timeanddate.com/time/gmt-utc-time.html
+// 什么是闰年，闰年和闰月的区别: http://www.d1xz.net/rili/rilibiao/art55694.aspx
+// 公历闰年快速判断: http://www.thn21.com/hua/ren/8580.html
+// 农历闰月是怎么来的？如何计算闰月: http://www.d1xz.net/rili/jieqi/art48387.aspx
+// 关于时区的知识参考: https://en.wikipedia.org/wiki/Time_zone
+// ===================
+// Greenwich Mean Time (GMT) is often interchanged or confused with Coordinated Universal Time (UTC).
+// But GMT is a time zone and UTC is a time standard.
+// ===================
+// Although GMT and UTC share the same current time in practice, there is a basic difference between the two:
+// GMT is a time zone officially used in some European and African countries.
+// The time can be displayed using both the 24-hour format (0 - 24) or the 12-hour format (1 - 12 am/pm).
+// 
+// UTC is not a time zone, but a time standard that is the basis for civil(民用的) time and time zones worldwide.
+// This means that no country or territory(区域) officially uses UTC as a local time.
+// ===================
+// UTC, GMT and Daylight Saving Time
+// 
+// Neither UTC nor GMT ever change for Daylight Saving Time (DST).
+// However, some of the countries that use GMT switch to different time zones during their DST period.
+// 
+// For example, the United Kingdom is not on GMT all year, it uses British Summer Time (BST), which
+// is one hour ahead of GMT, during the summer months.
+// ===================
+// 美国夏令时
+// 
+// http://mt.sohu.com/20160313/n440262811.shtml
+// 虎扑体育3月13日讯 美国2016年夏令时在当地时间3月12日早上02:00(北京时间3月13日14:00)开始，至2016年11月6日结束。换言之，美国东部时间和北京时间之间的换算将从之前的13个小时时差变为12个小时。
+// 
+// http://www.51liuxue.net.cn/article_5217219966846959230.html
+// 美国时间一般被认为是美国本土的时间。美国本土横跨西五区至西十区，共六个时区，每个时区对应一个标准时间。
+// 从东向西分别为东部时间(EST)（西五区时间）、中部时间(CST)（西六区时间）、山地时间(MST)（西七区时间）、太平洋时间（西部时间）(PST)（西八区时间）、阿拉斯加时间(AKST)（西九区时间）和夏威夷时间(HST)（西十区时间），
+// 按照“东早西晚”的规律，各递减一小时。
+// 
+// 美国从每年3月的第二个星期日至11月的第一个星期日采用夏令时，夏令时比正常时间早一小时。
+//
+// 关于公历闰年
+// http://baike.baidu.com/link?url=ASLln1dHIHUx_t1k-aUjioib0GhQevJoeEqg6aPpCjMzeoEjwwDjMshfTdRRv1inuCpwH719JYeuy2g3uAfOkdo-GvjWY4UPWPAZf-VzKK_
+//
+// 公历的平年只有365日，比回归年短约0.2422 日，每四年累积约一天，把这一天加于2月
+// 末（即2月29日），使当年时间长度变为366日（1-12月分别为31天，29天，31天，30天，
+// 31天，30天，31天，31天，30天，31天，30天，31天），这一年就为闰年
+//
+// 判断规则:
+// 四年一闰,百年不闰,四百年再闰.
+// 其简单计算方法:1.能被4整除而不能被100整除.（如2004年就是闰年,1800年不是.）
+// 2.能被400整除.（如2000年是闰年）
+
 package time
 
 import "errors"
 
 // A Time represents an instant in time with nanosecond precision.
+//
+// instant ['ɪnst(ə)nt] adj. 立即的；紧急的；紧迫的 n. 瞬间；立即；片刻
+// nanosecond ['nænə,sekənd; 'nei-] n. 纳秒
+// Time 代表了时间的一个瞬时值,以纳秒为单位
 //
 // Programs using times should typically store and pass them as values,
 // not pointers. That is, time variables and struct fields should be of
@@ -95,6 +165,11 @@ import "errors"
 // The zero value of type Time is January 1, year 1, 00:00:00.000000000 UTC.
 // As this time is unlikely to come up in practice, the IsZero method gives
 // a simple way of detecting a time that has not been initialized explicitly.
+//
+// come up(发生,出现)
+// Time 的 zero value 是 '0001-01-01 00:00:00.000000000 UTC', 因为实际中很少
+// 出现这个时间,因此提供了 IsZero 方法用于检测一个 Time 是否为 zero value.
+// 也就是说, Iszero 测试时间是否为 '0001-01-01 00:00:00.000000000 UTC' 这个零值.
 //
 // Each Time has associated with it a Location, consulted when computing the
 // presentation form of the time, such as in the Format, Hour, and Year methods.
@@ -227,6 +302,8 @@ func (t *Time) mono() int64 {
 }
 
 // After reports whether the time instant t is after u.
+//
+// 注意: 此操作不涉及 Location
 func (t Time) After(u Time) bool {
 	if t.wall&u.wall&hasMonotonic != 0 {
 		return t.ext > u.ext
@@ -237,6 +314,8 @@ func (t Time) After(u Time) bool {
 }
 
 // Before reports whether the time instant t is before u.
+//
+// 注意: 此操作不涉及 Location
 func (t Time) Before(u Time) bool {
 	if t.wall&u.wall&hasMonotonic != 0 {
 		return t.ext < u.ext
@@ -248,6 +327,10 @@ func (t Time) Before(u Time) bool {
 // Two times can be equal even if they are in different locations.
 // For example, 6:00 +0200 CEST and 4:00 UTC are Equal.
 // Do not use == with Time values.
+//
+// (6:00 +0200 代表此时间比 UTC 时间 多 2 个小时,因此上面的两个时间是相等的)
+// 也就是说: 如果使用 t == u, 同时会比较 Location
+//         如果使用 Equal,不会使用 Location 参与比较
 func (t Time) Equal(u Time) bool {
 	if t.wall&u.wall&hasMonotonic != 0 {
 		return t.ext == u.ext
@@ -299,6 +382,8 @@ func (m Month) String() string {
 }
 
 // A Weekday specifies a day of the week (Sunday = 0, ...).
+//
+// 周几
 type Weekday int
 
 const (
@@ -427,6 +512,8 @@ const (
 
 // IsZero reports whether t represents the zero time instant,
 // January 1, year 1, 00:00:00 UTC.
+//
+// 注意: 此操作不涉及 Location
 func (t Time) IsZero() bool {
 	return t.sec() == 0 && t.nsec() == 0
 }
@@ -476,30 +563,42 @@ func (t Time) locabs() (name string, offset int, abs uint64) {
 }
 
 // Date returns the year, month, and day in which t occurs.
+//
+// 此函数返回值与location有关
 func (t Time) Date() (year int, month Month, day int) {
 	year, month, day, _ = t.date(true)
 	return
 }
 
 // Year returns the year in which t occurs.
+//
+// 此函数返回值与location有关
 func (t Time) Year() int {
 	year, _, _, _ := t.date(false)
 	return year
 }
 
 // Month returns the month of the year specified by t.
+//
+// 此函数返回值与location有关
+// 注意返回类型是Month而不是int
 func (t Time) Month() Month {
 	_, month, _, _ := t.date(true)
 	return month
 }
 
 // Day returns the day of the month specified by t.
+//
+// 此函数返回值与location有关
 func (t Time) Day() int {
 	_, _, day, _ := t.date(true)
 	return day
 }
 
 // Weekday returns the day of the week specified by t.
+//
+// Weekday 代表周几(0是周日)
+// 此函数返回值与location有关
 func (t Time) Weekday() Weekday {
 	return absWeekday(t.abs())
 }
@@ -515,6 +614,17 @@ func absWeekday(abs uint64) Weekday {
 // Week ranges from 1 to 53. Jan 01 to Jan 03 of year n might belong to
 // week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1
 // of year n+1.
+//
+// 也就是说, ISOWeek 返回 t 属于那一年的第几周.
+//
+// 7 * 53 = 371
+// 一年最多 53 周.
+//
+// 测试如下:
+// fmt.Println(t.String()); // '2016-11-02 18:59:58.9117821 +0800 CST'
+// fmt.Println(t.ISOWeek()); // '2016 44'
+//
+// 此函数返回值与location有关
 func (t Time) ISOWeek() (year, week int) {
 	year, month, day, yday := t.date(true)
 	wday := int(t.Weekday()+6) % 7 // weekday but Monday = 0.
@@ -571,6 +681,9 @@ func (t Time) ISOWeek() (year, week int) {
 }
 
 // Clock returns the hour, minute, and second within the day specified by t.
+//
+// Clock 返回当日的小时,分钟,秒
+// 此函数返回值与location有关
 func (t Time) Clock() (hour, min, sec int) {
 	return absClock(t.abs())
 }
@@ -586,28 +699,42 @@ func absClock(abs uint64) (hour, min, sec int) {
 }
 
 // Hour returns the hour within the day specified by t, in the range [0, 23].
+//
+// 此函数返回值与location有关
 func (t Time) Hour() int {
 	return int(t.abs()%secondsPerDay) / secondsPerHour
 }
 
 // Minute returns the minute offset within the hour specified by t, in the range [0, 59].
+//
+// 此函数返回值与location有关
 func (t Time) Minute() int {
 	return int(t.abs()%secondsPerHour) / secondsPerMinute
 }
 
 // Second returns the second offset within the minute specified by t, in the range [0, 59].
+//
+// 此函数返回值与location有关
 func (t Time) Second() int {
 	return int(t.abs() % secondsPerMinute)
 }
 
 // Nanosecond returns the nanosecond offset within the second specified by t,
 // in the range [0, 999999999].
+//
+// 此函数返回值与location没有关系, 下面的计算只用到了 t.nsec
 func (t Time) Nanosecond() int {
 	return int(t.nsec())
 }
 
 // YearDay returns the day of the year specified by t, in the range [1,365] for non-leap years,
 // and [1,366] in leap years.
+//
+// [[leap year]]: 闰年 : A leap year is a year which has 366 days. The extra day is
+// February 29th. There is a leap year every four years.
+//
+// 返回t是一年中的第多少天
+// 此函数与Location设置有关
 func (t Time) YearDay() int {
 	_, _, _, yday := t.date(false)
 	return yday + 1
@@ -616,6 +743,8 @@ func (t Time) YearDay() int {
 // A Duration represents the elapsed time between two instants
 // as an int64 nanosecond count. The representation limits the
 // largest representable duration to approximately 290 years.
+//
+// type Duration 单位是纳秒.最大范围大约是290年.
 type Duration int64
 
 const (
@@ -625,6 +754,8 @@ const (
 
 // Common durations. There is no definition for units of Day or larger
 // to avoid confusion across daylight savings time zone transitions.
+//
+// daylight saving: 夏令时（指在夏季把标准时间拨早1小时）
 //
 // To count the number of units in a Duration, divide:
 //	second := time.Second
@@ -636,7 +767,9 @@ const (
 //
 const (
 	Nanosecond  Duration = 1
+	// 微秒
 	Microsecond          = 1000 * Nanosecond
+	// 毫秒
 	Millisecond          = 1000 * Microsecond
 	Second               = 1000 * Millisecond
 	Minute               = 60 * Second
@@ -762,7 +895,14 @@ func fmtInt(buf []byte, v uint64) int {
 }
 
 // Nanoseconds returns the duration as an integer nanosecond count.
+//
+// Nanoseconds 会返回 d 是持续多少纳秒
 func (d Duration) Nanoseconds() int64 { return int64(d) }
+
+// dominant ['dɔminənt] adj.
+// 1.占优势的；统治的，支配的，控制的；有影响的，有权势的
+// 2.(在分布、数量等方面)占首要的，主要的，突出的
+// 3.高耸的，居高临下的，俯瞰的，俯视的
 
 // These methods return float64 because the dominant
 // use case is for printing a floating point number like 1.5s, and
@@ -772,6 +912,9 @@ func (d Duration) Nanoseconds() int64 { return int64(d) }
 // way that a pure integer conversion would have, even in cases
 // where, say, float64(d.Nanoseconds())/1e9 would have rounded
 // differently.
+//
+// 为什么下面几个 Duration 的 Seconds,Minutes,Hours 方法都是返回 float64?
+// 因为主要使用这些方法的场景是要打印一个浮点数(比如1.5s),这些场景下如果返回值截断为整数就没有什么用了.
 
 // Seconds returns the duration as a floating point number of seconds.
 func (d Duration) Seconds() float64 {
@@ -840,6 +983,11 @@ func (d Duration) Round(m Duration) Duration {
 }
 
 // Add returns the time t+d.
+//
+// 注意: d 可以是负数,此时返回t之前的时间
+// 假设当前时间是: '2016-11-02 22:22:03.3696435 +0800 CST'
+// 下面会输出一小时之前
+// fmt.Println(t.Add(-time.Hour)); // '2016-11-02 21:22:03.3696435 +0800 CST'
 func (t Time) Add(d Duration) Time {
 	dsec := int64(d / 1e9)
 	nsec := t.nsec() + int32(d%1e9)
@@ -913,6 +1061,16 @@ func Until(t Time) Duration {
 // AddDate normalizes its result in the same way that Date does,
 // so, for example, adding one month to October 31 yields
 // December 1, the normalized form for November 31.
+//
+// October [ɒk'təʊbə] n. 十月
+// November [nə(ʊ)'vembə] n. 十一月
+// 十月大,十一月小,十二月大
+//
+// 比如 t 是 2016-10-31
+// 此时 t.AddDate(0, 1, 0) 返回的是 2016-12-01, 而不是 2016-11-31
+//
+// ?? 如果 months 参数为 1, 是否代表固定的30天? 还是固定的31天? 还是说是变动的值?
+// @see下面的源码
 func (t Time) AddDate(years int, months int, days int) Time {
 	year, month, day := t.Date()
 	hour, min, sec := t.Clock()
@@ -1076,6 +1234,8 @@ func (t Time) In(loc *Location) Time {
 }
 
 // Location returns the time zone information associated with t.
+//
+// 如果 t 未设置 t.loc 字段, 会返回 time.UTC
 func (t Time) Location() *Location {
 	l := t.loc
 	if l == nil {
@@ -1086,6 +1246,17 @@ func (t Time) Location() *Location {
 
 // Zone computes the time zone in effect at time t, returning the abbreviated
 // name of the zone (such as "CET") and its offset in seconds east of UTC.
+//
+// abbreviated [ə'briːvɪeɪtɪd] adj. 简短的；小型的；服装超短的 v. 缩写；节略（abbreviate的过去分词）
+//
+// 测试:
+// fmt.Println(t.Zone()); // 'CST 28800' 相当于是 'CST 8*3600' 相当于是 'CST +8小时'
+//
+// CST可以为如下4个不同的时区的缩写：
+// 美国中部时间：Central Standard Time (USA) UT-6:00
+// 澳大利亚中部时间：Central Standard Time (Australia) UT+9:30
+// 中国标准时间：China Standard Time UT+8:00
+// 古巴标准时间：Cuba Standard Time UT-4:00
 func (t Time) Zone() (name string, offset int) {
 	name, offset, _, _, _ = t.loc.lookup(t.unixSec())
 	return
@@ -1093,6 +1264,10 @@ func (t Time) Zone() (name string, offset int) {
 
 // Unix returns t as a Unix time, the number of seconds elapsed
 // since January 1, 1970 UTC.
+//
+// 返回的结果可能是这样 1478097644
+// 相当于是 php 的 time()
+// 返回值与时区无关
 func (t Time) Unix() int64 {
 	return t.unixSec()
 }
@@ -1102,6 +1277,10 @@ func (t Time) Unix() int64 {
 // in nanoseconds cannot be represented by an int64 (a date before the year
 // 1678 or after 2262). Note that this means the result of calling UnixNano
 // on the zero Time is undefined.
+//
+// UnixNano 返回自 'January 1, 1970 UTC' 以来经历了多少纳秒.
+//
+// 返回的结果可能是这样 1478097644270450000, 去掉最后9位后, 其实就是 时间戳
 func (t Time) UnixNano() int64 {
 	return (t.unixSec())*1e9 + int64(t.nsec())
 }
@@ -1257,6 +1436,8 @@ func (t *Time) UnmarshalText(data []byte) error {
 // It is valid to pass nsec outside the range [0, 999999999].
 // Not all sec values have a corresponding time value. One such
 // value is 1<<63-1 (the largest int64 value).
+//
+// 可以看做根据timestamp构造一个time.Time
 func Unix(sec int64, nsec int64) Time {
 	if nsec < 0 || nsec >= 1e9 {
 		n := nsec / 1e9
@@ -1270,6 +1451,7 @@ func Unix(sec int64, nsec int64) Time {
 	return unixTime(sec, int32(nsec))
 }
 
+// @see
 func isLeap(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
 }
@@ -1298,6 +1480,8 @@ func norm(hi, lo, base int) (nhi, nlo int) {
 // The month, day, hour, min, sec, and nsec values may be outside
 // their usual ranges and will be normalized during the conversion.
 // For example, October 32 converts to November 1.
+//
+// 10-32 会被转化为 11-01
 //
 // A daylight savings time transition skips or repeats times.
 // For example, in the United States, March 13, 2011 2:15am never occurred,
@@ -1405,6 +1589,8 @@ func (t Time) Truncate(d Duration) Time {
 // zero time; it does not operate on the presentation form of the
 // time. Thus, Round(Hour) may return a time with a non-zero
 // minute, depending on the time's Location.
+//
+// round up(四舍五入).
 func (t Time) Round(d Duration) Time {
 	t.stripMono()
 	if d <= 0 {
