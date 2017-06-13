@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-6-13 10:27:36
 
 package sort_test
 
@@ -18,6 +20,7 @@ func ExampleInts() {
 
 func ExampleReverse() {
 	s := []int{5, 2, 6, 3, 1, 4} // unsorted
+	// sort.IntSlice(s) 是 sort.Interface, sort.Reverse 返回的也是 sort.Interface, 只是将 sort.IntSlice(s).Less 的意义反转了.
 	sort.Sort(sort.Reverse(sort.IntSlice(s)))
 	fmt.Println(s)
 	// Output: [6 5 4 3 2 1]

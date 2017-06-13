@@ -1,6 +1,8 @@
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-6-13 10:05:02
 
 package sort_test
 
@@ -16,6 +18,7 @@ type Change struct {
 	lines    int
 }
 
+// lessFunc 用于比较两个 *Change
 type lessFunc func(p1, p2 *Change) bool
 
 // multiSorter implements the Sort interface, sorting the changes within.
@@ -54,9 +57,11 @@ func (ms *multiSorter) Swap(i, j int) {
 // could change the functions to return -1, 0, 1 and reduce the
 // number of calls for greater efficiency: an exercise for the reader.
 func (ms *multiSorter) Less(i, j int) bool {
+	// slice 的元素可以取地址
 	p, q := &ms.changes[i], &ms.changes[j]
 	// Try all but the last comparison.
 	var k int
+	// 循环每一个 less 函数
 	for k = 0; k < len(ms.less)-1; k++ {
 		less := ms.less[k]
 		switch {
@@ -71,6 +76,7 @@ func (ms *multiSorter) Less(i, j int) bool {
 	}
 	// All comparisons to here said "equal", so just return whatever
 	// the final comparison reports.
+	// k 现在代表了 ms.less 的最后一个元素的索引值.
 	return ms.less[k](p, q)
 }
 
@@ -109,15 +115,19 @@ func Example_sortMultiKeys() {
 	fmt.Println("By user:", changes)
 
 	// More examples.
+	// 按照 user 字段排序,如果 user 字段相等,按照 lines 字段升序
 	OrderedBy(user, increasingLines).Sort(changes)
 	fmt.Println("By user,<lines:", changes)
 
+	// 按照 user 字段排序,如果 user 字段相等,按照 lines 字段降序
 	OrderedBy(user, decreasingLines).Sort(changes)
 	fmt.Println("By user,>lines:", changes)
 
+	// 按照 language 字段排序,如果 language 字段相等,按照 lines 字段升序
 	OrderedBy(language, increasingLines).Sort(changes)
 	fmt.Println("By language,<lines:", changes)
 
+	// 按照 language 字段排序,如果 language 字段相等,按照 lines 字段升序,lines字段相等,按照 user 升序
 	OrderedBy(language, increasingLines, user).Sort(changes)
 	fmt.Println("By language,<lines,user:", changes)
 

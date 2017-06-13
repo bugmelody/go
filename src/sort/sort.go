@@ -1,6 +1,7 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// [[[4-over]]] 2017-6-12 19:22:23
 
 //go:generate go run genzfunc.go
 
@@ -215,6 +216,8 @@ func quickSort(data Interface, a, b, maxDepth int) {
 // Sort sorts data.
 // It makes one call to data.Len to determine n, and O(n*log(n)) calls to
 // data.Less and data.Swap. The sort is not guaranteed to be stable.
+//
+// 稳定排序: http://baike.baidu.com/link?url=Cy-R2fO8JqLChFs1t792-vtM_8XAiSi6vABt6pvlC2PLno1PYHg8xga3hYgjVTkcDX-Kmv9cOgI-ae_AijURrDQzOOImy5F37cRZTdE1BY6wHwfQfJl-wcwQkoONuIgT
 func Sort(data Interface) {
 	n := data.Len()
 	quickSort(data, 0, n, maxDepth(n))
@@ -244,6 +247,19 @@ type lessSwap struct {
 // SliceStable.
 //
 // The function panics if the provided interface is not a slice.
+//
+// 实现sort，需要三要素：Len、Swap和Less。在1.8之前，我们通过实现sort.Interface实
+// 现了这三个要素；而在1.8版本里，Slice函数通过reflect获取到swap和length，通过结合
+// 闭包实现的less参数让Less要素也具备了。我们从下面sort.Slice的源码可以看出这一点.
+//
+// 例子:
+// langs := []Lang{
+//   {"rust", 2},
+//   {"go", 1},
+//   {"swift", 3},
+// }
+// sort.Slice(langs, func(i, j int) bool { return langs[i].Rank < langs[j].Rank })
+// fmt.Printf("%v\n", langs)
 func Slice(slice interface{}, less func(i, j int) bool) {
 	rv := reflect.ValueOf(slice)
 	swap := reflect.Swapper(slice)
@@ -264,7 +280,9 @@ func SliceStable(slice interface{}, less func(i, j int) bool) {
 // SliceIsSorted tests whether a slice is sorted.
 //
 // The function panics if the provided interface is not a slice.
+// @see
 func SliceIsSorted(slice interface{}, less func(i, j int) bool) bool {
+	// 通过反射获得slice的len
 	rv := reflect.ValueOf(slice)
 	n := rv.Len()
 	for i := n - 1; i > 0; i-- {
@@ -275,6 +293,7 @@ func SliceIsSorted(slice interface{}, less func(i, j int) bool) bool {
 	return true
 }
 
+// @see
 type reverse struct {
 	// This embedded Interface permits Reverse to use the methods of
 	// another Interface implementation.
@@ -282,16 +301,26 @@ type reverse struct {
 }
 
 // Less returns the opposite of the embedded implementation's Less method.
+// @see
 func (r reverse) Less(i, j int) bool {
+	// 将内嵌的Interface的意义反转.
 	return r.Interface.Less(j, i)
 }
 
 // Reverse returns the reverse order for data.
+//
+// 参考上面定义的 func (r reverse) Less(i, j int) bool  方法
+// 实际是反转了 data.Less 的意义
+// @see
 func Reverse(data Interface) Interface {
+	// reverse也实现了sort.Interface接口
 	return &reverse{data}
 }
 
 // IsSorted reports whether data is sorted.
+//
+// 所谓的 sorted, 是指已经按照Less的规则进行了升序排列.
+// @see
 func IsSorted(data Interface) bool {
 	n := data.Len()
 	for i := n - 1; i > 0; i-- {
@@ -316,14 +345,19 @@ func (p IntSlice) Sort() { Sort(p) }
 
 // Float64Slice attaches the methods of Interface to []float64, sorting in increasing order
 // (not-a-number values are treated as less than other values).
+// 注意: not-a-number values are treated as less than other values
 type Float64Slice []float64
 
 func (p Float64Slice) Len() int           { return len(p) }
+// Float64Slice 的 Less 首先比较 p[i] < p[j], 如果不满足, 继续比较 isNaN(p[i]) && !isNaN(p[j])
+// 也就是说, Float64Slice.Less 中会将 NaN 视为小于 非 NaN
 func (p Float64Slice) Less(i, j int) bool { return p[i] < p[j] || isNaN(p[i]) && !isNaN(p[j]) }
 func (p Float64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // isNaN is a copy of math.IsNaN to avoid a dependency on the math package.
 func isNaN(f float64) bool {
+	// 任何数字都应该等于自己
+	// 不等于自己,说明是NaN
 	return f != f
 }
 
@@ -334,6 +368,7 @@ func (p Float64Slice) Sort() { Sort(p) }
 type StringSlice []string
 
 func (p StringSlice) Len() int           { return len(p) }
+// StringSlice.Less 比较规则是进行字符串之间的比较
 func (p StringSlice) Less(i, j int) bool { return p[i] < p[j] }
 func (p StringSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
@@ -347,6 +382,7 @@ func Ints(a []int) { Sort(IntSlice(a)) }
 
 // Float64s sorts a slice of float64s in increasing order
 // (not-a-number values are treated as less than other values).
+// 注意: not-a-number values are treated as less than other values
 func Float64s(a []float64) { Sort(Float64Slice(a)) }
 
 // Strings sorts a slice of strings in increasing order.
@@ -357,6 +393,7 @@ func IntsAreSorted(a []int) bool { return IsSorted(IntSlice(a)) }
 
 // Float64sAreSorted tests whether a slice of float64s is sorted in increasing order
 // (not-a-number values are treated as less than other values).
+// 注意: not-a-number values are treated as less than other values
 func Float64sAreSorted(a []float64) bool { return IsSorted(Float64Slice(a)) }
 
 // StringsAreSorted tests whether a slice of strings is sorted in increasing order.
@@ -392,6 +429,8 @@ func StringsAreSorted(a []string) bool { return IsSorted(StringSlice(a)) }
 //
 // It makes one call to data.Len to determine n, O(n*log(n)) calls to
 // data.Less and O(n*log(n)*log(n)) calls to data.Swap.
+//
+// 稳定排序
 func Stable(data Interface) {
 	stable(data, data.Len())
 }

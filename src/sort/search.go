@@ -1,8 +1,11 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-12 18:37:36
 
 // This file implements binary search.
+// 本文件实现了二分法检索(binary search,又称折半检索)
 
 package sort
 
@@ -15,6 +18,8 @@ package sort
 // (Note that the "not found" return value is not -1 as in, for instance,
 // strings.Index.)
 // Search calls f(i) only for i in the range [0, n).
+//
+// 超过 [0, n) 范围是不会调用 f(i) 的.
 //
 // A common use of Search is to find the index i for a value x in
 // a sorted, indexable data structure such as an array or slice.
@@ -31,6 +36,8 @@ package sort
 // Searching data sorted in descending order would use the <=
 // operator instead of the >= operator.
 //
+// 使用Search的数据结构,既可以是升序,也可以是降序.
+//
 // To complete the example above, the following code tries to find the value
 // x in an integer slice data sorted in ascending order:
 //
@@ -45,10 +52,15 @@ package sort
 //
 // As a more whimsical example, this program guesses your number:
 //
+// whimsical ['wɪmzɪk(ə)l] adj. 古怪的；异想天开的；反复无常的
+//
 //	func GuessingGame() {
+//		// s是每轮询问后的确认字符串,如果s不为空并且第一个字节是y,说明程序猜中了
 //		var s string
+//		// 脑中想一个数
 //		fmt.Printf("Pick an integer from 0 to 100.\n")
 //		answer := sort.Search(100, func(i int) bool {
+//			// 假设我们想的是90,i的序列为: 50,75,88,94,91,90. 可见,i的选择是折半选择的中间的数据,这正是二分查找.
 //			fmt.Printf("Is your number <= %d? ", i)
 //			fmt.Scanf("%s", &s)
 //			return s != "" && s[0] == 'y'

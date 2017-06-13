@@ -1,6 +1,8 @@
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]] 2017-6-13 10:05:02
 
 package sort_test
 
@@ -18,6 +20,7 @@ func ExampleSearch() {
 	if i < len(a) && a[i] == x {
 		fmt.Printf("found %d at index %d in %v\n", x, i, a)
 	} else {
+		// 此时i代表了如果将x插入a,应该在哪个位置
 		fmt.Printf("%d not found in %v\n", x, a)
 	}
 	// Output:
