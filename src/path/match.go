@@ -1,6 +1,8 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 12:46:11
 
 package path
 
@@ -11,6 +13,7 @@ import (
 )
 
 // ErrBadPattern indicates a globbing pattern was malformed.
+// malformed [,mæl'fɔrmd] adj. 畸形的，难看的
 var ErrBadPattern = errors.New("syntax error in pattern")
 
 // Match reports whether name matches the shell file name pattern.
@@ -35,6 +38,27 @@ var ErrBadPattern = errors.New("syntax error in pattern")
 // The only possible returned error is ErrBadPattern, when pattern
 // is malformed.
 //
+//
+// 注意: 上文中的 'non-/ characters' 指的是非 '/' 的字符, 其中 'non-' 是一个整体
+//
+//
+// 翻译pattern:
+// pattern:
+// { term }
+// term:
+// '*'                                  匹配0或多个非/的字符
+// '?'                                  匹配1个非/的字符
+// '[' [ '^' ] { character-range } ']'  字符组（必须非空）
+// c                                    匹配字符c（c != '*', '?', '\\', '['）
+// '\\' c                               匹配字符c
+// character-range:
+// c           匹配字符c（c != '\\', '-', ']'）
+// '\\' c      匹配字符c
+// lo '-' hi   匹配区间[lo, hi]内的字符
+//
+//
+// Match需要pattern匹配整个name,而不是name的一部分.
+// 唯一可能返回的error是ErrBadPattern(当pattern语法错误时).
 func Match(pattern, name string) (matched bool, err error) {
 Pattern:
 	for len(pattern) > 0 {

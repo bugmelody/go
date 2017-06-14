@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 13:16:47 本包只看导出的
 
 // Package filepath implements utility routines for manipulating filename paths
 // in a way compatible with the target operating system-defined file paths.
@@ -85,6 +87,14 @@ const (
 // See also Rob Pike, ``Lexical File Names in Plan 9 or
 // Getting Dot-Dot Right,''
 // https://9p.io/sys/doc/lexnames.html
+//
+//
+// 相比 path.Clean, filepath.Clean 多了下面两个功能
+// 1. The returned path ends in a slash only if it represents a root directory,
+// such as "/" on Unix or `C:\` on Windows.
+// 2. Finally, any occurrences of slash are replaced by Separator.
+//
+// 本函数不看细节
 func Clean(path string) string {
 	originalPath := path
 	volLen := volumeNameLen(path)
@@ -162,18 +172,35 @@ func Clean(path string) string {
 // ToSlash returns the result of replacing each separator character
 // in path with a slash ('/') character. Multiple separators are
 // replaced by multiple slashes.
+//
+//
+// ToSlash 应该叫 from Separator to Slash
+// ToSlash 将 path 中所有 separator 替换为 '/', 多个 separators 被替换为多个 '/'.
+// separator 是独立于操作系统
+//   windows 是 \ , 见: src\os\path_windows.go
+//   linux 是 / , 见: src\os\path_unix.go
+// @see
 func ToSlash(path string) string {
 	if Separator == '/' {
+		// 当前系统操作符已经是slash;没有必要进行转换,返回
 		return path
 	}
+	// 现在,需要将Separator替换为slash
 	return strings.Replace(path, string(Separator), "/", -1)
 }
 
 // FromSlash returns the result of replacing each slash ('/') character
 // in path with a separator character. Multiple slashes are replaced
 // by multiple separators.
+//
+//
+// FromSlash 应该叫 from Slash to Separator
+// 如果当前系统分隔符是'/',path原样返回
+// 否则,将path中的'/'替换为当前系统分隔符后返回.
 func FromSlash(path string) string {
 	if Separator == '/' {
+		// 当前系统操作符已经是slash
+		// 没有必要进行转换,返回
 		return path
 	}
 	return strings.Replace(path, "/", string(Separator), -1)
@@ -183,6 +210,13 @@ func FromSlash(path string) string {
 // usually found in PATH or GOPATH environment variables.
 // Unlike strings.Split, SplitList returns an empty slice when passed an empty
 // string.
+//
+// 对比下 $ go doc strings.Split
+//
+// PathListSeparator = ';'  // windows path list separator
+// PathListSeparator = ':' // unix path list separator
+//
+// 例子: filepath.SplitList("/a/b/c:/usr/bin") = [/a/b/c /usr/bin]
 func SplitList(path string) []string {
 	return splitList(path)
 }
@@ -192,6 +226,8 @@ func SplitList(path string) []string {
 // If there is no Separator in path, Split returns an empty dir
 // and file set to path.
 // The returned values have the property that path = dir+file.
+//
+// @see
 func Split(path string) (dir, file string) {
 	vol := VolumeName(path)
 	i := len(path) - 1
@@ -206,6 +242,10 @@ func Split(path string) (dir, file string) {
 // all empty strings are ignored.
 // On Windows, the result is a UNC path if and only if the first path
 // element is a UNC path.
+//
+//
+// 什么是 UNC path: 
+// http://baike.baidu.com/link?url=DOT-IdRopiwt3OFOzT2V0HBKRq4fCl0BCUb4vhsMkFkEjmiK02zu7p1s5PlwMgKl04iShNbF0zqSL8bBwzEcE1U8PQeTjMjWl4yOK4kVnO3
 func Join(elem ...string) string {
 	return join(elem)
 }
@@ -214,12 +254,18 @@ func Join(elem ...string) string {
 // The extension is the suffix beginning at the final dot
 // in the final element of path; it is empty if there is
 // no dot.
+//
+//
+// 获取 path 中文件名部分的扩展名
+// 返回的字符串中以'.'开头,比如:'.jpg','.txt'
+// @see
 func Ext(path string) string {
 	for i := len(path) - 1; i >= 0 && !os.IsPathSeparator(path[i]); i-- {
 		if path[i] == '.' {
 			return path[i:]
 		}
 	}
+	// 根据文档: it is empty if there is no dot.
 	return ""
 }
 
@@ -260,6 +306,9 @@ func unixAbs(path string) (string, error) {
 // An error is returned if targpath can't be made relative to basepath or if
 // knowing the current working directory would be necessary to compute it.
 // Rel calls Clean on the result.
+//
+// 看看 func ExampleRel() {
+// 不看源码
 func Rel(basepath, targpath string) (string, error) {
 	baseVol := VolumeName(basepath)
 	targVol := VolumeName(targpath)
@@ -331,6 +380,9 @@ func Rel(basepath, targpath string) (string, error) {
 // SkipDir is used as a return value from WalkFuncs to indicate that
 // the directory named in the call is to be skipped. It is not returned
 // as an error by any function.
+//
+// that the directory named(WalkFunc的path参数)
+// in the call(指WalkFunc的调用)
 var SkipDir = errors.New("skip this directory")
 
 // WalkFunc is the type of the function called for each file or directory
@@ -347,39 +399,80 @@ var SkipDir = errors.New("skip this directory")
 // on a directory, Walk skips the directory's contents entirely.
 // If the function returns SkipDir when invoked on a non-directory file,
 // Walk skips the remaining files in the containing directory.
+//
+// incoming error: 指WalkFunc的err参数
+// the function(指WalkFunc) can decide how to handle that error(指err参数)
+// If an error is returned(WalkFunc返回一个error), processing stops(整个walk停止)
+//
+// 总结:
+// WalkFunc的函数体内部,处理的是walk过程中遇到的一个文件path.
+// err是walk到path的错误,WalkFunc有权根据err决定如何处理这个错误.
+// 如果WalkFunc返回err=SkipDir,表示会忽略当前path.
+// 如果WalkFunc返回err=非SkipDir error,整个walk结束.
+// 如果WalkFunc返回error=nil,表示没有遇到错误.
+//
+// 以下是粗略的翻译
+// Walk函数对每一个文件/目录都会调用WalkFunc函数类型值.
+// 调用时path参数会包含Walk的root参数作为前缀;就是说,如果Walk函数的root为"dir",该目录下有文件"a",
+// 将会使用"dir/a"作为path参数调用walkFn参数.
+// walkFn参数被调用时的info参数是path指定的地址(文件/目录)的文件信息,类型为os.FileInfo.
+// 如果遍历path指定的文件或目录时出现了问题,传入的参数err会描述该问题,WalkFunc类型函数可以决定
+// 如何去处理该错误(Walk函数将不会深入该目录);如果该函数返回一个错误,Walk函数的执行会中止;只有一个
+// 例外,如果Walk的walkFn返回值是SkipDir,将会跳过该目录的内容而Walk函数照常执行处理下一个文件.
 type WalkFunc func(path string, info os.FileInfo, err error) error
 
 var lstat = os.Lstat // for testing
 
 // walk recursively descends path, calling w.
+//
+// @see
 func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 	err := walkFn(path, info, nil)
 	if err != nil {
+		// walkFn返回错误
 		if info.IsDir() && err == SkipDir {
+			// SkipDir表示忽略当前错误
 			return nil
 		}
+		// 其他错误会终止整个Walk
 		return err
 	}
+	// 现在,walkFn成功
 
 	if !info.IsDir() {
+		// 不是目录,说明是文件;当前函数成功返回
 		return nil
 	}
+	// 现在,path是目录
 
+	// 读取path下的子目录列表
 	names, err := readDirNames(path)
 	if err != nil {
+		// 无法读取path下的子目录列表
+		// 那就不管path下的子目录,只管path
 		return walkFn(path, info, err)
 	}
+	// 现在,成功读取到了path下的子目录列表
 
+	// 循环每一个子目录
 	for _, name := range names {
+		// 该文件的完整路径
 		filename := Join(path, name)
+		// 不跟踪符号链接
 		fileInfo, err := lstat(filename)
 		if err != nil {
+			// os.Lstat出错,通知walkFn
 			if err := walkFn(filename, fileInfo, err); err != nil && err != SkipDir {
+				// walkFn失败并且不是SkipDir造成的失败
 				return err
 			}
+			// 如果walkFn失败并且是SkipDir造成的失败,则会继续下轮循环
 		} else {
+			// os.Lstat成功
+			// 递归调用walk
 			err = walk(filename, fileInfo, walkFn)
 			if err != nil {
+				// walk出错
 				if !fileInfo.IsDir() || err != SkipDir {
 					return err
 				}
@@ -395,9 +488,17 @@ func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 // order, which makes the output deterministic but means that for very
 // large directories Walk can be inefficient.
 // Walk does not follow symbolic links.
+//
+// lexical order: 词典式序列
+// @see
 func Walk(root string, walkFn WalkFunc) error {
+	// 文档: does not follow symbolic links
+	// os.Stat和os.LStat的对比
+	// Stat 会跟踪符号链接,最后返回的是真正的 FileInfo
+	// LStat 不会跟踪符号链接,最后返回的是符号链接的 FileInfo
 	info, err := os.Lstat(root)
 	if err != nil {
+		// os.Lstat 出错
 		err = walkFn(root, nil, err)
 	} else {
 		err = walk(root, info, walkFn)
@@ -410,6 +511,8 @@ func Walk(root string, walkFn WalkFunc) error {
 
 // readDirNames reads the directory named by dirname and returns
 // a sorted list of directory entries.
+//
+// @see
 func readDirNames(dirname string) ([]string, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
@@ -428,12 +531,16 @@ func readDirNames(dirname string) ([]string, error) {
 // Trailing path separators are removed before extracting the last element.
 // If the path is empty, Base returns ".".
 // If the path consists entirely of separators, Base returns a single separator.
+//
+// @see
 func Base(path string) string {
 	if path == "" {
+		// 文档:If the path is empty, Base returns ".".
 		return "."
 	}
 	// Strip trailing slashes.
 	for len(path) > 0 && os.IsPathSeparator(path[len(path)-1]) {
+		// 文档: Trailing path separators are removed before extracting the last element.
 		path = path[0 : len(path)-1]
 	}
 	// Throw away volume name
@@ -441,13 +548,16 @@ func Base(path string) string {
 	// Find the last element
 	i := len(path) - 1
 	for i >= 0 && !os.IsPathSeparator(path[i]) {
+		// i-- 一直到遇到path的最后一个分隔符
 		i--
 	}
 	if i >= 0 {
+		// 设置path为最后一个分隔符之后的内容
 		path = path[i+1:]
 	}
 	// If empty now, it had only slashes.
 	if path == "" {
+		// 文档: If the path consists entirely of separators, Base returns a single separator.
 		return string(Separator)
 	}
 	return path
@@ -459,6 +569,9 @@ func Base(path string) string {
 // If the path is empty, Dir returns ".".
 // If the path consists entirely of separators, Dir returns a single separator.
 // The returned path does not end in a separator unless it is the root directory.
+//
+// 返回的内容如'a/b',一般情况下结尾的'/'已经被去掉,除非path本身就是'/'
+// 不看细节了
 func Dir(path string) string {
 	vol := VolumeName(path)
 	i := len(path) - 1

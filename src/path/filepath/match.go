@@ -1,6 +1,8 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 13:16:47
 
 package filepath
 
@@ -231,6 +233,8 @@ func getEsc(chunk string) (r rune, nchunk string, err error) {
 // Glob ignores file system errors such as I/O errors reading directories.
 // The only possible returned error is ErrBadPattern, when pattern
 // is malformed.
+//
+// Glob会忽略文件系统的错误(比如读取文件夹时出现I/o错误)
 func Glob(pattern string) (matches []string, err error) {
 	if !hasMeta(pattern) {
 		if _, err = os.Lstat(pattern); err != nil {

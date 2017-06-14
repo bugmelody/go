@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 11:26:53
 
 // Package path implements utility routines for manipulating slash-separated
 // paths.
@@ -19,6 +21,8 @@ import (
 // It supports append, reading previously appended bytes,
 // and retrieving the final string. It does not allocate a buffer
 // to hold the output until that output diverges from s.
+//
+// diverge[daɪ'vɜːdʒ; dɪ-] vi. 分歧；偏离；分叉；离题 vt. 使偏离；使分叉
 type lazybuf struct {
 	s   string
 	buf []byte
@@ -71,11 +75,16 @@ func (b *lazybuf) string() string {
 // See also Rob Pike, ``Lexical File Names in Plan 9 or
 // Getting Dot-Dot Right,''
 // https://9p.io/sys/doc/lexnames.html
+//
+// rooted: path是否以'/'开头
+// 不看细节
 func Clean(path string) string {
 	if path == "" {
+		// 文档: If the result of this process is an empty string, Clean returns the string ".".
 		return "."
 	}
 
+	// rooted: path是否以'/'开头
 	rooted := path[0] == '/'
 	n := len(path)
 
@@ -144,6 +153,8 @@ func Clean(path string) string {
 // If there is no slash in path, Split returns an empty dir and
 // file set to path.
 // The returned values have the property that path = dir+file.
+//
+// @see
 func Split(path string) (dir, file string) {
 	i := strings.LastIndex(path, "/")
 	return path[:i+1], path[i+1:]
@@ -152,8 +163,13 @@ func Split(path string) (dir, file string) {
 // Join joins any number of path elements into a single path, adding a
 // separating slash if necessary. The result is Cleaned; in particular,
 // all empty strings are ignored.
+//
+// 根据文档, Join 在连接的过程中,会自动判断是否需要加 slash. 因此, elem 中每个元素不必有 slash.
+// 注意: The result is Cleaned.
+// @see
 func Join(elem ...string) string {
 	for i, e := range elem {
+		// 根据文档:all empty strings are ignored
 		if e != "" {
 			return Clean(strings.Join(elem[i:], "/"))
 		}
@@ -165,6 +181,9 @@ func Join(elem ...string) string {
 // The extension is the suffix beginning at the final dot
 // in the final slash-separated element of path;
 // it is empty if there is no dot.
+//
+// 获取 path 中文件名部分的扩展名
+// 返回的字符串中以'.'开头,比如:'.jpg','.txt'
 func Ext(path string) string {
 	for i := len(path) - 1; i >= 0 && path[i] != '/'; i-- {
 		if path[i] == '.' {
@@ -178,12 +197,17 @@ func Ext(path string) string {
 // Trailing slashes are removed before extracting the last element.
 // If the path is empty, Base returns ".".
 // If the path consists entirely of slashes, Base returns "/".
+//
+// 注意,如果存在Trailing slashes,它们会先被去除掉.
+// @see
 func Base(path string) string {
 	if path == "" {
+		// 文档:If the path consists entirely of slashes, Base returns "/".
 		return "."
 	}
 	// Strip trailing slashes.
 	for len(path) > 0 && path[len(path)-1] == '/' {
+		// 循环剔除末尾的斜线
 		path = path[0 : len(path)-1]
 	}
 	// Find the last element
@@ -192,12 +216,17 @@ func Base(path string) string {
 	}
 	// If empty now, it had only slashes.
 	if path == "" {
+		// 文档:If the path is empty, Base returns ".".
 		return "/"
 	}
 	return path
 }
 
 // IsAbs reports whether the path is absolute.
+//
+// 所谓的 absolute, 是指是否以 '/' 开头,这个跟操作系统无关.
+// 因为path包是不区分操作系统的
+// 而filepath包的IsAbs定义就不同了,跟操作系统有关.
 func IsAbs(path string) bool {
 	return len(path) > 0 && path[0] == '/'
 }
@@ -209,6 +238,8 @@ func IsAbs(path string) bool {
 // If the path consists entirely of slashes followed by non-slash bytes, Dir
 // returns a single slash. In any other case, the returned path does not end in a
 // slash.
+//
+// @see
 func Dir(path string) string {
 	dir, _ := Split(path)
 	return Clean(dir)
