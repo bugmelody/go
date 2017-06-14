@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-14 09:20:04 这个文件以后暂时不要看了,太多driver的东西
 
 // Package driver defines interfaces to be implemented by database
 // drivers as used by package sql.
@@ -84,6 +86,24 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
+/**
+Avoiding Prepared Statements
+
+Go creates prepared statements for you under the covers.
+A simple db.Query(sql, param1, param2), for example, works by preparing the sql, then executing it with the parameters and finally closing the statement.
+
+Sometimes a prepared statement is not what you want, however. There might be several reasons for this:
+
+	The database doesn’t support prepared statements. When using the MySQL driver, for example, you can connect to MemSQL and Sphinx, because they support
+			the MySQL wire protocol. But they don’t support the “binary” protocol that includes prepared statements, so they can fail in confusing ways.
+	The statements aren’t reused enough to make them worthwhile, and security issues are handled in other ways, so performance overhead is undesired. An
+		example of this can be seen at the VividCortex blog
+		(https://www.vividcortex.com/blog/2014/11/19/analyzing-prepared-statement-performance-with-vividcortex/).
+
+If you don’t want to use a prepared statement, you need to use fmt.Sprint() or similar to assemble the SQL, and pass this as the only argument
+to db.Query() or db.QueryRow(). And your driver needs to support plaintext query execution, which is added in Go 1.1 via the Execer and Queryer interfaces.
+ */
+
 // Execer is an optional interface that may be implemented by a Conn.
 //
 // If a Conn does not implement Execer, the sql package's DB.Exec will
@@ -93,7 +113,11 @@ type Pinger interface {
 // Exec may return ErrSkip.
 //
 // Deprecated: Drivers should implement ExecerContext instead (or additionally).
+//
+// 如果一个Conn没有实现Execer,sql包的DB.Exec会首先prepare查询,执行statement,然后关闭statement.
+// 如果一个Conn有实现Execer,就有机会不经过prepare来执行查询.
 type Execer interface {
+	// 注意,这里的 Result 是指 driver.Result, 而不是 sql.Result
 	Exec(query string, args []Value) (Result, error)
 }
 
@@ -106,7 +130,11 @@ type Execer interface {
 // ExecerContext may return ErrSkip.
 //
 // ExecerContext must honor the context timeout and return when the context is canceled.
+//
+// 如果一个Conn没有实现Execer,sql包的DB.Exec会首先prepare查询,执行statement,然后关闭statement.
+// 如果一个Conn有实现Execer,就有机会不经过prepare来执行查询.
 type ExecerContext interface {
+	// 注意,这里的 Result 是指 driver.Result, 而不是 sql.Result
 	ExecContext(ctx context.Context, query string, args []NamedValue) (Result, error)
 }
 
@@ -119,7 +147,11 @@ type ExecerContext interface {
 // Query may return ErrSkip.
 //
 // Deprecated: Drivers should implement QueryerContext instead (or additionally).
+//
+// 如果一个Conn没有实现Queryer,sql包的DB.Query会首先prepare查询,执行statement,然后关闭statement.
+// 如果一个Conn有实现Queryer,就有机会不经过prepare来执行查询.
 type Queryer interface {
+	// 这里的Rows是指dirver.Rows
 	Query(query string, args []Value) (Rows, error)
 }
 
@@ -132,7 +164,11 @@ type Queryer interface {
 // QueryerContext may return ErrSkip.
 //
 // QueryerContext must honor the context timeout and return when the context is canceled.
+//
+// 如果一个Conn没有实现Queryer,sql包的DB.Query会首先prepare查询,执行statement,然后关闭statement.
+// 如果一个Conn有实现Queryer,就有机会不经过prepare来执行查询.
 type QueryerContext interface {
+	// 这里的Rows是指dirver.Rows
 	QueryContext(ctx context.Context, query string, args []NamedValue) (Rows, error)
 }
 
@@ -152,6 +188,11 @@ type Conn interface {
 	// connections and only calls Close when there's a surplus of
 	// idle connections, it shouldn't be necessary for drivers to
 	// do their own connection caching.
+	//
+	//
+	// invalidate [in'vælideit] vt. 使无效；使失效；使作废；使无价值
+	// potentially [pə'tɛnʃəli] adv. 可能地，潜在地
+	// surplus ['sɜːpləs] n. 剩余；[贸易] 顺差；盈余；过剩 adj. 剩余的；过剩的
 	Close() error
 
 	// Begin starts and returns a new transaction.
@@ -218,6 +259,10 @@ type Stmt interface {
 	//
 	// As of Go 1.1, a Stmt will not be closed if it's in use
 	// by any queries.
+	//
+	// as of: 自……起:
+	// 1. As of now, next steps for the movement are unclear.
+	// 到目前为止，这场运动的下一步尚不明朗。
 	Close() error
 
 	// NumInput returns the number of placeholder parameters.
@@ -229,6 +274,8 @@ type Stmt interface {
 	// NumInput may also return -1, if the driver doesn't know
 	// its number of placeholders. In that case, the sql package
 	// will not sanity check Exec or Query argument counts.
+	//
+	// sanity ['sænəti] n.1.心智健全，精神正常 2.清醒；明智 3.通情达理
 	NumInput() int
 
 	// Exec executes a query that doesn't return rows, such
@@ -295,6 +342,8 @@ type NamedValueChecker interface {
 // any type to a driver Value.
 //
 // Deprecated: Drivers should implement NamedValueChecker.
+//
+// be aware of: 知道；意识到；察觉到；认识到
 type ColumnConverter interface {
 	// ColumnConverter returns a ValueConverter for the provided
 	// column index. If the type of a specific column isn't known

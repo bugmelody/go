@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 10:58:06 本文件以后不要看了,太复杂
 
 // Type conversions for Scan.
 
@@ -217,6 +219,8 @@ func driverArgs(ci driver.Conn, ds *driverStmt, args []interface{}) ([]driver.Na
 // convertAssign copies to dest the value in src, converting it if possible.
 // An error is returned if the copy would result in loss of information.
 // dest should be a pointer type.
+//
+// @see
 func convertAssign(dest, src interface{}) error {
 	// Common cases, without reflect.
 	switch s := src.(type) {
@@ -256,6 +260,7 @@ func convertAssign(dest, src interface{}) error {
 			*d = cloneBytes(s)
 			return nil
 		case *RawBytes:
+			// 参考 go doc sql.RawBytes
 			if d == nil {
 				return errNilPtr
 			}
@@ -289,6 +294,7 @@ func convertAssign(dest, src interface{}) error {
 			*d = nil
 			return nil
 		case *RawBytes:
+			// 参考 go doc sql.RawBytes
 			if d == nil {
 				return errNilPtr
 			}
@@ -427,6 +433,7 @@ func strconvErr(err error) error {
 	return err
 }
 
+// @see
 func cloneBytes(b []byte) []byte {
 	if b == nil {
 		return nil

@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-13 11:15:32
 
 // Package sql provides a generic interface around SQL (or SQL-like)
 // databases.
@@ -30,7 +32,9 @@ import (
 )
 
 var (
+	// driversMu保护下面的drivers(读多写少使用RWMutex)
 	driversMu sync.RWMutex
+	// 已经注册的driver, name=>driver.Driver
 	drivers   = make(map[string]driver.Driver)
 )
 
@@ -40,6 +44,8 @@ var nowFunc = time.Now
 // Register makes a database driver available by the provided name.
 // If Register is called twice with the same name or if driver is nil,
 // it panics.
+//
+// @see
 func Register(name string, driver driver.Driver) {
 	driversMu.Lock()
 	defer driversMu.Unlock()
@@ -47,11 +53,14 @@ func Register(name string, driver driver.Driver) {
 		panic("sql: Register driver is nil")
 	}
 	if _, dup := drivers[name]; dup {
+		// dup表示duplicate
 		panic("sql: Register called twice for driver " + name)
 	}
+	// 记录name和driver映射关系
 	drivers[name] = driver
 }
 
+// @see
 func unregisterAllDrivers() {
 	driversMu.Lock()
 	defer driversMu.Unlock()
@@ -60,9 +69,14 @@ func unregisterAllDrivers() {
 }
 
 // Drivers returns a sorted list of the names of the registered drivers.
+//
+// Drivers会返回当前已经注册的driver的names, 按照 sort.Strings 进行排序.
+// @see
 func Drivers() []string {
+	// 注意这里由于只需要读,因此使用的是RLock()
 	driversMu.RLock()
 	defer driversMu.RUnlock()
+	// 最后的返回值
 	var list []string
 	for name := range drivers {
 		list = append(list, name)
@@ -143,6 +157,8 @@ type TxOptions struct {
 // RawBytes is a byte slice that holds a reference to memory owned by
 // the database itself. After a Scan into a RawBytes, the slice is only
 // valid until the next call to Next, Scan, or Close.
+//
+// the database(指database包)
 type RawBytes []byte
 
 // NullString represents a string that may be null.
@@ -166,18 +182,23 @@ type NullString struct {
 // Scan implements the Scanner interface.
 func (ns *NullString) Scan(value interface{}) error {
 	if value == nil {
+		// 如果是 db NULL
 		ns.String, ns.Valid = "", false
 		return nil
 	}
+	// 现在,不是db NULL
 	ns.Valid = true
+	// 注意: &ns.String
 	return convertAssign(&ns.String, value)
 }
 
 // Value implements the driver Valuer interface.
 func (ns NullString) Value() (driver.Value, error) {
 	if !ns.Valid {
+		// 不合法,说明确实是 db null
 		return nil, nil
 	}
+	// 现在,合法,说明不是db null
 	return ns.String, nil
 }
 
@@ -244,6 +265,7 @@ type NullBool struct {
 // Scan implements the Scanner interface.
 func (n *NullBool) Scan(value interface{}) error {
 	if value == nil {
+		// false是bool类型的零值
 		n.Bool, n.Valid = false, false
 		return nil
 	}
@@ -254,8 +276,10 @@ func (n *NullBool) Scan(value interface{}) error {
 // Value implements the driver Valuer interface.
 func (n NullBool) Value() (driver.Value, error) {
 	if !n.Valid {
+		// 不合法,说明确实是 db null
 		return nil, nil
 	}
+	// 合法,说明不是db null
 	return n.Bool, nil
 }
 
@@ -639,6 +663,8 @@ func (db *DB) PingContext(ctx context.Context) error {
 
 // Ping verifies a connection to the database is still alive,
 // establishing a connection if necessary.
+//
+// @see
 func (db *DB) Ping() error {
 	return db.PingContext(context.Background())
 }
@@ -1150,6 +1176,8 @@ func (db *DB) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
 // returned statement.
 // The caller must call the statement's Close method
 // when the statement is no longer needed.
+//
+// @see
 func (db *DB) Prepare(query string) (*Stmt, error) {
 	return db.PrepareContext(context.Background(), query)
 }
@@ -1209,6 +1237,8 @@ func (db *DB) ExecContext(ctx context.Context, query string, args ...interface{}
 
 // Exec executes a query without returning any rows.
 // The args are for any placeholder parameters in the query.
+//
+// @see
 func (db *DB) Exec(query string, args ...interface{}) (Result, error) {
 	return db.ExecContext(context.Background(), query, args...)
 }
@@ -1274,6 +1304,8 @@ func (db *DB) QueryContext(ctx context.Context, query string, args ...interface{
 
 // Query executes a query that returns rows, typically a SELECT.
 // The args are for any placeholder parameters in the query.
+//
+// @see
 func (db *DB) Query(query string, args ...interface{}) (*Rows, error) {
 	return db.QueryContext(context.Background(), query, args...)
 }
@@ -1355,7 +1387,10 @@ func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn fu
 // If the query selects no rows, the *Row's Scan will return ErrNoRows.
 // Otherwise, the *Row's Scan scans the first selected row and discards
 // the rest.
+//
+// @see
 func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
+	// 注意: db.QueryContext返回的Rows和Row的关系
 	rows, err := db.QueryContext(ctx, query, args...)
 	return &Row{rows: rows, err: err}
 }
@@ -1366,6 +1401,8 @@ func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interfa
 // If the query selects no rows, the *Row's Scan will return ErrNoRows.
 // Otherwise, the *Row's Scan scans the first selected row and discards
 // the rest.
+//
+// @see
 func (db *DB) QueryRow(query string, args ...interface{}) *Row {
 	return db.QueryRowContext(context.Background(), query, args...)
 }
@@ -1397,6 +1434,12 @@ func (db *DB) BeginTx(ctx context.Context, opts *TxOptions) (*Tx, error) {
 
 // Begin starts a transaction. The default isolation level is dependent on
 // the driver.
+//
+// be dependent on: 依赖，依靠；取决于
+// isolation level: 隔离级, 见: http://baike.baidu.com/link?url=_lC8TVhsKmwh5u3gDvQc-GK53szurQ2mDjCK_ohP4hadxpYAp8Khr9YoerMI-6P0zlxvkHyTHLQUWs9UoEfxJq
+//
+// 注意: Begin和BeginTx的关系
+// @see
 func (db *DB) Begin() (*Tx, error) {
 	return db.BeginTx(context.Background(), nil)
 }
@@ -1636,6 +1679,11 @@ func (c *Conn) Close() error {
 // The statements prepared for a transaction by calling
 // the transaction's Prepare or Stmt methods are closed
 // by the call to Commit or Rollback.
+//
+// in progress: 正在进行；在发展
+//
+// 当Commit or Rollback的时候,会自动将此transaction使用期间Prepare,Stmt
+// 出来的的 prepared statements 进行关闭.
 type Tx struct {
 	db *DB
 
@@ -1838,6 +1886,9 @@ func (tx *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
 // be used once the transaction has been committed or rolled back.
 //
 // To use an existing prepared statement on this transaction, see Tx.Stmt.
+//
+// Prepare 返回的这个 *Stmt 只能在 tx 代表的 transaction 中使用,
+// 并且一旦 transaction 被 committed or rolled back, 则这个 *Stmt 不能再被使用
 func (tx *Tx) Prepare(query string) (*Stmt, error) {
 	return tx.PrepareContext(context.Background(), query)
 }
@@ -1936,6 +1987,8 @@ func (tx *Tx) StmtContext(ctx context.Context, stmt *Stmt) *Stmt {
 //
 // The returned statement operates within the transaction and will be closed
 // when the transaction has been committed or rolled back.
+//
+// -specific comb.form 表示“限定的”,“特有的”：species-specific
 func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
 	return tx.StmtContext(context.Background(), stmt)
 }
@@ -2305,6 +2358,9 @@ func (s *Stmt) QueryRowContext(ctx context.Context, args ...interface{}) *Row {
 //
 //  var name string
 //  err := nameByUseridStmt.QueryRow(id).Scan(&name)
+//
+// QueryRow 总是会返回一个 non-nil 的 *Row, 只有调用了 Scan(这也是调用QueryRow的目的,希望拿取数据)后 才能知道有没有问题.
+// 注意: QueryRow并不会limit,仍然需要在sql中limit
 func (s *Stmt) QueryRow(args ...interface{}) *Row {
 	return s.QueryRowContext(context.Background(), args...)
 }
@@ -2412,6 +2468,8 @@ func (rs *Rows) awaitDone(ctx, txctx context.Context) {
 // the two cases.
 //
 // Every call to Scan, even the first one, must be preceded by a call to Next.
+//
+// 针对这两种情况(循环完毕或出错),应该使用Rows.Err()方法进行区分.
 func (rs *Rows) Next() bool {
 	var doClose, ok bool
 	withLock(rs.closemu.RLocker(), func() {
@@ -2489,6 +2547,8 @@ func (rs *Rows) NextResultSet() bool {
 
 // Err returns the error, if any, that was encountered during iteration.
 // Err may be called after an explicit or implicit Close.
+//
+// Err可以在显式或隐式(Next,返回false,无数据或出错了)的Close之后被调用
 func (rs *Rows) Err() error {
 	rs.closemu.RLock()
 	defer rs.closemu.RUnlock()
@@ -2501,6 +2561,9 @@ func (rs *Rows) Err() error {
 // Columns returns the column names.
 // Columns returns an error if the rows are closed, or if the rows
 // are from QueryRow and there was a deferred error.
+//
+// 这个Row和Rows有什么关系?
+// 可以查看type Row struct的源码,其实Row结构体内部封装了一个Rows struct.
 func (rs *Rows) Columns() ([]string, error) {
 	rs.closemu.RLock()
 	defer rs.closemu.RUnlock()
@@ -2553,6 +2616,9 @@ func (ci *ColumnType) Name() string {
 // be math.MaxInt64 (any database limits will still apply).
 // If the column type is not variable length, such as an int, or if not supported
 // by the driver ok is false.
+//
+// unbounded [ʌn'baʊndɪd] adj. 无限的；不受控制的
+// variable length [计] 可变长度
 func (ci *ColumnType) Length() (length int64, ok bool) {
 	return ci.length, ci.hasLength
 }
@@ -2620,6 +2686,10 @@ func rowsColumnInfoSetup(rowsi driver.Rows) []*ColumnType {
 // at by dest. The number of values in dest must be the same as the
 // number of columns in Rows.
 //
+// 注意: 下文提到的source并非是指数据库,而是指driver从数据库接受到的driver.Value
+// 也就是说, database=>network=>每一列被映射为=>driver.Value=>最后被Scan到=>dest
+// 具体细节可以看看本函数源码.
+//
 // Scan converts columns read from the database into the following
 // common Go types and special types provided by the sql package:
 //
@@ -2647,11 +2717,17 @@ func rowsColumnInfoSetup(rowsi driver.Rows) []*ColumnType {
 // strings may lose information when stringifying. In general, scan
 // floating point columns into *float64.
 //
+// 255刚好被uint8容纳
+// uint8:也就是8bit,11111111,十进制是255,因此uint8最大容纳 255
+//
 // If a dest argument has type *[]byte, Scan saves in that argument a
 // copy of the corresponding data. The copy is owned by the caller and
 // can be modified and held indefinitely. The copy can be avoided by
 // using an argument of type *RawBytes instead; see the documentation
 // for RawBytes for restrictions on its use.
+//
+// 上文的The copy is owned by the caller(指Scan方法的调用者)
+// indefinitely [ɪn'defɪnɪtlɪ] adv. 不确定地，无限期地；模糊地，不明确地
 //
 // If an argument has type *interface{}, Scan copies the value
 // provided by the underlying driver without conversion. When scanning
@@ -2698,6 +2774,12 @@ var rowsCloseHook = func() func(*Rows, *error) { return nil }
 // and returns false and there are no further result sets,
 // the Rows are closed automatically and it will suffice to check the
 // result of Err. Close is idempotent and does not affect the result of Err.
+//
+// suffice [sə'faɪs] vt. 使满足；足够…用；合格 vi. 足够；有能力
+// 当 Next 返回 false(意味着没有更多行,或者出错了), Rows 会被自动 Close.
+// 注意到在 Rows.Err() 的文档中提到: Err may be called after an explicit or implicit Close.
+// 因此,这里说 Next 返回 false 后, 调用 Err 检查错误是没有问题的.
+// Close()还可以被多次调用,并且不会影响 Err() 的结果.
 func (rs *Rows) Close() error {
 	return rs.close(nil)
 }
@@ -2736,6 +2818,7 @@ func (rs *Rows) close(err error) error {
 type Row struct {
 	// One of these two will be non-nil:
 	err  error // deferred error for easy chaining
+	// 注意Row和Rows的关系
 	rows *Rows
 }
 
@@ -2744,6 +2827,8 @@ type Row struct {
 // If more than one row matches the query,
 // Scan uses the first row and discards the rest. If no row matches
 // the query, Scan returns ErrNoRows.
+//
+// 如果查询时返回了多行, Scan 会只用第一行并舍弃其余的行
 func (r *Row) Scan(dest ...interface{}) error {
 	if r.err != nil {
 		return r.err
@@ -2788,6 +2873,8 @@ func (r *Row) Scan(dest ...interface{}) error {
 }
 
 // A Result summarizes an executed SQL command.
+//
+// Result 是 interface, 具体是由下面的 driverResult 实现的
 type Result interface {
 	// LastInsertId returns the integer generated by the database
 	// in response to a command. Typically this will be from an
@@ -2801,6 +2888,8 @@ type Result interface {
 	// driver may support this.
 	RowsAffected() (int64, error)
 }
+
+// 下面的 sync.Locker 和 driver.Result 都是 interface
 
 type driverResult struct {
 	sync.Locker // the *driverConn

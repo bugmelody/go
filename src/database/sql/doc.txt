@@ -1,9 +1,12 @@
+// [[[5-over]]] 2017-6-13 11:15:32
 Goals of the sql and sql/driver packages:
 
 * Provide a generic database API for a variety of SQL or SQL-like
   databases.  There currently exist Go libraries for SQLite, MySQL,
   and Postgres, but all with a very different feel, and often
   a non-Go-like feel.
+  
+  generic(通用的)
 
 * Feel like Go.
 
@@ -11,6 +14,10 @@ Goals of the sql and sql/driver packages:
   SQL edge cases or db-specific extensions can be detected and
   conditionally used by the application.  It is a non-goal to care
   about every particular db's extension or quirk.
+  
+  什么是 Edge case ? An edge case is a problem or situation that
+  occurs only at an extreme (maximum or minimum) operating parameter.
+  也就是边界情况.
 
 * Separate out the basic implementation of a database driver
   (implementing the sql/driver interfaces) vs the implementation
@@ -27,6 +34,9 @@ Goals of the sql and sql/driver packages:
 
 * Be flexible with type conversions, but be paranoid about silent
   truncation or other loss of precision.
+  
+  paranoid ['pærənɔid] adj.1.像患妄想狂的2.类似偏执狂的，处于高度偏执状态的；极度害怕的；超出常情地害怕的 [亦作 paranoidal] n.患妄想狂的人[亦作paranoiac,paranoeac]
+  对 type conversions 处理非常灵活, 但是拒绝 静默的数据截断 或 精度丢失
 
 * Handle concurrency well.  Users shouldn't need to care about the
   database's per-connection thread safety issues (or lack thereof),
@@ -34,13 +44,23 @@ Goals of the sql and sql/driver packages:
   The 'db' package should deal with that bookkeeping as needed.  Given
   an *sql.DB, it should be possible to share that instance between
   multiple goroutines, without any extra synchronization.
+  
+  or lack thereof 或缺乏
+  or lack thereof 或者根本不知道
+  给定一个 *sql.DB, 可以被多个线程并发的使用而无需同步.
 
 * Push complexity, where necessary, down into the sql+driver packages,
   rather than exposing it to users. Said otherwise, the sql package
   should expose an ideal database that's not finnicky about how it's
   accessed, even if that's not true.
+  
+  ideal(adj. 理想的；完美的；想象的；不切实际的)
+  finnicky(adj. 吹毛求疵的；难以讨好的)
 
 * Provide optional interfaces in sql/driver for drivers to implement
   for special cases or fastpaths.  But the only party that knows about
   those is the sql package.  To user code, some stuff just might start
   working or start working slightly faster.
+  
+  在sql/driver中提供了部分可选的interface,如果drivers实现了这
+  些interface,可以解决特殊情况和fastpath
