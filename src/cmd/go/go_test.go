@@ -2447,7 +2447,7 @@ import "C"
 func main() { C.f() }`)
 	tg.setenv("GOPATH", tg.path("."))
 	tg.run("build", "-n", "-compiler", "gccgo", "cgoref")
-	tg.grepStderr(`gccgo.*\-L alibpath \-lalib`, `no Go-inline "#cgo LDFLAGS:" ("-L alibpath -lalib") passed to gccgo linking stage`)
+	tg.grepStderr(`gccgo.*\-L [^ ]*alibpath \-lalib`, `no Go-inline "#cgo LDFLAGS:" ("-L alibpath -lalib") passed to gccgo linking stage`)
 }
 
 func TestListTemplateContextFunction(t *testing.T) {
@@ -3157,6 +3157,20 @@ func TestGoGetUpdate(t *testing.T) {
 	// Again with -d -u.
 	rewind()
 	tg.run("get", "-d", "-u", "github.com/rsc/go-get-issue-9224-cmd")
+}
+
+// Issue #20512.
+func TestGoGetRace(t *testing.T) {
+	testenv.MustHaveExternalNetwork(t)
+	if !canRace {
+		t.Skip("skipping because race detector not supported")
+	}
+
+	tg := testgo(t)
+	defer tg.cleanup()
+	tg.makeTempdir()
+	tg.setenv("GOPATH", tg.path("."))
+	tg.run("get", "-race", "github.com/rsc/go-get-issue-9224-cmd")
 }
 
 func TestGoGetDomainRoot(t *testing.T) {
@@ -4073,6 +4087,7 @@ func TestCgoFlagContainsSpace(t *testing.T) {
 		import (
 			"os"
 			"os/exec"
+			"strings"
 		)
 
 		func main() {
@@ -4091,13 +4106,13 @@ func TestCgoFlagContainsSpace(t *testing.T) {
 
 			var success bool
 			for _, arg := range os.Args {
-				switch arg {
-				case "-Ic flags":
+				switch {
+				case strings.Contains(arg, "c flags"):
 					if success {
 						panic("duplicate CFLAGS")
 					}
 					success = true
-				case "-Lld flags":
+				case strings.Contains(arg, "ld flags"):
 					if success {
 						panic("duplicate LDFLAGS")
 					}

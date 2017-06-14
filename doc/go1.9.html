@@ -149,13 +149,10 @@ type T1 = T2
   better generated code, and optimizations in the core library.
 </p>
 
-<p>
+<p> <!-- CL 39203 -->
   TODO: There have been significant optimizations bringing more than 10% improvements
   to implementations in the
-  <a href="/pkg/foo/"><code>foo</code></a>,
-  <a href="/pkg/bar/"><code>bar</code></a>,
-  and
-  <a href="/pkg/quux/"><code>quux</code></a>
+  <a href="/pkg/encoding/gob"><code>encoding/gob</code></a>, and ...
   packages.
 </p>
 
@@ -239,18 +236,14 @@ type T1 = T2
 <dl id="archive/zip"><dt><a href="/pkg/archive/zip/">archive/zip</a></dt>
   <dd>
     <p><!-- CL 39570 -->
-      TODO: <a href="https://golang.org/cl/39570">https://golang.org/cl/39570</a>: set utf-8 flag
+      The
+      ZIP <a href="/pkg/archive/zip/#Writer"><code>Writer</code></a>
+      now sets the UTF-8 bit in
+      the <a href="/pkg/archive/zip/#FileHeader.Flags"><code>FileHeader.Flags</code></a>
+      when appropriate.
     </p>
 
 </dl><!-- archive/zip -->
-
-<dl id="crypto"><dt><a href="/pkg/crypto/">crypto</a></dt>
-  <dd>
-    <p><!-- CL 36876 -->
-      TODO: <a href="https://golang.org/cl/36876">https://golang.org/cl/36876</a>: add BLAKE2b and BLAKE2s hash constants
-    </p>
-
-</dl><!-- crypto -->
 
 <dl id="crypto/aes"><dt><a href="/pkg/crypto/aes/">crypto/aes</a></dt>
   <dd>
@@ -263,7 +256,11 @@ type T1 = T2
 <dl id="crypto/rand"><dt><a href="/pkg/crypto/rand/">crypto/rand</a></dt>
   <dd>
     <p><!-- CL 43852 -->
-      TODO: <a href="https://golang.org/cl/43852">https://golang.org/cl/43852</a>: use blocking getrandom call on Linux when supported
+      On Linux, Go now calls the <code>getrandom</code> system call
+      without the <code>GRND_NONBLOCK</code> flag; it will now block
+      until the kernel has sufficient randomness. On kernels predating
+      the <code>getrandom</code> system call, Go continues to read
+      from <code>/dev/urandom</code>.
     </p>
 
 </dl><!-- crypto/rand -->
@@ -271,11 +268,28 @@ type T1 = T2
 <dl id="crypto/x509"><dt><a href="/pkg/crypto/x509/">crypto/x509</a></dt>
   <dd>
     <p><!-- CL 36093 -->
-      TODO: <a href="https://golang.org/cl/36093">https://golang.org/cl/36093</a>: load certs from env vars + extra locations
+
+      On UNIX systems the environment
+      variables <code>SSL_CERT_FILE</code>
+      and <code>SSL_CERT_DIR</code> can now be used to override the
+      system default locations for the SSL certificate file and SSL
+      certificate files directory, respectively.
+    </p>
+
+    <p>The FreeBSD path <code>/usr/local/etc/ssl/cert.pem</code> is
+      now included in the certificate search path.
     </p>
 
     <p><!-- CL 36900 -->
-      TODO: <a href="https://golang.org/cl/36900">https://golang.org/cl/36900</a>: support excluded domains in name constraints.
+
+      The package now supports excluded domains in name constraints.
+      In addition to enforcing such constraints,
+      <a href="/pkg/crypto/x509/#CreateCertificate"><code>CreateCertificate</code></a>
+      will create certificates with excluded name constraints
+      if the provided template certificate has the new
+      field
+      <a href="/pkg/crypto/x509/#Certificate.ExcludedDNSDomains"><code>ExcludedDNSDomains</code></a>
+      populated.
     </p>
 
 </dl><!-- crypto/x509 -->
@@ -283,55 +297,67 @@ type T1 = T2
 <dl id="database/sql"><dt><a href="/pkg/database/sql/">database/sql</a></dt>
   <dd>
     <p><!-- CL 35476 -->
-      TODO: <a href="https://golang.org/cl/35476">https://golang.org/cl/35476</a>: proper prepared statement support in transactions
+      The package will now use a cached <a href="/pkg/database/sql/#Stmt"><code>Stmt</code></a> if
+      available in <a href="/pkg/database/sql/#Tx.Stmt"><code>Tx.Stmt</code></a>.
+      This prevents statements from being re-prepared each time
+      <a href="/pkg/database/sql/#Tx.Stmt"><code>Tx.Stmt</code></a> is called.
+    </p>
+
+    <p><!-- CL 38533 -->
+      The package now allows drivers to implement their own argument checkers by implementing
+      <a href="/pkg/database/sql/driver/#NamedValueChecker"><code>driver.NamedValueChecker</code></a>.
+      This also allows drivers to support <code>OUTPUT</code> and <code>INOUT</code> parameter types.
+      <a href="/pkg/database/sql/#Out"><code>Out</code></a> should be used to return output parameters
+      when supported by the driver.
     </p>
 
     <p><!-- CL 39031 -->
-      TODO: <a href="https://golang.org/cl/39031">https://golang.org/cl/39031</a>: support scanning into user defined string types
+      <a href="/pkg/database/sql/#Rows.Scan"><code>Rows.Scan</code></a> can now scan user-defined string types.
+      Previously the package supported scanning into numeric types like <code>type Int int64</code>. It now also supports
+      scanning into string types like <code>type String string</code>.
     </p>
 
     <p><!-- CL 40694 -->
-      TODO: <a href="https://golang.org/cl/40694">https://golang.org/cl/40694</a>: allow using a single connection from the database
+      The new <a href="/pkg/database/sql/#DB.Conn"><code>DB.Conn</code></a> method returns the new
+      <a href="/pkg/database/sql/#Conn"><code>Conn</code></a> type representing an
+      exclusive connection to the database from the connection pool. All queries run on
+      a <a href="/pkg/database/sql/#Conn"><code>Conn</code></a> will use the same underlying
+      connection until <a href="/pkg/database/sql/#Conn.Close"><code>Conn.Close</code></a> is called
+      to return the connection to the connection pool.
     </p>
 
 </dl><!-- database/sql -->
 
-<dl id="debug/dwarf"><dt><a href="/pkg/debug/dwarf/">debug/dwarf</a></dt>
-  <dd>
-    <p><!-- CL 44017 -->
-      TODO: <a href="https://golang.org/cl/44017">https://golang.org/cl/44017</a>: heuristically handle both UNIX and Windows paths
-    </p>
-
-</dl><!-- debug/dwarf -->
-
 <dl id="encoding/asn1"><dt><a href="/pkg/encoding/asn1/">encoding/asn1</a></dt>
   <dd>
     <p><!-- CL 38660 -->
-      TODO: <a href="https://golang.org/cl/38660">https://golang.org/cl/38660</a>: add NullBytes and NullRawValue for working with ASN.1 NULL
+	  The new
+	  <a href="/pkg/encoding/asn1/#NullBytes"><code>NullBytes</code></a>
+	  and
+	  <a href="/pkg/encoding/asn1/#NullRawValue"><code>NullRawValue</code></a>
+	  represent the <code>ASN.1 NULL</code> type.
     </p>
 
 </dl><!-- encoding/asn1 -->
 
 <dl id="encoding/base32"><dt><a href="/pkg/encoding/base32/">encoding/base32</a></dt>
   <dd>
-    <p><!-- CL 38634 -->
-      TODO: <a href="https://golang.org/cl/38634">https://golang.org/cl/38634</a>: add Encoding.WithPadding, StdPadding, NoPadding
+    <p><!-- CL 38634 --> 
+	  The new <a href="/pkg/encoding/base32/#Encoding.WithPadding">Encoding.WithPadding</a>
+	  method adds support for custom padding characters and disabling padding.
     </p>
 
 </dl><!-- encoding/base32 -->
 
-<dl id="encoding/gob"><dt><a href="/pkg/encoding/gob/">encoding/gob</a></dt>
-  <dd>
-    <p><!-- CL 39203 -->
-      TODO: <a href="https://golang.org/cl/39203">https://golang.org/cl/39203</a>: speedup decoding of maps by zeroing values
-    </p>
-
-</dl><!-- encoding/gob -->
-
 <dl id="fmt"><dt><a href="/pkg/fmt/">fmt</a></dt>
   <dd>
     <p><!-- CL 37051 -->
-      TODO: <a href="https://golang.org/cl/37051">https://golang.org/cl/37051</a>: support sharp flag for float and complex value printing
+      The sharp flag ('<code>#</code>') is now supported when printing
+      floating point and complex numbers. It will always print a
+      decimal point
+      for <code>%e</code>, <code>%E</code>, <code>%f</code>, <code>%F</code>, <code>%g</code>
+      and <code>%G</code>; it will not remove trailing zeros
+      for <code>%g</code> and <code>%G</code>.
     </p>
 
 </dl><!-- fmt -->
@@ -347,7 +373,9 @@ type T1 = T2
 <dl id="hash/fnv"><dt><a href="/pkg/hash/fnv/">hash/fnv</a></dt>
   <dd>
     <p><!-- CL 38356 -->
-      TODO: <a href="https://golang.org/cl/38356">https://golang.org/cl/38356</a>: add 128-bit FNV hash support
+      The package now includes 128-bit FNV-1 and FNV-1a hash support with
+      <a href="/pkg/hash/fnv/#New128"><code>New128</code></a> and
+      <a href="/pkg/hash/fnv/#New128a"><code>New128a</code></a>, respectively.
     </p>
 
 </dl><!-- hash/fnv -->
@@ -408,7 +436,13 @@ type T1 = T2
 <dl id="math/big"><dt><a href="/pkg/math/big/">math/big</a></dt>
   <dd>
     <p><!-- CL 36487 -->
-      TODO: <a href="https://golang.org/cl/36487">https://golang.org/cl/36487</a>: add IsInt64/IsUint64 predicates
+      The new
+      <a href="/pkg/math/big/#Int.IsInt64"><code>IsInt64</code></a>
+      and
+      <a href="/pkg/math/big/#Int.IsUint64"><code>IsUint64</code></a>
+      methods report whether an <code>Int</code>
+      may be represented as an <code>int64</code> or <code>uint64</code>
+      value.
     </p>
 
 </dl><!-- math/big -->
@@ -416,7 +450,9 @@ type T1 = T2
 <dl id="mime/multipart"><dt><a href="/pkg/mime/multipart/">mime/multipart</a></dt>
   <dd>
     <p><!-- CL 39223 -->
-      TODO: <a href="https://golang.org/cl/39223">https://golang.org/cl/39223</a>: add Size to FileHeader
+      The new
+      <a href="/pkg/mime/multipart/#FileHeader.Size"><code>FileHeader.Size</code></a>
+      field describes the size of a file in a multipart message.
     </p>
 
 </dl><!-- mime/multipart -->
@@ -441,6 +477,16 @@ type T1 = T2
 
     <p><!-- CL 40512 -->
       TODO: <a href="https://golang.org/cl/40512">https://golang.org/cl/40512</a>: validate network in Dial{,IP} and Listen{Packet,IP} for IP networks
+    </p>
+
+    <p><!-- CL 37913 -->
+      The new methods
+      <a href="/pkg/net/#TCPConn.SyscallConn"><code>TCPConn.SyscallConn</code></a>,
+      <a href="/pkg/net/#IPConn.SyscallConn"><code>IPConn.SyscallConn</code></a>,
+      <a href="/pkg/net/#UDPConn.SyscallConn"><code>UDPConn.SyscallConn</code></a>,
+      and
+      <a href="/pkg/net/#UnixConn.SyscallConn"><code>UnixConn.SyscallConn</code></a>
+      provide access to the connections' underlying file descriptors.
     </p>
 
 </dl><!-- net -->
@@ -616,15 +662,26 @@ type T1 = T2
 <dl id="syscall"><dt><a href="/pkg/syscall/">syscall</a></dt>
   <dd>
     <p><!-- CL 36697 -->
-      TODO: <a href="https://golang.org/cl/36697">https://golang.org/cl/36697</a>: only call setgroups if we need to
+      The new field
+      <a href="/pkg/syscall/#Credential.NoSetGroups"><code>Credential.NoSetGroups</code></a>
+      controls whether UNIX systems make a <code>setgroups</code> system call
+      to set supplementary groups when starting a new process.
     </p>
 
     <p><!-- CL 37439 -->
-      TODO: <a href="https://golang.org/cl/37439">https://golang.org/cl/37439</a>: use CLONE_VFORK and CLONE_VM
+      On 64-bit x86 Linux, process creation latency has been optimized with
+      use of <code>CLONE_VFORK</code> and <code>CLONE_VM</code>.
     </p>
 
     <p><!-- CL 37913 -->
-      TODO: <a href="https://golang.org/cl/37913">https://golang.org/cl/37913</a>: add Conn and RawConn interfaces
+      The new
+      <a href="/pkg/syscall/#Conn"><code>Conn</code></a>
+      interface describes some types in the
+      <a href="/pkg/net/"><code>net</code></a>
+      package that can provide access to their underlying file descriptor
+      using the new 
+      <a href="/pkg/syscall/#RawConn"><code>RawConn</code></a>
+      interface.
     </p>
 
 </dl><!-- syscall -->
@@ -652,7 +709,11 @@ type T1 = T2
 <dl id="time"><dt><a href="/pkg/time/">time</a></dt>
   <dd>
     <p><!-- CL 36615 -->
-      TODO: <a href="https://golang.org/cl/36615">https://golang.org/cl/36615</a>: add Duration.Truncate and Duration.Round
+      The new methods
+      <a href="/pkg/time/#Duration.Round"><code>Duration.Round</code></a>
+      and 
+      <a href="/pkg/time/#Duration.Truncate"><code>Duration.Truncate</code></a>
+      handle rounding durations away from and towards zero, respectively.
     </p>
 
     <p><!-- CL 35710 -->
