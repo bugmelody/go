@@ -300,11 +300,7 @@ func Remove(name string) error {
 	return &PathError{"remove", name, e}
 }
 
-// TempDir returns the default directory to use for temporary files.
-//
-// TempDir 返回系统默认的临时文件目录
-func TempDir() string {
-	// 获取"TMPDIR"这个环境变量的值
+func tempDir() string {
 	dir := Getenv("TMPDIR")
 	if dir == "" {
 		// 如果环境变量TMPDIR没有指定值
