@@ -1,8 +1,11 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 15:17:41
 
 // These examples demonstrate more intricate uses of the flag package.
+// intricate ['ɪntrɪkət] adj. 复杂的；错综的，缠结的
 package flag_test
 
 import (
@@ -14,6 +17,8 @@ import (
 )
 
 // Example 1: A single string flag called "species" with default value "gopher".
+// species ['spiːʃiːz; -ʃɪz; 'spiːs-] n. [生物] 物种；种类 adj. 物种上的
+// gopher ['gəʊfə] n. 囊地鼠（产自北美的一种地鼠）
 var species = flag.String("species", "gopher", "the species we are studying")
 
 // Example 2: Two flags sharing a variable, so we can have a shorthand.
@@ -22,6 +27,9 @@ var species = flag.String("species", "gopher", "the species we are studying")
 var gopherType string
 
 func init() {
+	// 上面提到了:
+	// The order of initialization is undefined, so make sure both use the
+	// same default value. They must be set up with an init function.
 	const (
 		defaultGopher = "pocket"
 		usage         = "the variety of gopher"
@@ -35,6 +43,8 @@ type interval []time.Duration
 
 // String is the method to format the flag's value, part of the flag.Value interface.
 // The String method's output will be used in diagnostics.
+//
+// 参考: $ go doc flag.Value
 func (i *interval) String() string {
 	return fmt.Sprint(*i)
 }
@@ -42,6 +52,8 @@ func (i *interval) String() string {
 // Set is the method to set the flag value, part of the flag.Value interface.
 // Set's argument is a string to be parsed to set the flag.
 // It's a comma-separated list, so we split it.
+//
+// 参考: $ go doc flag.Value
 func (i *interval) Set(value string) error {
 	// If we wanted to allow the flag to be set multiple times,
 	// accumulating values, we would delete this if statement.

@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-14 15:17:41
 
 package flag_test
 
@@ -25,6 +27,7 @@ func boolString(s string) string {
 
 func TestEverything(t *testing.T) {
 	ResetForTesting(nil)
+	// 注: (flag name string, flag default value, flag usage string)
 	Bool("test_bool", false, "bool value")
 	Int("test_int", 0, "int value")
 	Int64("test_int64", 0, "int64 value")
@@ -36,8 +39,10 @@ func TestEverything(t *testing.T) {
 
 	m := make(map[string]*Flag)
 	desired := "0"
+	// 匿名函数,闭包,使用了外层的 desired, m 两个变量
 	visitor := func(f *Flag) {
 		if len(f.Name) > 5 && f.Name[0:5] == "test_" {
+			// 如果 f.Name 是以 test_ 开头, 记录到 m 这个 map 中
 			m[f.Name] = f
 			ok := false
 			switch {
@@ -55,12 +60,17 @@ func TestEverything(t *testing.T) {
 	}
 	VisitAll(visitor)
 	if len(m) != 8 {
+		// 共8个测试
 		t.Error("VisitAll misses some flags")
 		for k, v := range m {
 			t.Log(k, *v)
 		}
 	}
+	// 注意: m 在之前已经被声明和初始化,这里是重新赋值,用一个新的空map设置给m
 	m = make(map[string]*Flag)
+	// 什么意思 ?
+	// 注意这里是 Visit,上面是 VisitAll
+	// 他们的不同之处在于函数内部, Visit 访问 f.actual, VisitAll 访问 f.formal
 	Visit(visitor)
 	if len(m) != 0 {
 		t.Errorf("Visit sees unset flags")
@@ -69,6 +79,8 @@ func TestEverything(t *testing.T) {
 		}
 	}
 	// Now set all flags
+	// Set 第一个参数是 flag_name, 第二个参数是字符串
+	// 然后 Set 会解析第二个参数,根据 flag.Value 接口中的 Set 方法将值设置到对应的 flag 上面
 	Set("test_bool", "true")
 	Set("test_int", "1")
 	Set("test_int64", "1")
@@ -88,6 +100,7 @@ func TestEverything(t *testing.T) {
 	// Now test they're visited in sort order.
 	var flagNames []string
 	Visit(func(f *Flag) { flagNames = append(flagNames, f.Name) })
+	// StringsAreSorted 测试 a slice of strings 是否是以升序排列的
 	if !sort.StringsAreSorted(flagNames) {
 		t.Errorf("flag names not sorted: %v", flagNames)
 	}
@@ -141,9 +154,11 @@ func TestUsage(t *testing.T) {
 	called := false
 	ResetForTesting(func() { called = true })
 	if CommandLine.Parse([]string{"-x"}) == nil {
+		// 因为并没有定义 -x 这个 flag, 因此期望出错
 		t.Error("parse did not fail for unknown flag")
 	}
 	if !called {
+		// 期望 flag.Usage 被调用
 		t.Error("did not call Usage for unknown flag")
 	}
 }
@@ -215,7 +230,9 @@ func testParse(f *FlagSet, t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
+	// 当 Usage 被调用的时候,会输出 "bad parse"
 	ResetForTesting(func() { t.Error("bad parse") })
+	// CommandLine 实际类型是 *FlagSet
 	testParse(CommandLine, t)
 }
 
@@ -224,6 +241,10 @@ func TestFlagSetParse(t *testing.T) {
 }
 
 // Declare a user-defined flag type.
+//
+// 用户自定义的flag类型
+// 实现了flag.Value interface
+// $ go doc flag.Value
 type flagVar []string
 
 func (f *flagVar) String() string {
@@ -255,7 +276,9 @@ func TestUserDefined(t *testing.T) {
 func TestUserDefinedForCommandLine(t *testing.T) {
 	const help = "HELP"
 	var result string
+	// ResetForTesting 内部会设置 flag.Usage
 	ResetForTesting(func() { result = help })
+	// 应该是调用上面设置的 Usage 函数
 	Usage()
 	if result != help {
 		t.Fatalf("got %q; expected %q", result, help)
@@ -263,6 +286,9 @@ func TestUserDefinedForCommandLine(t *testing.T) {
 }
 
 // Declare a user-defined boolean flag type.
+//
+// 实现了flag.Value interface
+// $ go doc flag.Value
 type boolFlagVar struct {
 	count int
 }
@@ -278,6 +304,10 @@ func (b *boolFlagVar) Set(value string) error {
 	return nil
 }
 
+// 根据 flag 包的文档
+// If a Value has an IsBoolFlag() bool method returning true,
+// the command-line parser makes -name equivalent to -name=true
+// rather than using the next command-line argument.
 func (b *boolFlagVar) IsBoolFlag() bool {
 	return b.count < 4
 }
@@ -288,6 +318,12 @@ func TestUserDefinedBool(t *testing.T) {
 	var b boolFlagVar
 	var err error
 	flags.Var(&b, "b", "usage")
+	// 根据文档:If a Value has an IsBoolFlag() bool method returning true,
+	// the command-line parser makes -name equivalent to -name=true
+	// rather than using the next command-line argument.
+
+	// 因此,只有前四个参数能增加count, "-b", "-b", "-b", "-b=true",
+	// 后面的 "-b=false", "-b", "barg", "-b" 四个参数没有作用
 	if err = flags.Parse([]string{"-b", "-b", "-b", "-b=true", "-b=false", "-b", "barg", "-b"}); err != nil {
 		if b.count < 4 {
 			t.Error(err)
@@ -308,6 +344,7 @@ func TestSetOutput(t *testing.T) {
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 	flags.Init("test", ContinueOnError)
+	// 未知的flag
 	flags.Parse([]string{"-unknown"})
 	if out := buf.String(); !strings.Contains(out, "-unknown") {
 		t.Logf("expected output mentioning unknown; got %q", out)
@@ -316,7 +353,10 @@ func TestSetOutput(t *testing.T) {
 
 // This tests that one can reset the flags. This still works but not well, and is
 // superseded by FlagSet.
+//
+// supersede [,suːpə'siːd; ,sjuː-] vt. 取代，代替；紧接着……而到来 vi. 推迟行动
 func TestChangingArgs(t *testing.T) {
+	// Usage被调用的时候,肯定是解析失败
 	ResetForTesting(func() { t.Fatal("bad parse") })
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
@@ -325,13 +365,20 @@ func TestChangingArgs(t *testing.T) {
 	if err := CommandLine.Parse(os.Args[1:]); err != nil {
 		t.Fatal(err)
 	}
+	// 此时 cmd == "subcmd"
 	cmd := Arg(0)
+	// 此时 os.Args = [ "subcmd", "-after", "args" ]
 	os.Args = Args()
 	after := Bool("after", false, "")
 	Parse()
+	// 此时 args = ["args" ]
 	args := Args()
 
 	if !*before || cmd != "subcmd" || !*after || len(args) != 1 || args[0] != "args" {
+		// 期望 *before = false
+		// 期望 cmd = subcmd
+		// 期望 *after = false
+		// 期望 args = [ "args" ]
 		t.Fatalf("expected true subcmd true [args] got %v %v %v %v", *before, cmd, *after, args)
 	}
 }
