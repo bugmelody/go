@@ -1,6 +1,8 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-16 14:03:42
 
 package template_test
 
@@ -16,6 +18,7 @@ import (
 // Make Title Text Look Good In Our Template's Output.
 func ExampleTemplate_func() {
 	// First we create a FuncMap with which to register the function.
+	// 注意template.FuncMap的初始化方式,其实也是跟map的初始化一样
 	funcMap := template.FuncMap{
 		// The name "title" is what the function will be called in the template text.
 		"title": strings.Title,

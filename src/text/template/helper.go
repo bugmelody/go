@@ -18,6 +18,8 @@ import (
 // and panics if the error is non-nil. It is intended for use in variable
 // initializations such as
 //	var t = template.Must(template.New("name").Parse("text"))
+//
+// 看看 Must 这类技巧.
 func Must(t *Template, err error) *Template {
 	if err != nil {
 		panic(err)
@@ -34,6 +36,8 @@ func Must(t *Template, err error) *Template {
 // the last one mentioned will be the one that results.
 // For instance, ParseFiles("a/foo", "b/foo") stores "b/foo" as the template
 // named "foo", while "a/foo" is unavailable.
+//
+// 上文的the resulting templates(指filenames解析后的templates)
 func ParseFiles(filenames ...string) (*Template, error) {
 	return parseFiles(nil, filenames...)
 }
@@ -99,6 +103,12 @@ func parseFiles(t *Template, filenames ...string) (*Template, error) {
 //
 // When parsing multiple files with the same name in different directories,
 // the last one mentioned will be the one that results.
+//
+// 通过跟踪源码发现
+// template.ParseGlob(pattern)
+// 	=> filepath.Glob(pattern)
+// 	=> sort.Strings(names)
+// 只不过 filepath.Glob 文档中并未说明是排序的
 func ParseGlob(pattern string) (*Template, error) {
 	return parseGlob(nil, pattern)
 }

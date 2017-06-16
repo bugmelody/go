@@ -1,12 +1,19 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-16 09:09:24
 
 /*
 Package template implements data-driven templates for generating textual output.
 
+// Go 模板嵌套最佳实践
+// http://colobu.com/2016/10/09/Go-embedded-template-best-practices/?utm_source=tuicool&utm_medium=referral
+
 To generate HTML output, see package html/template, which has the same interface
 as this package but automatically secures HTML output against certain attacks.
+
+Annotations (n. 注释；注解；释文)
 
 Templates are executed by applying them to a data structure. Annotations in the
 template refer to elements of the data structure (typically a field of a struct
@@ -23,10 +30,24 @@ Except for raw strings, actions may not span newlines, although comments can.
 Once parsed, a template may be executed safely in parallel, although if parallel
 executions share a Writer the output may be interleaved.
 
+[wool : n. 羊毛；毛线；绒线；毛织品；毛料衣物]
+[inventory ['ɪnv(ə)nt(ə)rɪ] n. 存货，存货清单；详细目录；财产清册 ]
+[sweater : n. 毛线衣，运动衫]
+[niladic method: 无参数的方法]
+[niladic function: 无参数的函数]
+[and the like - 等等；依次类推]
+[or the like - 等等,诸如此类]
+transitive ['trænsitiv; -zi-; 'trɑ:n-] adj. 1.【语言学】(动词)及物的 2.【数学】传递的；可递的 3.转变的；转移的；过渡的 n.【语法学】及物动词(＝transitive verb)
+intricate[adj. 复杂的；错综的，缠结的]
+verbatim [vɜː'beɪtɪm] adv. 逐字地 adj. 逐字的
+aid in vt. 帮助；帮助（在...给予帮助）
+
 Here is a trivial example that prints "17 items are made of wool".
 
 	type Inventory struct {
+		// 材料
 		Material string
+		// 数量
 		Count    uint
 	}
 	sweaters := Inventory{"wool", 17}
@@ -172,6 +193,9 @@ An argument is a simple value, denoted by one of the following.
 	  field names they do not need to start with an upper case letter.
 	  Keys can also be evaluated on variables, including chaining:
 	    $x.key1.key2
+	    
+	  要想使用struct的field,field name必须是导出的,也就是要大写开头
+	
 	- The name of a niladic method of the data, preceded by a period,
 	  such as
 		.Method
@@ -265,6 +289,8 @@ Examples
 Here are some example one-line templates demonstrating pipelines and variables.
 All produce the quoted word "output":
 
+printf是模板的预定义函数
+
 	{{"\"output\""}}
 		A string constant.
 	{{`"output"`}}
@@ -284,6 +310,10 @@ All produce the quoted word "output":
 		A with action using dot.
 	{{with $x := "output" | printf "%q"}}{{$x}}{{end}}
 		A with action that creates and uses a variable.
+		
+		$x := "output" | printf "%q" 联合起来创建了一个 $x = '"output"', 相当于 $x := ("output" | printf "%q")
+		然后通过 {{$x}} 输出 '"output"'
+		
 	{{with $x := "output"}}{{printf "%q" $x}}{{end}}
 		A with action that uses the variable in another action.
 	{{with $x := "output"}}{{$x | printf "%q"}}{{end}}
@@ -317,6 +347,9 @@ Predefined global functions are named as follows.
 		Returns the escaped HTML equivalent of the textual
 		representation of its arguments. This function is unavailable
 		in html/template, with a few exceptions.
+		
+		参考func HTMLEscape(w io.Writer, b []byte) {  的源码(本包)
+		
 	index
 		Returns the result of indexing its first argument by the
 		following arguments. Thus "index x 1 2 3" is, in Go syntax,
@@ -324,6 +357,9 @@ Predefined global functions are named as follows.
 	js
 		Returns the escaped JavaScript equivalent of the textual
 		representation of its arguments.
+		
+		参考 func JSEscaper(args ...interface{}) string { 的源码(本包)
+		
 	len
 		Returns the integer length of its argument.
 	not
@@ -344,9 +380,14 @@ Predefined global functions are named as follows.
 		its arguments in a form suitable for embedding in a URL query.
 		This function is unavailable in html/template, with a few
 		exceptions.
+		
+		参考: func URLQueryEscaper(args ...interface{}) string { (本包)
+		实际是调用的 url.QueryEscape,去参考 go goc url.QueryEscape
 
 The boolean functions take any zero value to be false and a non-zero
 value to be true.
+
+上文中:The boolean functions(指 and, not, or)
 
 There is also a set of binary comparison operators defined as
 functions:
@@ -391,6 +432,9 @@ name; such associations are transitive and form a name space of templates.
 A template may use a template invocation to instantiate another associated
 template; see the explanation of the "template" action above. The name must be
 that of a template associated with the template that contains the invocation.
+
+name 模板必须与当前模板(包含 '{{template xxx}}' 调用的模板)进行了关联.
+也就是,name模板必须已经被关联到当前模板.
 
 Nested template definitions
 

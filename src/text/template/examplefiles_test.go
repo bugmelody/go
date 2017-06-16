@@ -1,6 +1,8 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-16 13:18:05 ★★★★★
 
 package template_test
 
@@ -15,7 +17,9 @@ import (
 
 // templateFile defines the contents of a template to be stored in a file, for testing.
 type templateFile struct {
+	// 文件名
 	name     string
+	// 文件内容
 	contents string
 }
 
@@ -45,6 +49,7 @@ func ExampleTemplate_glob() {
 	// exist in some location known to the program.
 	dir := createTestDir([]templateFile{
 		// T0.tmpl is a plain template file that just invokes T1.
+		// 文件名 => 文件内容
 		{"T0.tmpl", `T0 invokes T1: ({{template "T1"}})`},
 		// T1.tmpl defines a template, T1 that invokes T2.
 		{"T1.tmpl", `{{define "T1"}}T1 invokes T2: ({{template "T2"}}){{end}}`},
@@ -60,6 +65,8 @@ func ExampleTemplate_glob() {
 	// Here starts the example proper.
 	// T0.tmpl is the first name matched, so it becomes the starting template,
 	// the value returned by ParseGlob.
+	// 上面这句话是什么意思 ????? template.ParseGlob 返回值会将目录中的文件按照文件名排序吗???
+	// 通过跟踪源码发现, template.ParseGlob(pattern) => filepath.Glob(pattern) => sort.Strings(names), 只不过 filepath.Glob 文档中并未说明是排序的
 	tmpl := template.Must(template.ParseGlob(pattern))
 
 	err := tmpl.Execute(os.Stdout, nil)
@@ -93,15 +100,20 @@ func ExampleTemplate_helpers() {
 	// Load the helpers.
 	templates := template.Must(template.ParseGlob(pattern))
 	// Add one driver template to the bunch; we do this with an explicit template definition.
+	// bunch [bʌn(t)ʃ] n. 群；串；突出物 vi. 隆起；打褶；形成一串 vt. 使成一串；使打褶
+	// driver1 被关联到了 templates.
 	_, err := templates.Parse("{{define `driver1`}}Driver 1 calls T1: ({{template `T1`}})\n{{end}}")
 	if err != nil {
 		log.Fatal("parsing driver1: ", err)
 	}
 	// Add another driver template.
+	// driver2 被关联到了 templates.
 	_, err = templates.Parse("{{define `driver2`}}Driver 2 calls T2: ({{template `T2`}})\n{{end}}")
 	if err != nil {
 		log.Fatal("parsing driver2: ", err)
 	}
+	// 现在, templates 关联了 driver1, driver2; 反过来说, driver1, driver2 被关联到了 templates.
+
 	// We load all the templates before execution. This package does not require
 	// that behavior but html/template's escaping does, so it's a good habit.
 	err = templates.ExecuteTemplate(os.Stdout, "driver1", nil)
@@ -129,6 +141,7 @@ func ExampleTemplate_share() {
 		// T1.tmpl defines a template, T1 that invokes T2. Note T2 is not defined
 		{"T1.tmpl", `{{define "T1"}}T1 invokes T2: ({{template "T2"}}){{end}}`},
 	})
+	// 注意,此时T2还未定义
 	// Clean up after the test; another quirk of running as an example.
 	defer os.RemoveAll(dir)
 
@@ -143,6 +156,8 @@ func ExampleTemplate_share() {
 	// the drivers, then add a definition of T2 to the template name space.
 
 	// 1. Clone the helper set to create a new name space from which to run them.
+	// 上文: helper set(指 drivers)
+	// a new name space(指下面的first变量)
 	first, err := drivers.Clone()
 	if err != nil {
 		log.Fatal("cloning helpers: ", err)
@@ -164,9 +179,11 @@ func ExampleTemplate_share() {
 	if err != nil {
 		log.Fatal("parsing T2: ", err)
 	}
+	// first 和 second 是两个不同的 name space(两次不同的drivers.Clone()调用返回的结果).
 
 	// Execute the templates in the reverse order to verify the
 	// first is unaffected by the second.
+	// 由于 first 和 second 是两个不同的 name space. 因此相互之间不会互相影响.
 	err = second.ExecuteTemplate(os.Stdout, "T0.tmpl", "second")
 	if err != nil {
 		log.Fatalf("second execution: %s", err)

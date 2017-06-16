@@ -493,8 +493,13 @@ var (
 )
 
 // HTMLEscape writes to w the escaped HTML equivalent of the plain text data b.
+//
+// b: 需要 escape 的数据
+// w: 要写入的目标
 func HTMLEscape(w io.Writer, b []byte) {
+	// last 代表上一次处理完转义之后的位置
 	last := 0
+	// 对于 []byte 来说, range 是循环每一个 byte
 	for i, c := range b {
 		var html []byte
 		switch c {
@@ -513,8 +518,10 @@ func HTMLEscape(w io.Writer, b []byte) {
 		default:
 			continue
 		}
+		// [标记A]
 		w.Write(b[last:i])
 		w.Write(html)
+		// last 实际代表上次处理完后,下次 [标记A] 应该从何处读取
 		last = i + 1
 	}
 	w.Write(b[last:])
@@ -526,6 +533,7 @@ func HTMLEscapeString(s string) string {
 	if !strings.ContainsAny(s, "'\"&<>\000") {
 		return s
 	}
+	// 现在, s 中包含需要转义的字符
 	var b bytes.Buffer
 	HTMLEscape(&b, []byte(s))
 	return b.String()
@@ -533,6 +541,9 @@ func HTMLEscapeString(s string) string {
 
 // HTMLEscaper returns the escaped HTML equivalent of the textual
 // representation of its arguments.
+//
+// 注意这个函数命名 'HTMLEscaper', 代表一个 HTMLEscape 的执行者
+// 这个命名习惯与 strings.Replacer 类似
 func HTMLEscaper(args ...interface{}) string {
 	return HTMLEscapeString(evalArgs(args))
 }
@@ -556,6 +567,7 @@ func JSEscape(w io.Writer, b []byte) {
 	for i := 0; i < len(b); i++ {
 		c := b[i]
 
+		// 注意: jsIsSpecial 内部有 utf8.RuneSelf <= r 的判断, 看看 jsIsSpecial 的源码
 		if !jsIsSpecial(rune(c)) {
 			// fast path: nothing to do
 			continue
@@ -600,6 +612,7 @@ func JSEscape(w io.Writer, b []byte) {
 // JSEscapeString returns the escaped JavaScript equivalent of the plain text data s.
 func JSEscapeString(s string) string {
 	// Avoid allocation if we can.
+	// 第一个满足 jsIsSpecial 的位置, <0 表示没有找到这样的位置
 	if strings.IndexFunc(s, jsIsSpecial) < 0 {
 		return s
 	}
@@ -641,9 +654,11 @@ func evalArgs(args []interface{}) string {
 		s, ok = args[0].(string)
 	}
 	if !ok {
+		// 只要不是 len(args) == 1 并且 args[0] 类型为 string, 就会执行本分支
 		for i, arg := range args {
 			a, ok := printableValue(reflect.ValueOf(arg))
 			if ok {
+				// 说明a是 printableValue,修改 args
 				args[i] = a
 			} // else let fmt do its thing
 		}
