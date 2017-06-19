@@ -25,6 +25,9 @@ import (
 // in the value pointed to by v. If v is nil or not a pointer,
 // Unmarshal returns an InvalidUnmarshalError.
 //
+// data是要decode的json字符串.
+// v是要decode的目标,v必须是一个非空指针.
+//
 // Unmarshal uses the inverse of the encodings that
 // Marshal uses, allocating maps, slices, and pointers as necessary,
 // with the following additional rules:
@@ -93,6 +96,9 @@ import (
 // Instead, they are replaced by the Unicode replacement
 // character U+FFFD.
 //
+//
+// 关于UTF-16 surrogate pairs:
+// http://baike.baidu.com/link?url=x4_rG406HPyZ6XX8vljP5fS9NSfdppiHYgIHTC6A_2YpHxlkq6thvldEBt4O_4yuDYPWokMMKochMvgPm4bFxiNO18CAdPOCMrGNU5SrXt3
 func Unmarshal(data []byte, v interface{}) error {
 	// Check for well-formedness.
 	// Avoids filling out half a data structure

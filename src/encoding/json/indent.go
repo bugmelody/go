@@ -8,6 +8,8 @@ import "bytes"
 
 // Compact appends to dst the JSON-encoded src with
 // insignificant space characters elided.
+//
+// src是一个json字符串,Compact会将src进行压缩(去掉无用的空格)后写入dst
 func Compact(dst *bytes.Buffer, src []byte) error {
 	return compact(dst, src, false)
 }

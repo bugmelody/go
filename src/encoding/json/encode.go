@@ -1,6 +1,8 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[2-over]]] 2017-6-16 14:16:03 本包只看导出,千万不要看细节
 
 // Package json implements encoding and decoding of JSON as defined in
 // RFC 4627. The mapping between JSON and Go values is described
@@ -45,6 +47,8 @@ import (
 //
 // Floating point, integer, and Number values encode as JSON numbers.
 //
+// js中只存在Number类型,不区分整数和浮点数.
+//
 // String values encode as JSON strings coerced to valid UTF-8,
 // replacing invalid bytes with the Unicode replacement rune.
 // The angle brackets "<" and ">" are escaped to "\u003c" and "\u003e"
@@ -62,6 +66,8 @@ import (
 // field name as the object key, unless the field is omitted for one of the
 // reasons given below.
 //
+// 上文中的object指JSON object.
+//
 // The encoding of each struct field can be customized by the format string
 // stored under the "json" key in the struct field's tag.
 // The format string gives the name of the field, possibly followed by a
@@ -75,6 +81,8 @@ import (
 //
 // As a special case, if the field tag is "-", the field is always omitted.
 // Note that a field with name "-" can still be generated using the tag "-,".
+//
+// 对于上面这句话的理解: 如果定义了 Field int `json:"-,"` ,则json中对应的key是'-'
 //
 // Examples of struct field tags and their meanings:
 //
@@ -108,6 +116,8 @@ import (
 // only Unicode letters, digits, and ASCII punctuation except quotation
 // marks, backslash, and comma.
 //
+// 上文中:The key name是指什么???
+//
 // Anonymous struct fields are usually marshaled as if their inner exported fields
 // were fields in the outer struct, subject to the usual Go visibility rules amended
 // as described in the next paragraph.
@@ -122,6 +132,9 @@ import (
 // nested (and would therefore be the nesting level selected by the
 // usual Go rules), the following extra rules apply:
 //
+// 上文中:and that level is the least nested(最小的嵌套等级)
+// 上文中:(and would therefore be the nesting level selected by the usual Go rules)(Go的默认规则是最小嵌套等级优先)
+//
 // 1) Of those fields, if any are JSON-tagged, only tagged fields are considered,
 // even if there are multiple untagged fields that would otherwise conflict.
 //
@@ -134,6 +147,10 @@ import (
 // an anonymous struct field in both current and earlier versions, give the field
 // a JSON tag of "-".
 //
+// 在go1.1之前,anonymous struct fields会被忽略.
+// 在go1.1之后,anonymous struct fields不会被忽略.
+// 如果想在所有版本中都忽略anonymous struct fields, give the field a JSON tag of "-".
+//
 // Map values encode as JSON objects. The map's key type must either be a
 // string, an integer type, or implement encoding.TextMarshaler. The map keys
 // are sorted and used as JSON object keys by applying the following rules,
@@ -141,6 +158,7 @@ import (
 //   - string keys are used directly
 //   - encoding.TextMarshalers are marshaled
 //   - integer keys are converted to strings
+//   - 注意上面三条都是针对map keys
 //
 // Pointer values encode as the value pointed to.
 // A nil pointer encodes as the null JSON value.
