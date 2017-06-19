@@ -120,7 +120,7 @@ func ExampleUnmarshal() {
 	// 注: Name字段最后有变化,Phone字段最后没有变化
 	v := Result{Name: "none", Phone: "none"}
 
-	// 注: Note that the XML <Company> element is ignored
+	// 注: Note that the XML <Company> element is ignored; 由于声明的结构体Result中没有Company的对应字段
 	data := `
 		<Person>
 			<FullName>Grace R. Emlin</FullName>

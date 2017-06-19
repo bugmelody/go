@@ -70,6 +70,16 @@ const (
 // parent elements a and b. Fields that appear next to each other that name
 // the same parent will be enclosed in one XML element.
 //
+//
+// 注意这句话:Fields that appear next to each other that name the same parent will be enclosed in one XML element. 
+// 意思是,如果结构体字段中,通过"a>b>c"表明同一个父元素的,并且是挨着的字段,才会被enclosed in one XML element. 
+// 否则,通过"a>b>c"表明同一个父元素的,但不是挨着的字段,不会被enclosed in one XML element.
+// 本包的测试中搜索:
+// Value: &NestedOrder{Field1: "C", Field2: "B", Field3: "A"}, 
+// Value: &NilTest{A: "A", B: nil, C: "C"}, 
+// Value: &MixedNested{A: "A", B: "B", C: "C", D: "D"},
+// 可以看到这点.
+//
 // See MarshalIndent for an example.
 //
 // Marshal will return an error if asked to marshal a channel, function, or map.

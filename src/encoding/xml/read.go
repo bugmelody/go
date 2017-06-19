@@ -31,7 +31,7 @@ import (
 // comparison to match XML element names to tag values and struct
 // field names.
 //
-// Unmarshal的时候,xml标签和tag值(或struct字段名)的匹配是大小写敏感的.
+// Unmarshal的时候,xml标签和tag值(或struct字段名)的匹配是大小写敏感的,这与json包不同.
 //
 // Unmarshal maps an XML element to a struct using the following rules.
 // In the rules, the tag of a field refers to the value associated with the
@@ -45,6 +45,7 @@ import (
 //
 //   * 翻译:如果struct有一个字段类型是[]byte或string,并且tag是",innerxml":
 //      Unmarshal会将xml元素中的raw XML写入此字段.然后会继续下面的rules.
+//      注意: 会继续下面的rules.
 //
 //   * If the struct has a field named XMLName of type Name,
 //      Unmarshal records the element name in that field.
@@ -67,7 +68,7 @@ import (
 //   * 翻译:xml元素有一个属性
 //       如果xml属性名匹配struct字段名,并且此struct字段的tag是",attr",
 //       或者,tag中显示指定了name,"name,attr",并且xml属性名匹配name,
-//       Unmarshal会记录xml元素的属性到哪个字段.
+//       Unmarshal会记录xml元素的属性到那个字段.
 //
 //   * If the XML element has an attribute not handled by the previous
 //      rule and the struct has a field with an associated tag containing
@@ -153,6 +154,8 @@ import (
 // floating-point field by setting the field to the result of
 // interpreting the string value in decimal. There is no check for
 // overflow.
+//
+// 上面的in decimal是指十进制.
 //
 // Unmarshal maps an XML element to a Name by recording the element
 // name.

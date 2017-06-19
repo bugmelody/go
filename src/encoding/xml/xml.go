@@ -71,6 +71,8 @@ func (e StartElement) Copy() StartElement {
 }
 
 // End returns the corresponding XML end element.
+//
+// 根据StartElement构造出EndElement.
 func (e StartElement) End() EndElement {
 	return EndElement{e.Name}
 }
@@ -123,6 +125,8 @@ type Directive []byte
 func (d Directive) Copy() Directive { return Directive(makeCopy(d)) }
 
 // CopyToken returns a copy of a Token.
+//
+// @see
 func CopyToken(t Token) Token {
 	switch v := t.(type) {
 	case CharData:
