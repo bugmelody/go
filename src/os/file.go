@@ -54,6 +54,7 @@ import (
 // Name returns the name of the file as presented to Open.
 //
 // Name 返回的就是 os.Open 中传入的
+// 返回值是带路径的文件名,可直接用作os.Remove的参数
 func (f *File) Name() string { return f.name }
 
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,

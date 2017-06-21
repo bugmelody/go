@@ -18,6 +18,8 @@ import (
 // when calling the Wait method.
 //
 // A Cond must not be copied after first use.
+//
+// rendezvous point: 同步点,汇聚点
 type Cond struct {
 	noCopy noCopy
 
@@ -49,6 +51,7 @@ func NewCond(l Locker) *Cond {
 //    ... make use of condition ...
 //    c.L.Unlock()
 //
+// atomically: 原子地
 func (c *Cond) Wait() {
 	c.checker.check()
 	t := runtime_notifyListAdd(&c.notify)

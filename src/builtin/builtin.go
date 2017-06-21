@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-19 18:40:04
 
 /*
 	Package builtin provides documentation for Go's predeclared identifiers.
@@ -68,10 +70,20 @@ type complex128 complex128
 // string is the set of all strings of 8-bit bytes, conventionally but not
 // necessarily representing UTF-8-encoded text. A string may be empty, but
 // not nil. Values of string type are immutable.
+//
+// 上文的string指string内置类型
+// strings泛指字符串
+// empty指空字符串""
+//
+// string通常是 UTF-8-encoded text, 但也可以是其他编码.
+// string可以为空,但不会是nil.
+// string 是不可修改的.
 type string string
 
 // int is a signed integer type that is at least 32 bits in size. It is a
 // distinct type, however, and not an alias for, say, int32.
+//
+// int 至少 32 bits,是一个单独的类型,并且不是 int32 的别名.
 type int int
 
 // uint is an unsigned integer type that is at least 32 bits in size. It is a
@@ -80,6 +92,8 @@ type uint uint
 
 // uintptr is an integer type that is large enough to hold the bit pattern of
 // any pointer.
+//
+// 存储指针
 type uintptr uintptr
 
 // byte is an alias for uint8 and is equivalent to uint8 in all ways. It is
@@ -94,6 +108,9 @@ type rune = int32
 // iota is a predeclared identifier representing the untyped integer ordinal
 // number of the current const specification in a (usually parenthesized)
 // const declaration. It is zero-indexed.
+//
+// ordinal: adj. 顺序的，依次的
+// ordinal number: [数] 序数；序列号
 const iota = 0 // Untyped int.
 
 // nil is a predeclared identifier representing the zero value for a
@@ -103,6 +120,8 @@ var nil Type // Type must be a pointer, channel, func, interface, map, or slice 
 // Type is here for the purposes of documentation only. It is a stand-in
 // for any Go type, but represents the same type for any given function
 // invocation.
+//
+// stand-in ['stændin] n. 替身
 type Type int
 
 // Type1 is here for the purposes of documentation only. It is a stand-in
@@ -131,6 +150,13 @@ type ComplexType complex64
 //	slice = append(slice, anotherSlice...)
 // As a special case, it is legal to append a string to a byte slice, like this:
 //	slice = append([]byte("hello "), "world"...)
+//
+// 内置的append函数追加元素到slice的结尾处.
+// 如果slice的cap足够,目标(slice)会被resliced以容纳新元素(此时cap不变,len会增加).
+// 如果slice的cap不够,a new underlying array will be allocated.
+// Append returns the updated slice(返回的slice可能指向一块新内存)
+//
+// 注意这里的名词:resliced
 func append(slice []Type, elems ...Type) []Type
 
 // The copy built-in function copies elements from a source slice into a
@@ -143,6 +169,8 @@ func copy(dst, src []Type) int
 // The delete built-in function deletes the element with the specified key
 // (m[key]) from the map. If m is nil or there is no such element, delete
 // is a no-op.
+//
+// delete 可以作用在 nil map 上
 func delete(m map[Type]Type1, key Type)
 
 // The len built-in function returns the length of v, according to its type:
@@ -161,6 +189,10 @@ func len(v Type) int
 //	if v is nil, cap(v) is zero.
 //	Channel: the channel buffer capacity, in units of elements;
 //	if v is nil, cap(v) is zero.
+//
+// 根据 cap 和 append 的文档, 可以看出:
+// reslice 是指在 cap 不变的情况下, slice 类型的 len 增加
+// 对应的另一种情况是由于cap不够而重新分配了一个slice
 func cap(v Type) int
 
 // The make built-in function allocates and initializes an object of type
@@ -210,6 +242,26 @@ func imag(c ComplexType) FloatType
 // blocking, returning the zero value for the channel element. The form
 //	x, ok := <-c
 // will also set ok to false for a closed channel.
+//
+//
+// 上面有句话需要注意:
+// close应该只能被sender调用
+// close的效果: 在最后发送的值被接受后,关闭channel.
+// 关闭channel后的效果: 从c中能立刻收到值并且不阻塞,收到的值是channel元素的零值
+// 可以通过 x, ok := <-c 中的 ok 变量判断是否channel已经关闭
+// 注意: close调用时,channel并不会立刻关闭,而是等待直到 the last sent value is received.
+//
+// ========================以下是spec中关于close的描述
+// Close
+// For a channel c, the built-in function close(c) records that no more values will be
+// sent on the channel. It is an error if c is a receive-only channel. Sending to or
+// closing a closed channel causes a run-time panic. Closing the nil channel also causes
+// a run-time panic. After calling close, and after any previously sent values have been
+// received, receive operations will return the zero value for the channel's type without
+// blocking. The multi-valued receive operation returns a received value along with an
+// indication of whether the channel is closed.
+//
+// 可见: close 只是标记一个状态,标记此状态表明了不能再send东西到c中.
 func close(c chan<- Type)
 
 // The panic built-in function stops normal execution of the current
@@ -223,6 +275,8 @@ func close(c chan<- Type)
 // including the value of the argument to panic. This termination sequence
 // is called panicking and can be controlled by the built-in function
 // recover.
+//
+// 注意这里的 panicking 这个名词.
 func panic(v interface{})
 
 // The recover built-in function allows a program to manage behavior of a
@@ -234,6 +288,10 @@ func panic(v interface{})
 // panicking, or if the argument supplied to panic was nil, recover returns
 // nil. Thus the return value from recover reports whether the goroutine is
 // panicking.
+//
+// 上文中:but not any function called by it [这个it是指deferred function]
+// 也就是说,recover只能用在deferred function中,即使是deferred function中调用的函数调用了recover也不行.
+// In this case[指recover is called outside the deferred function]
 func recover() interface{}
 
 // The print built-in function formats its arguments in an

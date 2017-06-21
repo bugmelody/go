@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-20 13:26:20 本文件暂时只看导出的吧
 
 // Pipe adapter to connect code expecting an io.Reader
 // with code expecting an io.Writer.
@@ -188,6 +190,12 @@ func (w *PipeWriter) CloseWithError(err error) error {
 // It is safe to call Read and Write in parallel with each other or with Close.
 // Parallel calls to Read and parallel calls to Write are also safe:
 // the individual calls will be gated sequentially.
+//
+// 参考:
+// https://garbagecollected.org/2015/05/30/io-with-go-io-pipe/
+// http://studygolang.com/articles/2271
+// http://www.jianshu.com/p/aa207155ca7d
+// 它的实际应用场景是什么呢???????
 func Pipe() (*PipeReader, *PipeWriter) {
 	p := new(pipe)
 	p.rwait.L = &p.l
