@@ -1,6 +1,8 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-22 10:07:21
 
 // MakeFunc implementation.
 
@@ -26,8 +28,15 @@ type makeFuncImpl struct {
 // that wraps the function fn. When called, that new function
 // does the following:
 //
+// 上文中:
+// of the given Type: 指typ参数,typ应该是一个reflect.Func,否则会panic
+// wraps the function fn: 指fn参数
+// that new function: 指MakeFunc返回的Value
+//
 //	- converts its arguments to a slice of Values.
+//	- 注意:这里的args来自上一步
 //	- runs results := fn(args).
+//	- returns: 指调用 <MakeFunc返回的Value> 会返回
 //	- returns the results as a slice of Values, one per formal result.
 //
 // The implementation fn can assume that the argument Value slice
@@ -36,6 +45,11 @@ type makeFuncImpl struct {
 // a slice representing the variadic arguments, as in the
 // body of a variadic function. The result Value slice returned by fn
 // must have the number and type of results given by typ.
+//
+//	- 上文中:
+//	- assume that the argument Value slice(指args)
+//	- has the number and type of arguments given by typ(fn的参数和type的参数一样)
+//	- the final Value is itself a slice representing the variadic arguments(函数typ的最后一个参数是变参)
 //
 // The Value.Call method allows the caller to invoke a typed function
 // in terms of Values; in contrast, MakeFunc allows the caller to implement

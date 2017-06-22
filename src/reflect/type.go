@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-21 15:44:01
 
 // Package reflect implements run-time reflection, allowing a program to
 // manipulate objects with arbitrary types. The typical use is to take a value
@@ -13,6 +15,8 @@
 //
 // See "The Laws of Reflection" for an introduction to reflection in Go:
 // https://golang.org/doc/articles/laws_of_reflection.html
+//
+// 根据上面的描述,一个值分为两部分, dynamic type information 和 run-time data
 package reflect
 
 import (
@@ -137,6 +141,8 @@ type Type interface {
 	//	t.IsVariadic() == true
 	//
 	// IsVariadic panics if the type's Kind is not Func.
+	//
+	// for concreteness 举个具体例子
 	IsVariadic() bool
 
 	// Elem returns a type's element type.
@@ -152,6 +158,11 @@ type Type interface {
 	// to the index sequence. It is equivalent to calling Field
 	// successively for each index i.
 	// It panics if the type's Kind is not Struct.
+	//
+	// 这个方法使得访问结构的内嵌字段成为可能。
+	// 将访问各个层次的字段的索引排列起来，就形成了一个[]int，参数index不可越界，否则panic
+	// 比如 s.FieldByIndex([]int{1,2,3})
+	// 相当于 s.Field(1).Field(2).Field(3)
 	FieldByIndex(index []int) StructField
 
 	// FieldByName returns the struct field with the given name
@@ -170,6 +181,12 @@ type Type interface {
 	// and FieldByNameFunc returns no match.
 	// This behavior mirrors Go's handling of name lookup in
 	// structs containing anonymous fields.
+	//
+	// breadth first: 广度优先
+	//
+	// 比如: match func(string) bool 函数, 参数是 field name.
+	// 在实现 match 的时候, 可以根据正则判断 field name 来决定是否是要返回.
+	// 最终 FieldByNameFunc 返回的 StructField 是第一个满足 match 的字段, bool 表示是否找到.
 	FieldByNameFunc(match func(string) bool) (StructField, bool)
 
 	// In returns the type of a function type's i'th input parameter.
@@ -589,6 +606,7 @@ type Method struct {
 
 	Type  Type  // method type
 	Func  Value // func with receiver as first argument
+	// 通过 Type.Method 调用的时候对应的索引.
 	Index int   // index for Type.Method
 }
 
@@ -1137,6 +1155,8 @@ type StructField struct {
 // characters other than space (U+0020 ' '), quote (U+0022 '"'),
 // and colon (U+003A ':').  Each value is quoted using U+0022 '"'
 // characters and Go string literal syntax.
+//
+// 用php来说,tag = 'key1:"value1" key2:"value2" key3:"value3"'.
 type StructTag string
 
 // Get returns the value associated with key in the tag string.
@@ -1144,6 +1164,8 @@ type StructTag string
 // If the tag does not have the conventional format, the value
 // returned by Get is unspecified. To determine whether a tag is
 // explicitly set to the empty string, use Lookup.
+//
+// Get就是用Lookup实现的,只是忽略了第二个返回值
 func (tag StructTag) Get(key string) string {
 	v, _ := tag.Lookup(key)
 	return v
@@ -1155,6 +1177,9 @@ func (tag StructTag) Get(key string) string {
 // The ok return value reports whether the value was explicitly set in
 // the tag string. If the tag does not have the conventional format,
 // the value returned by Lookup is unspecified.
+//
+// ok 为 true, 表示 tag 中设置了 key:"value", 此时 value 可能为空字符串.
+// ok 为 false, 表示 tag 中没有 key:"value" 这个 key 的设置.
 func (tag StructTag) Lookup(key string) (value string, ok bool) {
 	// When modifying this code, also update the validateStructTag code
 	// in cmd/vet/structtag.go.
@@ -1405,6 +1430,8 @@ var ptrMap sync.Map // map[*rtype]*ptrType
 
 // PtrTo returns the pointer type with element t.
 // For example, if t represents type Foo, PtrTo(t) represents *Foo.
+//
+// 如果t代表类型 Foo,那么 PtrTo(t) 代表类型 *Foo.
 func PtrTo(t Type) Type {
 	return t.(*rtype).ptrTo()
 }
@@ -2374,6 +2401,8 @@ func isValidFieldName(fieldName string) bool {
 // StructOf returns the struct type containing fields.
 // The Offset and Index fields are ignored and computed as they would be
 // by the compiler.
+//
+// 上文的意思是说: fields参数的单个StructField的Offset和Index字段会被忽略.
 //
 // StructOf currently does not generate wrapper methods for embedded fields.
 // This limitation may be lifted in a future version.

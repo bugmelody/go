@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-21 17:18:21 到此
 
 package reflect
 
@@ -29,6 +31,9 @@ const ptrSize = 4 << (^uintptr(0) >> 63) // unsafe.Sizeof(uintptr(0)) but an ide
 // A Value can be used concurrently by multiple goroutines provided that
 // the underlying Go value can be used concurrently for the equivalent
 // direct operations.
+//
+// 也就是说对于Value能否被多个线程使用,反射和普通Go规则是对称的.
+// provided that: 如果;条件是;倘若.
 //
 // To compare two Values, compare the results of the Interface method.
 // Using == on two Values does not compare the underlying values
@@ -152,6 +157,7 @@ type ValueError struct {
 	Kind   Kind
 }
 
+// @see
 func (e *ValueError) Error() string {
 	if e.Kind == 0 {
 		return "reflect: call of " + e.Method + " on zero Value"
@@ -250,6 +256,8 @@ func (v Value) Bool() bool {
 
 // Bytes returns v's underlying value.
 // It panics if v's underlying value is not a slice of bytes.
+//
+// 此方法期望v的underlying value类型是[]byte
 func (v Value) Bytes() []byte {
 	v.mustBe(Slice)
 	if v.typ.Elem().Kind() != Uint8 {
@@ -296,6 +304,8 @@ func (v Value) CanSet() bool {
 // type of the function's corresponding input parameter.
 // If v is a variadic function, Call creates the variadic slice parameter
 // itself, copying in the corresponding values.
+//
+// Call 会调用函数 v.
 func (v Value) Call(in []Value) []Value {
 	v.mustBe(Func)
 	v.mustBeExported()
@@ -309,6 +319,8 @@ func (v Value) Call(in []Value) []Value {
 // It returns the output results as Values.
 // As in Go, each input argument must be assignable to the
 // type of the function's corresponding input parameter.
+//
+// CallSlice 会调用可变参数函数 v.
 func (v Value) CallSlice(in []Value) []Value {
 	v.mustBe(Func)
 	v.mustBeExported()
@@ -694,6 +706,8 @@ func (v Value) Cap() int {
 
 // Close closes the channel v.
 // It panics if v's Kind is not Chan.
+//
+// 用于 Close channel.
 func (v Value) Close() {
 	v.mustBe(Chan)
 	v.mustBeExported()
@@ -717,6 +731,8 @@ func (v Value) Complex() complex128 {
 // or that the pointer v points to.
 // It panics if v's Kind is not Interface or Ptr.
 // It returns the zero Value if v is nil.
+//
+// 当 v 是指针或接口的时候,此时可以用 v.Elem() 获取 (指针指向的值, 或接口包含的值)
 func (v Value) Elem() Value {
 	k := v.kind()
 	switch k {
@@ -786,20 +802,29 @@ func (v Value) Field(i int) Value {
 
 // FieldByIndex returns the nested field corresponding to index.
 // It panics if v's Kind is not struct.
+//
+// 这个方法使得访问结构的内嵌字段成为可能。将访问各个层次的字段的索引排列起来，就形成了一个[]int.
+// 比如 s.FieldByIndex([]int{1,2,3})
+// 相当于 s.Field(1).Field(2).Field(3)
+// @see
 func (v Value) FieldByIndex(index []int) Value {
 	if len(index) == 1 {
+		// 只有1层,直接使用v.Field
 		return v.Field(index[0])
 	}
 	v.mustBe(Struct)
 	for i, x := range index {
 		if i > 0 {
 			if v.Kind() == Ptr && v.typ.Elem().Kind() == Struct {
+				// v是指向struct的指针
 				if v.IsNil() {
 					panic("reflect: indirection through nil pointer to embedded struct")
 				}
+				// 设置下轮循环v的值
 				v = v.Elem()
 			}
 		}
+		// i==0的时候执行
 		v = v.Field(x)
 	}
 	return v
@@ -808,11 +833,15 @@ func (v Value) FieldByIndex(index []int) Value {
 // FieldByName returns the struct field with the given name.
 // It returns the zero Value if no field was found.
 // It panics if v's Kind is not struct.
+//
+// @see
 func (v Value) FieldByName(name string) Value {
 	v.mustBe(Struct)
 	if f, ok := v.typ.FieldByName(name); ok {
+		// StructField有Index字段,表明这个StructField的索引位置
 		return v.FieldByIndex(f.Index)
 	}
+	// 文档: It returns the zero Value if no field was found.
 	return Value{}
 }
 
@@ -820,10 +849,14 @@ func (v Value) FieldByName(name string) Value {
 // that satisfies the match function.
 // It panics if v's Kind is not struct.
 // It returns the zero Value if no field was found.
+//
+// @see
 func (v Value) FieldByNameFunc(match func(string) bool) Value {
 	if f, ok := v.typ.FieldByNameFunc(match); ok {
+		// StructField有Index字段,表名这个StructField的索引位置
 		return v.FieldByIndex(f.Index)
 	}
+	// 文档: It returns the zero Value if no field was found.
 	return Value{}
 }
 
@@ -1036,6 +1069,8 @@ func (v Value) Len() int {
 // It panics if v's Kind is not Map.
 // It returns the zero Value if key is not found in the map or if v represents a nil map.
 // As in Go, the key's value must be assignable to the map's key type.
+//
+// 对于map中的一对k和v, MapIndex根据k返回对应的v.
 func (v Value) MapIndex(key Value) Value {
 	v.mustBe(Map)
 	tt := (*mapType)(unsafe.Pointer(v.typ))
@@ -1118,6 +1153,9 @@ func (v Value) MapKeys() []Value {
 // The arguments to a Call on the returned function should not include
 // a receiver; the returned function will always use v as the receiver.
 // Method panics if i is out of range or if v is a nil interface value.
+//
+// 上文中:The arguments to a Call on the returned function should not include a receiver;
+// 意思是类似js中已经被bind的函数
 func (v Value) Method(i int) Value {
 	if v.typ == nil {
 		panic(&ValueError{"reflect.Value.Method", Invalid})
@@ -1174,12 +1212,15 @@ func (v Value) NumField() int {
 
 // OverflowComplex reports whether the complex128 x cannot be represented by v's type.
 // It panics if v's Kind is not Complex64 or Complex128.
+//
+// @see
 func (v Value) OverflowComplex(x complex128) bool {
 	k := v.kind()
 	switch k {
 	case Complex64:
 		return overflowFloat32(real(x)) || overflowFloat32(imag(x))
 	case Complex128:
+		// Complex128 永远不会 overflow 
 		return false
 	}
 	panic(&ValueError{"reflect.Value.OverflowComplex", v.kind()})
@@ -1187,12 +1228,15 @@ func (v Value) OverflowComplex(x complex128) bool {
 
 // OverflowFloat reports whether the float64 x cannot be represented by v's type.
 // It panics if v's Kind is not Float32 or Float64.
+//
+// @see
 func (v Value) OverflowFloat(x float64) bool {
 	k := v.kind()
 	switch k {
 	case Float32:
 		return overflowFloat32(x)
 	case Float64:
+		// Float64 永远不会 overflow
 		return false
 	}
 	panic(&ValueError{"reflect.Value.OverflowFloat", v.kind()})
@@ -1281,6 +1325,8 @@ func (v Value) Pointer() uintptr {
 // The receive blocks until a value is ready.
 // The boolean value ok is true if the value x corresponds to a send
 // on the channel, false if it is a zero value received because the channel is closed.
+//
+// 从channel接收值.
 func (v Value) Recv() (x Value, ok bool) {
 	v.mustBe(Chan)
 	v.mustBeExported()
@@ -1314,6 +1360,8 @@ func (v Value) recv(nb bool) (val Value, ok bool) {
 // Send sends x on the channel v.
 // It panics if v's kind is not Chan or if x's type is not the same type as v's element type.
 // As in Go, x's value must be assignable to the channel's element type.
+//
+// 发送值x到channel v.
 func (v Value) Send(x Value) {
 	v.mustBe(Chan)
 	v.mustBeExported()
@@ -1341,6 +1389,9 @@ func (v Value) send(x Value, nb bool) (selected bool) {
 // Set assigns x to the value v.
 // It panics if CanSet returns false.
 // As in Go, x's value must be assignable to v's type.
+//
+// 在调用Set之前,应该确保CanSet返回true.
+// 在调用Set时,应该确保x assignable to v.
 func (v Value) Set(x Value) {
 	v.mustBeAssignable()
 	x.mustBeExported() // do not let unexported x leak
@@ -1366,6 +1417,8 @@ func (v Value) SetBool(x bool) {
 
 // SetBytes sets v's underlying value.
 // It panics if v's underlying value is not a slice of bytes.
+//
+// v的类型应该是[]byte.
 func (v Value) SetBytes(x []byte) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
@@ -1437,6 +1490,9 @@ func (v Value) SetInt(x int64) {
 // SetLen sets v's length to n.
 // It panics if v's Kind is not Slice or if n is negative or
 // greater than the capacity of the slice.
+//
+// v必须是slice
+// 相当于是对 slice v 进行这样的操作: v = v[0:n]
 func (v Value) SetLen(n int) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
@@ -1450,6 +1506,13 @@ func (v Value) SetLen(n int) {
 // SetCap sets v's capacity to n.
 // It panics if v's Kind is not Slice or if n is smaller than the length or
 // greater than the capacity of the slice.
+//
+// 假设s是v对应的slice,如果 n < s.Len || n > s.Cap,会panic.
+// 也就是:
+// s
+// ..........len.....................cap
+//              <-------------------->
+//                 n只能在这个区间
 func (v Value) SetCap(n int) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
@@ -1466,6 +1529,8 @@ func (v Value) SetCap(n int) {
 // Otherwise if v holds a nil map, SetMapIndex will panic.
 // As in Go, key's value must be assignable to the map's key type,
 // and val's value must be assignable to the map's value type.
+//
+// 注意:If val is the zero Value, SetMapIndex deletes the key from the map.
 func (v Value) SetMapIndex(key, val Value) {
 	v.mustBe(Map)
 	v.mustBeExported()
@@ -1534,6 +1599,9 @@ func (v Value) SetString(x string) {
 // Slice returns v[i:j].
 // It panics if v's Kind is not Array, Slice or String, or if v is an unaddressable array,
 // or if the indexes are out of bounds.
+//
+// 为什么可以作用于String.
+// 因为在Go中,string也是有bytes组成的([]bytes)
 func (v Value) Slice(i, j int) Value {
 	var (
 		cap  int
@@ -1593,6 +1661,9 @@ func (v Value) Slice(i, j int) Value {
 // Slice3 is the 3-index form of the slice operation: it returns v[i:j:k].
 // It panics if v's Kind is not Array or Slice, or if v is an unaddressable array,
 // or if the indexes are out of bounds.
+//
+// Slice3只支持Array,Slice, 不支持 String.
+// 而Slice支持Array,Slice,String.
 func (v Value) Slice3(i, j, k int) Value {
 	var (
 		cap  int
@@ -1648,6 +1719,8 @@ func (v Value) Slice3(i, j, k int) Value {
 // Instead, it returns a string of the form "<T value>" where T is v's type.
 // The fmt package treats Values specially. It does not call their String
 // method implicitly but instead prints the concrete values they hold.
+//
+// @see
 func (v Value) String() string {
 	switch k := v.kind(); k {
 	case Invalid:
@@ -1682,6 +1755,8 @@ func (v Value) TrySend(x Value) bool {
 }
 
 // Type returns v's type.
+//
+// 通过一个 reflect.Value 获得对应的 reflect.Type
 func (v Value) Type() Type {
 	f := v.flag
 	if f == 0 {
@@ -1755,6 +1830,8 @@ func (v Value) UnsafeAddr() uintptr {
 // Moreover, the Data field is not sufficient to guarantee the data
 // it references will not be garbage collected, so programs must keep
 // a separate, correctly typed pointer to the underlying data.
+//
+// @see
 type StringHeader struct {
 	Data uintptr
 	Len  int
@@ -1772,6 +1849,8 @@ type stringHeader struct {
 // Moreover, the Data field is not sufficient to guarantee the data
 // it references will not be garbage collected, so programs must keep
 // a separate, correctly typed pointer to the underlying data.
+//
+// @see
 type SliceHeader struct {
 	Data uintptr
 	Len  int
@@ -1827,6 +1906,8 @@ func grow(s Value, extra int) (Value, int, int) {
 
 // Append appends the values x to a slice s and returns the resulting slice.
 // As in Go, each x's value must be assignable to the slice's element type.
+//
+// s必须是slice
 func Append(s Value, x ...Value) Value {
 	s.mustBe(Slice)
 	s, i0, i1 := grow(s, len(x))
@@ -1838,6 +1919,8 @@ func Append(s Value, x ...Value) Value {
 
 // AppendSlice appends a slice t to a slice s and returns the resulting slice.
 // The slices s and t must have the same element type.
+//
+// @see
 func AppendSlice(s, t Value) Value {
 	s.mustBe(Slice)
 	t.mustBe(Slice)
@@ -1949,6 +2032,12 @@ type SelectCase struct {
 // and, if that case was a receive operation, the value received and a
 // boolean indicating whether the value corresponds to a send on the channel
 // (as opposed to a zero value received because the channel is closed).
+//
+// uniform ['juːnɪfɔːm] adj. 统一的；一致的；相同的；均衡的；始终如一的 n. 制服 vt. 使穿制服；使成一样
+//
+// chosen: 最终选择了哪一个 SelectCase.
+// recv: 如果是接收操作,代表接收到的值.
+// recvOK: 与 x, ok := <-chan 的意义一样.
 func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
 	// NOTE: Do not trust that caller is not modifying cases data underfoot.
 	// The range is safe because the caller cannot modify our copy of the len
@@ -2078,6 +2167,8 @@ func MakeChan(typ Type, buffer int) Value {
 }
 
 // MakeMap creates a new map with the specified type.
+//
+// @see
 func MakeMap(typ Type) Value {
 	return MakeMapWithSize(typ, 0)
 }
@@ -2094,10 +2185,15 @@ func MakeMapWithSize(typ Type, cap int) Value {
 // Indirect returns the value that v points to.
 // If v is a nil pointer, Indirect returns a zero Value.
 // If v is not a pointer, Indirect returns v.
+//
+// @see
 func Indirect(v Value) Value {
 	if v.Kind() != Ptr {
+		// 不是指针
+		// 根据文档:If v is not a pointer, Indirect returns v.
 		return v
 	}
+	// 现在,是指针,根据文档:Indirect returns the value that v points to.
 	return v.Elem()
 }
 
@@ -2122,6 +2218,8 @@ func ValueOf(i interface{}) Value {
 // which represents no value at all.
 // For example, Zero(TypeOf(42)) returns a Value with Kind Int and value 0.
 // The returned value is neither addressable nor settable.
+//
+// Zero用于获取typ的零值.
 func Zero(typ Type) Value {
 	if typ == nil {
 		panic("reflect: Zero(nil)")
@@ -2136,6 +2234,9 @@ func Zero(typ Type) Value {
 
 // New returns a Value representing a pointer to a new zero value
 // for the specified type. That is, the returned Value's Type is PtrTo(typ).
+//
+// 相当于是内置函数new.
+// 参考: go doc builtin.new
 func New(typ Type) Value {
 	if typ == nil {
 		panic("reflect: New(nil)")

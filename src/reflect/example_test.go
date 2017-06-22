@@ -1,6 +1,8 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-22 11:19:36
 
 package reflect_test
 
@@ -18,15 +20,20 @@ func ExampleMakeFunc() {
 	// It must work in terms of reflect.Values so that it is possible
 	// to write code without knowing beforehand what the types
 	// will be.
+	// swap交换两个值,但是不知道这两个值的类型
+	// swap是reflect.MakeFunc函数的第二个参数
 	swap := func(in []reflect.Value) []reflect.Value {
 		return []reflect.Value{in[1], in[0]}
 	}
+	// makeSwap 封装了 reflect.MakeFunc 的调用
 
 	// makeSwap expects fptr to be a pointer to a nil function.
 	// It sets that pointer to a new function created with MakeFunc.
 	// When the function is invoked, reflect turns the arguments
 	// into Values, calls swap, and then turns swap's result slice
 	// into the values returned by the new function.
+	//
+	// fptr 是 function ptr 的缩写.
 	makeSwap := func(fptr interface{}) {
 		// fptr is a pointer to a function.
 		// Obtain the function value itself (likely nil) as a reflect.Value
@@ -42,6 +49,7 @@ func ExampleMakeFunc() {
 
 	// Make and call a swap function for ints.
 	var intSwap func(int, int) (int, int)
+	// 函数也能取地址
 	makeSwap(&intSwap)
 	fmt.Println(intSwap(0, 1))
 
@@ -101,9 +109,12 @@ func ExampleTypeOf() {
 	// As interface types are only used for static typing, a
 	// common idiom to find the reflection Type for an interface
 	// type Foo is to use a *Foo value.
+	// (*io.Writer)(nil) : 将 nil 转型为 *io.Writer
+	// reflect.TypeOf(*io.Writer).Elem => 返回 io.Writer 对应的 reflect.Type
 	writerType := reflect.TypeOf((*io.Writer)(nil)).Elem()
 
 	fileType := reflect.TypeOf((*os.File)(nil))
+	// *os.File 实现了 io.Writer
 	fmt.Println(fileType.Implements(writerType))
 
 	// Output:
@@ -123,6 +134,14 @@ func ExampleStructOf() {
 			Tag:  `json:"age"`,
 		},
 	})
+	
+	/**
+	相当于定义了类型
+	struct {
+		Height float64 `json:"height"`
+		Age int `json:"age"`
+	}
+	 */
 
 	v := reflect.New(typ).Elem()
 	v.Field(0).SetFloat(0.4)

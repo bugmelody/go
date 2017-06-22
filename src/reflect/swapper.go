@@ -1,6 +1,8 @@
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]] 2017-6-21 15:44:01
 
 package reflect
 
@@ -10,6 +12,10 @@ import "unsafe"
 // slice.
 //
 // Swapper panics if the provided interface is not a slice.
+//
+// 使用参考sort包中的
+// func Slice(slice interface{}, less func(i, j int) bool) {
+// func SliceStable(slice interface{}, less func(i, j int) bool) {
 func Swapper(slice interface{}) func(i, j int) {
 	v := ValueOf(slice)
 	if v.Kind() != Slice {

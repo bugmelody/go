@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-22 10:15:23
 
 // Deep equality test via reflection
 
@@ -142,6 +144,8 @@ func deepValueEqual(v1, v2 Value, visited map[visit]bool, depth int) bool {
 // Struct values are deeply equal if their corresponding fields,
 // both exported and unexported, are deeply equal.
 //
+// 对于Struct,要求exported and unexported字段都是deeply equal.
+//
 // Func values are deeply equal if both are nil; otherwise they are not deeply equal.
 //
 // Interface values are deeply equal if they hold deeply equal concrete values.
@@ -153,6 +157,8 @@ func deepValueEqual(v1, v2 Value, visited map[visit]bool, depth int) bool {
 //
 // Pointer values are deeply equal if they are equal using Go's == operator
 // or if they point to deeply equal values.
+//
+// 指针是deeply equal要求:是同一个指针,或指向的值是deeply equal.
 //
 // Slice values are deeply equal when all of the following are true:
 // they are both nil or both non-nil, they have the same length,
@@ -171,6 +177,11 @@ func deepValueEqual(v1, v2 Value, visited map[visit]bool, depth int) bool {
 // or because it is a floating-point NaN value (not equal to itself in floating-point comparison),
 // or because it is an array, struct, or interface containing
 // such a value.
+//
+//
+// relaxation [,ri:læk'seiʃən] n. 1.松弛；放松；松懈 2.放宽；缓和 3.轻松；消遣；娱乐
+// inconsistency [ɪnkən'sɪst(ə)nsɪ] n. 不一致；易变
+//
 // On the other hand, pointer values are always equal to themselves,
 // even if they point at or contain such problematic values,
 // because they compare equal using Go's == operator, and that
@@ -178,6 +189,8 @@ func deepValueEqual(v1, v2 Value, visited map[visit]bool, depth int) bool {
 // DeepEqual has been defined so that the same short-cut applies
 // to slices and maps: if x and y are the same slice or the same map,
 // they are deeply equal regardless of content.
+//
+// @notsee
 func DeepEqual(x, y interface{}) bool {
 	if x == nil || y == nil {
 		return x == y
