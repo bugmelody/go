@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[2-over]]] 2017-6-25 16:48:11 只看导出,别管细节
 
 /*
 Package template (html/template) implements data-driven templates for
@@ -60,6 +62,9 @@ Contexts
 This package understands HTML, CSS, JavaScript, and URIs. It adds sanitizing
 functions to each simple action pipeline, so given the excerpt
 
+sanitize ['sænɪtaɪz] vt. 使…无害；给…消毒；对…采取卫生措施
+excerpt ['eksɜːpt] n. 摘录，引用 vt. 引用，摘录 vi. 摘录，引用
+
   <a href="/search?q={{.}}">{{.}}</a>
 
 At parse time each {{.}} is overwritten to add escaping functions as necessary.
@@ -88,12 +93,19 @@ Assuming {{.}} is `O'Reilly: How are <i>you</i>?`, the table below shows
 how {{.}} appears when used in the context to the left.
 
   Context                          {{.}} After
+  普通的html转义: [<=&lt;] [>&gt;]
   {{.}}                            O'Reilly: How are &lt;i&gt;you&lt;/i&gt;?
+  自动识别html属性的转义
   <a title='{{.}}'>                O&#39;Reilly: How are you?
+  自动识别href属性的转义
   <a href="/{{.}}">                O&#39;Reilly: How are %3ci%3eyou%3c/i%3e?
+  自动识别querystring的转义
   <a href="?q={{.}}">              O&#39;Reilly%3a%20How%20are%3ci%3e...%3f
+  自动识别js中,引号之间的字符串的转义
   <a onx='f("{{.}}")'>             O\x27Reilly: How are \x3ci\x3eyou...?
+  自动识别js中,将data(string类型)作为函数参数的转义
   <a onx='f({{.}})'>               "O\x27Reilly: How are \x3ci\x3eyou...?"
+  自动识别js中的正则
   <a onx='pattern = /{{.}}/;'>     O\x27Reilly: How are \x3ci\x3eyou...\x3f
 
 If used in an unsafe context, then the value might be filtered out:
@@ -105,6 +117,8 @@ since "O'Reilly:" is not an allowed protocol like "http:".
 
 
 If {{.}} is the innocuous word, `left`, then it can appear more widely,
+
+innocuous [i'nɔkjuəs] adj. 1.无害的，无毒的 2.无伤大雅的；无关痛痒的；不冒犯的 3.单调的，乏味的
 
   Context                              {{.}} After
   {{.}}                                left
@@ -147,6 +161,8 @@ by marking it with its type.
 Types HTML, JS, URL, and others from content.go can carry safe content that is
 exempted from escaping.
 
+exempt [ɪg'zem(p)t; eg-] vt. 免除；豁免 adj. 被免除的；被豁免的 n. 免税者；被免除义务者
+
 The template
 
   Hello, {{.}}!
@@ -173,6 +189,8 @@ https://rawgit.com/mikesamuel/sanitized-jquery-templates/trunk/safetemplate.html
 This package assumes that template authors are trusted, that Execute's data
 parameter is not, and seeks to preserve the properties below in the face
 of untrusted data:
+
+in the face of 1.面临，面对 2.不顾；纵然
 
 Structure Preservation Property:
 "... when a template author writes an HTML tag in a safe templating language,

@@ -141,6 +141,8 @@ const (
 	// Discussion:
 	//   Package html/template does not support interpolation into regular
 	//   expression literal character sets.
+	//
+	// 这里是指本包不支持用 .Chars 构造 js 中的正则 /foo[abc]/
 	ErrPartialCharset
 
 	// ErrPartialEscape: "unfinished escape sequence in ..."
