@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-23 15:29:40
 
 // Package list implements a doubly linked list.
 //
@@ -9,9 +11,17 @@
 //		// do something with e.Value
 //	}
 //
+//
+// golang中container/list包中的坑:
+// http://studygolang.com/articles/4842
+// golang中container/list包用法: 
+// http://blog.csdn.net/chenbaoke/article/details/42780895
 package list
 
 // Element is an element of a linked list.
+//
+//
+// Element 代表了链表中的一个元素
 type Element struct {
 	// Next and previous pointers in the doubly-linked list of elements.
 	// To simplify the implementation, internally a list l is implemented
@@ -28,8 +38,14 @@ type Element struct {
 }
 
 // Next returns the next list element or nil.
+//
+// nil表示没有下个元素了
+// 注意: list l is implemented as a ring
+// 因此当e.next指向list的root的时候,返回nil.
 func (e *Element) Next() *Element {
 	if p := e.next; e.list != nil && p != &e.list.root {
+		// e.list != nil : e属于某个实际的list
+		// p != &e.list.root : 下一个元素不是e所属list的root
 		return p
 	}
 	return nil
@@ -90,11 +106,14 @@ func (l *List) lazyInit() {
 
 // insert inserts e after at, increments l.len, and returns e.
 func (l *List) insert(e, at *Element) *Element {
+	// n代表at之后的元素
+	// 将e插入at和n之间
 	n := at.next
 	at.next = e
 	e.prev = at
 	e.next = n
 	n.prev = e
+	// 设置e归属于哪个list
 	e.list = l
 	l.len++
 	return e
@@ -106,6 +125,8 @@ func (l *List) insertValue(v interface{}, at *Element) *Element {
 }
 
 // remove removes e from its list, decrements l.len, and returns e.
+//
+// 此函数假设e已经是l的一个元素
 func (l *List) remove(e *Element) *Element {
 	e.prev.next = e.next
 	e.next.prev = e.prev
@@ -118,12 +139,16 @@ func (l *List) remove(e *Element) *Element {
 
 // Remove removes e from l if e is an element of list l.
 // It returns the element value e.Value.
+//
+// 从此函数的源码来看,即使e不属于l,仍然会返回e.Value.
 func (l *List) Remove(e *Element) interface{} {
 	if e.list == l {
+		// 只有在 e 属于 l 的情况下才调用 l.remove
 		// if e.list == l, l must have been initialized when e was inserted
 		// in l or l == nil (e is a zero Element) and l.remove will crash
 		l.remove(e)
 	}
+	// 如果 e 不属于 l, 说明 l 中已经不存在 e.
 	return e.Value
 }
 
@@ -136,6 +161,7 @@ func (l *List) PushFront(v interface{}) *Element {
 // PushBack inserts a new element e with value v at the back of list l and returns e.
 func (l *List) PushBack(v interface{}) *Element {
 	l.lazyInit()
+	// l.root.prev就是最后的元素
 	return l.insertValue(v, l.root.prev)
 }
 
@@ -143,6 +169,7 @@ func (l *List) PushBack(v interface{}) *Element {
 // If mark is not an element of l, the list is not modified.
 func (l *List) InsertBefore(v interface{}, mark *Element) *Element {
 	if mark.list != l {
+		// mark不属于l
 		return nil
 	}
 	// see comment in List.Remove about initialization of l
@@ -153,6 +180,7 @@ func (l *List) InsertBefore(v interface{}, mark *Element) *Element {
 // If mark is not an element of l, the list is not modified.
 func (l *List) InsertAfter(v interface{}, mark *Element) *Element {
 	if mark.list != l {
+		// mark不属于l
 		return nil
 	}
 	// see comment in List.Remove about initialization of l
@@ -163,6 +191,8 @@ func (l *List) InsertAfter(v interface{}, mark *Element) *Element {
 // If e is not an element of l, the list is not modified.
 func (l *List) MoveToFront(e *Element) {
 	if e.list != l || l.root.next == e {
+		// 注: e.list != l : e不属于l
+		// 注: l.root.next == e : e已经在l的最前面了
 		return
 	}
 	// see comment in List.Remove about initialization of l
@@ -173,6 +203,8 @@ func (l *List) MoveToFront(e *Element) {
 // If e is not an element of l, the list is not modified.
 func (l *List) MoveToBack(e *Element) {
 	if e.list != l || l.root.prev == e {
+		// 注: e.list != l : e不属于l
+		// 注: l.root.prev == e : e已经在l的最后面了
 		return
 	}
 	// see comment in List.Remove about initialization of l

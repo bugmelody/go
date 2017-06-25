@@ -1,8 +1,38 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-6-23 16:16:49
 
 // HTTP file system request handler
+
+/**
+参考: http协议-- Range、If-Range: http://blog.csdn.net/shuimuniao/article/details/8086438
+
+假设如下场景：客户端缓存了entity的一部份，现在希望把该部分所属的整个entity一起缓存下来。
+使用携带Range首部行的条件GET方法来完成这件事，使用If-Unmodified-Since或者If-Match首部行来定义条件。
+如果条件失败了，也就是entity内容发生了变化，那么客户端只能再重新发请求把整个entity下载下来。
+
+如果使用If-Range首部行定义条件，那么不需要发第二次请求也可已把整个entity下载下来。
+If-Range的意思是：“如果entity没有发生变化，那么把我缺失的部分发送给我。如果entity发生了变化，那么把整个entity发送给我”。
+
+    If-Range = "If-Range" ":" ( entity-tag | HTTP-date )  
+
+如果客户端没有ETage却有Last-modified，那么也可以把last-modified作为If-Range字段的值。
+If-Range首部行必须与Range首部行配套使用。
+如果请求报文中没有Range首部行，那么If-Range首部行就会被忽略。
+如果服务器不支持If-Range，那么Range首部行也会被忽略。
+
+如果请求报文中的Etag与服务器目标内容的Etag相等，即没有发生变化，那么应答报文的状态码为206。如果服务器目标内容发生了变化，那么应答报文的状态码为200。
+
+==================================
+关于 If-None-Match : http://www.cnblogs.com/czh-liyu/archive/2011/06/22/2087113.html
+ */
+
+// If-Range: 参考 http://www.cnblogs.com/lebronjames/archive/2013/01/10/2854978.html
+//
+// granularity n. granular 的变形 [grænjʊ'lærɪtɪ] n. 间隔尺寸，[岩] 粒度
+// granular ['ɡrænjulə] adj. 1.含颗粒的，由细粒构成的 2.颗粒的，粒状的，颗粒状的 3.粒面的；生粒的
 
 package http
 
@@ -31,11 +61,14 @@ import (
 // by filepath.Separator, which isn't necessarily '/'.
 //
 // An empty Dir is treated as ".".
+//
+// 上文中: implements FileSystem(指FileSystem interface)
 type Dir string
 
 // mapDirOpenError maps the provided non-nil error from opening name
 // to a possibly better non-nil error. In particular, it turns OS-specific errors
 // about opening files in non-directories into os.ErrNotExist. See Issue 18984.
+// @notsee
 func mapDirOpenError(originalErr error, name string) error {
 	if os.IsNotExist(originalErr) || os.IsPermission(originalErr) {
 		return originalErr
@@ -57,12 +90,21 @@ func mapDirOpenError(originalErr error, name string) error {
 	return originalErr
 }
 
+// 实现了 FileSystem interface 要求的 Open 方法
+// 返回的是 http.File, 参考 $ go doc http.File
 func (d Dir) Open(name string) (File, error) {
+	// ascii -x 可以看到 0 就是 NUL
+
+	// 下面确保name中只有'/'分隔符,见type FileSystem interface的文档
+	// filepath.Separator是当前操作系统的目录分隔符
+	// '/' 的类型是 rune
 	if filepath.Separator != '/' && strings.ContainsRune(name, filepath.Separator) {
+		// 如果系统分隔符不是是'/',但name中包含'/'
 		return nil, errors.New("http: invalid character in file path")
 	}
 	dir := string(d)
 	if dir == "" {
+		// An empty Dir is treated as ".".
 		dir = "."
 	}
 	fullName := filepath.Join(dir, filepath.FromSlash(path.Clean("/"+name)))
@@ -70,6 +112,7 @@ func (d Dir) Open(name string) (File, error) {
 	if err != nil {
 		return nil, mapDirOpenError(err, fullName)
 	}
+	// 返回的*os.File满足了http.File接口
 	return f, nil
 }
 
@@ -92,6 +135,8 @@ type File interface {
 	Stat() (os.FileInfo, error)
 }
 
+// 显示f中的目录列表
+// @see
 func dirList(w ResponseWriter, f File) {
 	dirs, err := f.Readdir(-1)
 	if err != nil {
@@ -101,6 +146,7 @@ func dirList(w ResponseWriter, f File) {
 		Error(w, "Error reading directory", StatusInternalServerError)
 		return
 	}
+	// 将目录列表根据文件名进行排序
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].Name() < dirs[j].Name() })
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -114,6 +160,8 @@ func dirList(w ResponseWriter, f File) {
 		// part of the URL path, and not indicate the start of a query
 		// string or fragment.
 		url := url.URL{Path: name}
+		// name中可能包含?和#, 这些字符必须被转义后才能被放到URL path中,转以后就不会表示是query string和fragment的开始.
+		// url.String() 获取的就是转以后的格式
 		fmt.Fprintf(w, "<a href=\"%s\">%s</a>\n", url.String(), htmlReplacer.Replace(name))
 	}
 	fmt.Fprintf(w, "</pre>\n")
@@ -144,16 +192,23 @@ func dirList(w ResponseWriter, f File) {
 // ServeContent uses it to handle requests using If-Match, If-None-Match, or If-Range.
 //
 // Note that *os.File implements the io.ReadSeeker interface.
+//
+// name参数:文件名.
+// content参数:文件内容.本函数会将content的内容返回给client,需要支持seek是为了快速计算文件大小.
+// modtime参数:文件的最后修改时间.
 func ServeContent(w ResponseWriter, req *Request, name string, modtime time.Time, content io.ReadSeeker) {
 	sizeFunc := func() (int64, error) {
+		// seek到文件末尾
 		size, err := content.Seek(0, io.SeekEnd)
 		if err != nil {
 			return 0, errSeeker
 		}
+		// seek到文件开头
 		_, err = content.Seek(0, io.SeekStart)
 		if err != nil {
 			return 0, errSeeker
 		}
+		// 返回seek计算出来的文件大小
 		return size, nil
 	}
 	serveContent(w, req, name, modtime, sizeFunc, content)
@@ -163,6 +218,8 @@ func ServeContent(w ResponseWriter, req *Request, name string, modtime time.Time
 // doesn't seek properly. The underlying Seeker's error text isn't
 // included in the sizeFunc reply so it's not sent over HTTP to end
 // users.
+//
+// 没有暴露敏感信息
 var errSeeker = errors.New("seeker can't seek")
 
 // errNoOverlap is returned by serveContent's parseRange if first-byte-pos of
@@ -184,14 +241,18 @@ func serveContent(w ResponseWriter, r *Request, name string, modtime time.Time, 
 
 	// If Content-Type isn't set, use the file's extension to find it, but
 	// if the Content-Type is unset explicitly, do not sniff the type.
+	// 注意: 可以直接这样用 w.Header()["Content-Type"]
 	ctypes, haveType := w.Header()["Content-Type"]
 	var ctype string
 	if !haveType {
+		// 如果 "Content-Type" 头部没有设置
 		ctype = mime.TypeByExtension(filepath.Ext(name))
 		if ctype == "" {
 			// read a chunk to decide between utf-8 text and binary
 			var buf [sniffLen]byte
+			// 读取sniffLen字节
 			n, _ := io.ReadFull(content, buf[:])
+			// 根据name文件的前sniffLen字节DetectContentType
 			ctype = DetectContentType(buf[:n])
 			_, err := content.Seek(0, io.SeekStart) // rewind to output whole file
 			if err != nil {
@@ -201,21 +262,33 @@ func serveContent(w ResponseWriter, r *Request, name string, modtime time.Time, 
 		}
 		w.Header().Set("Content-Type", ctype)
 	} else if len(ctypes) > 0 {
+		// 如果 "Content-Type" 头部有设置,使用第一个
 		ctype = ctypes[0]
 	}
 
+	// 获取 content size
 	size, err := sizeFunc()
 	if err != nil {
+		// sizeFunc()出错
 		Error(w, err.Error(), StatusInternalServerError)
 		return
 	}
 
 	// handle Content-Range header.
+	// ??? 为什么要这样搞
 	sendSize := size
+	// ??? 为什么要这样搞
 	var sendContent io.Reader = content
 	if size >= 0 {
 		ranges, err := parseRange(rangeReq, size)
 		if err != nil {
+			/**
+			416 Requested Range Not Satisfiable 如果请求中包含了 Range 请求头，并且 Range 中指定的任何数据范围
+			都与当前资源的可用范围不重合，同时请求中又没有定义 If-Range 请求头，那么服务器就应当返回416状态码。
+			假如 Range 使用的是字节范围，那么这种情况就是指请求指定的所有数据范围的首字节位置都超过了当前资源的长度。
+			服务器也应当在返回416状态码的同时，包含一个 Content-Range 实体头，用以指明当前资源的长度。
+			这个响应也被禁止使用 multipart/byteranges 作为其 Content-Type。
+			 */
 			if err == errNoOverlap {
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
 			}
@@ -255,6 +328,7 @@ func serveContent(w ResponseWriter, r *Request, name string, modtime time.Time, 
 			code = StatusPartialContent
 
 			pr, pw := io.Pipe()
+			// multipart.NewWriter 内部会随机生成 boundary
 			mw := multipart.NewWriter(pw)
 			w.Header().Set("Content-Type", "multipart/byteranges; boundary="+mw.Boundary())
 			sendContent = pr
@@ -296,6 +370,7 @@ func serveContent(w ResponseWriter, r *Request, name string, modtime time.Time, 
 // scanETag determines if a syntactically valid ETag is present at s. If so,
 // the ETag and remaining text after consuming ETag is returned. Otherwise,
 // it returns "", "".
+// @notsee
 func scanETag(s string) (etag string, remain string) {
 	s = textproto.TrimString(s)
 	start := 0
@@ -469,13 +544,16 @@ func checkIfRange(w ResponseWriter, r *Request, modtime time.Time) condResult {
 	return condFalse
 }
 
+// 根据timestamp构造一个time.Time,刚好是unix Epoch
 var unixEpochTime = time.Unix(0, 0)
 
 // isZeroTime reports whether t is obviously unspecified (either zero or Unix()=0).
+// @see
 func isZeroTime(t time.Time) bool {
 	return t.IsZero() || t.Equal(unixEpochTime)
 }
 
+// @see
 func setLastModified(w ResponseWriter, modtime time.Time) {
 	if !isZeroTime(modtime) {
 		w.Header().Set("Last-Modified", modtime.UTC().Format(TimeFormat))
@@ -535,6 +613,7 @@ func checkPreconditions(w ResponseWriter, r *Request, modtime time.Time) (done b
 }
 
 // name is '/'-separated, not filepath.Separator.
+// @see
 func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirect bool) {
 	const indexPage = "/index.html"
 
@@ -546,6 +625,7 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 		return
 	}
 
+	// f 是 http.File
 	f, err := fs.Open(name)
 	if err != nil {
 		msg, code := toHTTPError(err)
@@ -564,24 +644,35 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 	if redirect {
 		// redirect to canonical path: / at end of directory url
 		// r.URL.Path always begins with /
+		// redirect是函数参数,表示是否需要进行跳转
 		url := r.URL.Path
 		if d.IsDir() {
+			// 如果请求的是目录
 			if url[len(url)-1] != '/' {
+				// 如果 url 最后一个字节不是 '/'
+				// 比如: http://xxx.com/dir 跳转为 => http://xxx.com/dir/ 
 				localRedirect(w, r, path.Base(url)+"/")
 				return
 			}
 		} else {
+			// 如果请求的不是目录
 			if url[len(url)-1] == '/' {
+				// 如果 url 最后一个字节是 '/'
+				// 比如: http://xxx.com/file/ 跳转为 => http://xxx.com/file/.. => http://xxx.com/file 
 				localRedirect(w, r, "../"+path.Base(url))
 				return
 			}
 		}
 	}
 
+	// 现在,不需要跳转
+
 	// redirect if the directory name doesn't end in a slash
 	if d.IsDir() {
 		url := r.URL.Path
 		if url[len(url)-1] != '/' {
+			// 如果 url 最后一个字节不是 '/'
+			// 比如: http://xxx.com/dir 跳转为 => http://xxx.com/dir/ 
 			localRedirect(w, r, path.Base(url)+"/")
 			return
 		}
@@ -589,14 +680,20 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 
 	// use contents of index.html for directory, if present
 	if d.IsDir() {
+		// 如果请求的是目录
 		index := strings.TrimSuffix(name, "/") + indexPage
+		// 尝试打开index.html文件
 		ff, err := fs.Open(index)
 		if err == nil {
 			defer ff.Close()
+			// 获取index.html的os.FileInfo
 			dd, err := ff.Stat()
 			if err == nil {
+				// 修正name
 				name = index
+				// 修正d
 				d = dd
+				// 修正f
 				f = ff
 			}
 		}
@@ -623,6 +720,7 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 // actually return err.Error(), since msg and httpStatus are returned to users,
 // and historically Go's ServeContent always returned just "404 Not Found" for
 // all errors. We don't want to start leaking information in error messages.
+// @see
 func toHTTPError(err error) (msg string, httpStatus int) {
 	if os.IsNotExist(err) {
 		return "404 page not found", StatusNotFound
@@ -657,6 +755,11 @@ func localRedirect(w ResponseWriter, r *Request, newPath string) {
 // ends in "/index.html" to the same path, without the final
 // "index.html". To avoid such redirects either modify the path or
 // use ServeContent.
+//
+// ascend to
+// 1. 上溯： Their inquiries ascend to the antiquity. 他们的研究上溯古代。
+// 2. 上升： The smoke ascended to the sky. 烟一直升天。
+// As a precaution 作为一项预防措施, 为预防起见
 func ServeFile(w ResponseWriter, r *Request, name string) {
 	if containsDotDot(r.URL.Path) {
 		// Too many programs use r.URL.Path to construct the argument to
@@ -673,10 +776,13 @@ func ServeFile(w ResponseWriter, r *Request, name string) {
 
 func containsDotDot(v string) bool {
 	if !strings.Contains(v, "..") {
+		// 如果v中不含".."
 		return false
 	}
+	// 现在,v中包含"..", 但是还想检查是否是在两个'/'之间刚好等于".."
 	for _, ent := range strings.FieldsFunc(v, isSlashRune) {
 		if ent == ".." {
+			// 如果两个slashRune之间正好是".."
 			return true
 		}
 	}
@@ -704,9 +810,13 @@ func FileServer(root FileSystem) Handler {
 	return &fileHandler{root}
 }
 
+// 在 *fileHandler 上面实现了 Handler interface.
 func (f *fileHandler) ServeHTTP(w ResponseWriter, r *Request) {
+	// 浏览器请求的url path
 	upath := r.URL.Path
 	if !strings.HasPrefix(upath, "/") {
+		// 确保upath是以'/'开头, 注意下面会调用 path.Clean(upath)
+		// 因此即使有两个 "//" 也没有关系
 		upath = "/" + upath
 		r.URL.Path = upath
 	}
@@ -714,14 +824,21 @@ func (f *fileHandler) ServeHTTP(w ResponseWriter, r *Request) {
 }
 
 // httpRange specifies the byte range to be sent to the client.
+// @see
 type httpRange struct {
 	start, length int64
 }
 
+// @see
+// size代表文件总的长度
 func (r httpRange) contentRange(size int64) string {
+	// HTTP Header里的Range和Content-Range参数
+	// http://hongjiang.info/http-header-range-and-content-range/?utm_source=tuicool&utm_medium=referral
 	return fmt.Sprintf("bytes %d-%d/%d", r.start, r.start+r.length-1, size)
+	//                       起点-长度/文件总长度
 }
 
+// @see
 func (r httpRange) mimeHeader(contentType string, size int64) textproto.MIMEHeader {
 	return textproto.MIMEHeader{
 		"Content-Range": {r.contentRange(size)},
@@ -731,6 +848,7 @@ func (r httpRange) mimeHeader(contentType string, size int64) textproto.MIMEHead
 
 // parseRange parses a Range header string as per RFC 2616.
 // errNoOverlap is returned if none of the ranges overlap.
+// @notsee
 func parseRange(s string, size int64) ([]httpRange, error) {
 	if s == "" {
 		return nil, nil // header not present
@@ -800,9 +918,15 @@ func parseRange(s string, size int64) ([]httpRange, error) {
 }
 
 // countingWriter counts how many bytes have been written to it.
+// countingWriter实现了io.Writer接口
+// @see
 type countingWriter int64
 
+// Write实际不写入,只是计算p的长度
+// countingWriter实现了io.Writer接口
+// @see
 func (w *countingWriter) Write(p []byte) (n int, err error) {
+	// 实际没有写入任何地点,只是计算了写入长度
 	*w += countingWriter(len(p))
 	return len(p), nil
 }
