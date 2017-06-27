@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-6-27 08:36:18
 
 package fmt
 
@@ -15,6 +17,11 @@ import (
 
 // Strings for use with buffer.WriteString.
 // This is less overhead than using buffer.Write with byte arrays.
+//
+// 使用const常量而不是运行时分配的byte arrays会更有效率
+//
+// right angle: 直角
+// slope angle: 斜角；倾斜角；坡度角
 const (
 	commaSpaceString  = ", "
 	nilAngleString    = "<nil>"
@@ -72,31 +79,42 @@ type GoStringer interface {
 }
 
 // Use simple []byte instead of bytes.Buffer to avoid large dependency.
+//
+// 简单的使用 []byte, 而不是 bytes.Buffer 避免引入大的依赖.
 type buffer []byte
 
+// Write 会将 p 写入 b 中
 func (b *buffer) Write(p []byte) {
 	*b = append(*b, p...)
 }
 
+// WriteString 会将 s 写入 b 中
 func (b *buffer) WriteString(s string) {
 	*b = append(*b, s...)
 }
 
+// WriteByte 会将 c 写入 b 中
 func (b *buffer) WriteByte(c byte) {
 	*b = append(*b, c)
 }
 
+// WriteRune 会将 r 写入 b 中
 func (bp *buffer) WriteRune(r rune) {
 	if r < utf8.RuneSelf {
+		// 如果是单字节字符, 可以通过 byte(r) 将 rune 转换为 byte
 		*bp = append(*bp, byte(r))
 		return
 	}
+	// 现在,r是多字节字符,不一定能够被放入bp
 
 	b := *bp
 	n := len(b)
+	// 通过 for 循环,保证 buffer 的容量是足够的
 	for n+utf8.UTFMax > cap(b) {
+		// 内置的append函数当cap不够的时候,会重新分配空间
 		b = append(b, 0)
 	}
+	// 现在, b 中的空间肯定足够写入一个 rune
 	w := utf8.EncodeRune(b[n:n+utf8.UTFMax], r)
 	*bp = b[:n+w]
 }
@@ -130,7 +148,11 @@ var ppFree = sync.Pool{
 
 // newPrinter allocates a new pp struct or grabs a cached one.
 func newPrinter() *pp {
+	// ppFree是sync.Pool类型的结构体
+	// 因为sync.Pool的Get()方法返回类型为interface{}
+	// 这里使用type assertion转换为*pp类型
 	p := ppFree.Get().(*pp)
+	// 现在, p 的类型为 *pp
 	p.panicking = false
 	p.erroring = false
 	p.fmt.init(&p.buf)
@@ -139,9 +161,11 @@ func newPrinter() *pp {
 
 // free saves used pp structs in ppFree; avoids an allocation per invocation.
 func (p *pp) free() {
+	// 对p进行清理
 	p.buf = p.buf[:0]
 	p.arg = nil
 	p.value = reflect.Value{}
+	// 放回池子中
 	ppFree.Put(p)
 }
 
@@ -167,7 +191,9 @@ func (p *pp) Flag(b int) bool {
 
 // Implement Write so we can call Fprintf on a pp (through State), for
 // recursive use in custom verbs.
+// 在 *pp 上实现 Write 方法(io.Writer接口)
 func (p *pp) Write(b []byte) (ret int, err error) {
+	// 实际是写入到 p.buf 中
 	p.buf.Write(b)
 	return len(b), nil
 }
@@ -186,6 +212,8 @@ func Fprintf(w io.Writer, format string, a ...interface{}) (n int, err error) {
 
 // Printf formats according to a format specifier and writes to standard output.
 // It returns the number of bytes written and any write error encountered.
+//
+// @see
 func Printf(format string, a ...interface{}) (n int, err error) {
 	return Fprintf(os.Stdout, format, a...)
 }
@@ -194,6 +222,7 @@ func Printf(format string, a ...interface{}) (n int, err error) {
 func Sprintf(format string, a ...interface{}) string {
 	p := newPrinter()
 	p.doPrintf(format, a)
+	// p.buf的底层类型是[]byte
 	s := string(p.buf)
 	p.free()
 	return s
@@ -201,6 +230,8 @@ func Sprintf(format string, a ...interface{}) string {
 
 // Errorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
+//
+// @see
 func Errorf(format string, a ...interface{}) error {
 	return errors.New(Sprintf(format, a...))
 }
@@ -210,6 +241,12 @@ func Errorf(format string, a ...interface{}) error {
 // Fprint formats using the default formats for its operands and writes to w.
 // Spaces are added between operands when neither is a string.
 // It returns the number of bytes written and any write error encountered.
+//
+// 当两个操作数都不是string的时候,会在之间添加空格
+// 如果两个操作数其中之一是string的时候,不会在它们之间添加空格
+//
+// neither [ˈnaɪðə; ˈniːðə]
+// conj. 也不；既不 adv. 两个都不；既不……也不 adj. 两者都不的 pron. 两者都不
 func Fprint(w io.Writer, a ...interface{}) (n int, err error) {
 	p := newPrinter()
 	p.doPrint(a)
@@ -221,12 +258,17 @@ func Fprint(w io.Writer, a ...interface{}) (n int, err error) {
 // Print formats using the default formats for its operands and writes to standard output.
 // Spaces are added between operands when neither is a string.
 // It returns the number of bytes written and any write error encountered.
+//
+// 当两个操作数都不是string的时候,会在之间添加空格
+// 如果两个操作数其中之一是string的时候,不会在它们之间添加空格
 func Print(a ...interface{}) (n int, err error) {
 	return Fprint(os.Stdout, a...)
 }
 
 // Sprint formats using the default formats for its operands and returns the resulting string.
 // Spaces are added between operands when neither is a string.
+// 当两个操作数都不是string的时候,会在之间添加空格
+// 如果两个操作数其中之一是string的时候,不会在它们之间添加空格
 func Sprint(a ...interface{}) string {
 	p := newPrinter()
 	p.doPrint(a)
@@ -270,9 +312,13 @@ func Sprintln(a ...interface{}) string {
 // getField gets the i'th field of the struct value.
 // If the field is itself is an interface, return a value for
 // the thing inside the interface, not the interface itself.
+//
+// getField获取struct value的第i个field.
+// 如果这个field本身是一个interface,返回这个interface里面的值,而不是interface本身.
 func getField(v reflect.Value, i int) reflect.Value {
 	val := v.Field(i)
 	if val.Kind() == reflect.Interface && !val.IsNil() {
+		// 文档:If the field is itself is an interface, return a value for the thing inside the interface, not the interface itself.
 		val = val.Elem()
 	}
 	return val
@@ -286,6 +332,9 @@ func tooLarge(x int) bool {
 }
 
 // parsenum converts ASCII to integer.  num is 0 (and isnum is false) if no number present.
+// parsenum 会将 s 中从 start 开始的数字字符 返回为一个 int.
+// 如果不存在数字字符,返回的num=0,并且 isnum=false.
+// newi 表示不是数字的那个位置
 func parsenum(s string, start, end int) (num int, isnum bool, newi int) {
 	if start >= end {
 		return 0, false, end
@@ -294,6 +343,7 @@ func parsenum(s string, start, end int) (num int, isnum bool, newi int) {
 		if tooLarge(num) {
 			return 0, false, end // Overflow; crazy long number most likely.
 		}
+		// 保存十进制的高位
 		num = num*10 + int(s[newi]-'0')
 		isnum = true
 	}
@@ -331,6 +381,7 @@ func (p *pp) badVerb(verb rune) {
 	p.erroring = false
 }
 
+// @see
 func (p *pp) fmtBool(v bool, verb rune) {
 	switch verb {
 	case 't', 'v':
@@ -342,10 +393,13 @@ func (p *pp) fmtBool(v bool, verb rune) {
 
 // fmt0x64 formats a uint64 in hexadecimal and prefixes it with 0x or
 // not, as requested, by temporarily setting the sharp flag.
+// leading0x 指示了是否使用 0x 前缀.
 func (p *pp) fmt0x64(v uint64, leading0x bool) {
+	// 保存老的
 	sharp := p.fmt.sharp
 	p.fmt.sharp = leading0x
 	p.fmt.fmt_integer(v, 16, unsigned, ldigits)
+	// 恢复老的
 	p.fmt.sharp = sharp
 }
 
@@ -354,29 +408,38 @@ func (p *pp) fmtInteger(v uint64, isSigned bool, verb rune) {
 	switch verb {
 	case 'v':
 		if p.fmt.sharpV && !isSigned {
+			//  %#v && 无符号, 使用 %x 的格式
 			p.fmt0x64(v, true)
 		} else {
 			p.fmt.fmt_integer(v, 10, isSigned, ldigits)
 		}
 	case 'd':
+		// %d	base 10
 		p.fmt.fmt_integer(v, 10, isSigned, ldigits)
 	case 'b':
+		// %b	base 2
 		p.fmt.fmt_integer(v, 2, isSigned, ldigits)
 	case 'o':
+		// %o	base 8
 		p.fmt.fmt_integer(v, 8, isSigned, ldigits)
 	case 'x':
+		// %x	base 16, with lower-case letters for a-f
 		p.fmt.fmt_integer(v, 16, isSigned, ldigits)
 	case 'X':
+		// %X	base 16, with upper-case letters for A-F
 		p.fmt.fmt_integer(v, 16, isSigned, udigits)
 	case 'c':
+		//	%c	the character represented by the corresponding Unicode code point
 		p.fmt.fmt_c(v)
 	case 'q':
+		//	%q	a single-quoted character literal safely escaped with Go syntax.
 		if v <= utf8.MaxRune {
 			p.fmt.fmt_qc(v)
 		} else {
 			p.badVerb(verb)
 		}
 	case 'U':
+		//	%U	Unicode format: U+1234; same as "U+%04X"
 		p.fmt.fmt_unicode(v)
 	default:
 		p.badVerb(verb)
@@ -388,12 +451,16 @@ func (p *pp) fmtInteger(v uint64, isSigned bool, verb rune) {
 func (p *pp) fmtFloat(v float64, size int, verb rune) {
 	switch verb {
 	case 'v':
+		// %v	the value in a default format
 		p.fmt.fmt_float(v, size, 'g', -1)
 	case 'b', 'g', 'G':
 		p.fmt.fmt_float(v, size, verb, -1)
 	case 'f', 'e', 'E':
+		// 精度为 6
 		p.fmt.fmt_float(v, size, verb, 6)
 	case 'F':
+		//%F	synonym for %f
+		// 精度为 6
 		p.fmt.fmt_float(v, size, 'f', 6)
 	default:
 		p.badVerb(verb)
@@ -422,6 +489,13 @@ func (p *pp) fmtComplex(v complex128, size int, verb rune) {
 }
 
 func (p *pp) fmtString(v string, verb rune) {
+	/**
+	String and slice of bytes (treated equivalently with these verbs):
+		%s	the uninterpreted bytes of the string or slice
+		%q	a double-quoted string safely escaped with Go syntax
+		%x	base 16, lower-case, two characters per byte
+		%X	base 16, upper-case, two characters per byte
+	 */
 	switch verb {
 	case 'v':
 		if p.fmt.sharpV {
@@ -442,7 +516,15 @@ func (p *pp) fmtString(v string, verb rune) {
 	}
 }
 
+// 调用举例: p.fmtBytes(f, verb, "[]byte")
 func (p *pp) fmtBytes(v []byte, verb rune, typeString string) {
+	/**
+	String and slice of bytes (treated equivalently with these verbs):
+		%s	the uninterpreted bytes of the string or slice
+		%q	a double-quoted string safely escaped with Go syntax
+		%x	base 16, lower-case, two characters per byte
+		%X	base 16, upper-case, two characters per byte
+	 */
 	switch verb {
 	case 'v', 'd':
 		if p.fmt.sharpV {
@@ -453,7 +535,9 @@ func (p *pp) fmtBytes(v []byte, verb rune, typeString string) {
 			}
 			p.buf.WriteByte('{')
 			for i, c := range v {
+				// range 循环 byte slice 中的每个 byte
 				if i > 0 {
+					// 如不是首个元素
 					p.buf.WriteString(commaSpaceString)
 				}
 				p.fmt0x64(uint64(c), true)
@@ -465,6 +549,7 @@ func (p *pp) fmtBytes(v []byte, verb rune, typeString string) {
 				if i > 0 {
 					p.buf.WriteByte(' ')
 				}
+				// 输出 byte c 的十进制表示
 				p.fmt.fmt_integer(uint64(c), 10, unsigned, ldigits)
 			}
 			p.buf.WriteByte(']')
@@ -486,6 +571,8 @@ func (p *pp) fmtPointer(value reflect.Value, verb rune) {
 	var u uintptr
 	switch value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
+		// 这一堆类型是 reflect.Value.Pointer() 文档中说明的
+		// reflect.Value.Pointer()
 		u = value.Pointer()
 	default:
 		p.badVerb(verb)
@@ -495,23 +582,29 @@ func (p *pp) fmtPointer(value reflect.Value, verb rune) {
 	switch verb {
 	case 'v':
 		if p.fmt.sharpV {
+			// 输出指针类型
 			p.buf.WriteByte('(')
 			p.buf.WriteString(value.Type().String())
 			p.buf.WriteString(")(")
+			// 输出值
 			if u == 0 {
 				p.buf.WriteString(nilString)
 			} else {
+				// 输出指针地址(带 0x 前缀)
 				p.fmt0x64(uint64(u), true)
 			}
 			p.buf.WriteByte(')')
 		} else {
 			if u == 0 {
+				// 空指针
 				p.fmt.padString(nilAngleString)
 			} else {
+				// 输出指针地址
 				p.fmt0x64(uint64(u), !p.fmt.sharp)
 			}
 		}
 	case 'p':
+		// Pointer:	%p	base 16 notation, with leading 0x
 		p.fmt0x64(uint64(u), !p.fmt.sharp)
 	case 'b', 'o', 'd', 'x', 'X':
 		p.fmtInteger(uint64(u), unsigned, verb)
@@ -525,6 +618,7 @@ func (p *pp) catchPanic(arg interface{}, verb rune) {
 		// If it's a nil pointer, just say "<nil>". The likeliest causes are a
 		// Stringer that fails to guard against nil or a nil pointer for a
 		// value receiver, and in either case, "<nil>" is a nice result.
+		// likeliest(最有可能) causes(原因)
 		if v := reflect.ValueOf(arg); v.Kind() == reflect.Ptr && v.IsNil() {
 			p.buf.WriteString(nilAngleString)
 			return
@@ -585,12 +679,14 @@ func (p *pp) handleMethods(verb rune) (handled bool) {
 			// must happen before calling the method.
 			switch v := p.arg.(type) {
 			case error:
+				// 如果满足内置 error 接口
 				handled = true
 				defer p.catchPanic(p.arg, verb)
 				p.fmtString(v.Error(), verb)
 				return
 
 			case Stringer:
+				// 如果满足 fmt.Stringer 接口
 				handled = true
 				defer p.catchPanic(p.arg, verb)
 				p.fmtString(v.String(), verb)
@@ -602,7 +698,10 @@ func (p *pp) handleMethods(verb rune) (handled bool) {
 }
 
 func (p *pp) printArg(arg interface{}, verb rune) {
+	// arg 字段说明: arg holds the current item, as an interface{}.
 	p.arg = arg
+	// value 字段说明: value is used instead of arg for reflect values.
+	// reflect.Value{}: reflect.Value 的零值
 	p.value = reflect.Value{}
 
 	if arg == nil {
@@ -679,6 +778,7 @@ func (p *pp) printArg(arg interface{}, verb rune) {
 		if !p.handleMethods(verb) {
 			// Need to use reflection, since the type had no
 			// interface methods that could be used for formatting.
+			// 如果 p.handleMethods 也无法处理, 只有通过反射了
 			p.printValue(reflect.ValueOf(f), verb, 0)
 		}
 	}
@@ -686,6 +786,9 @@ func (p *pp) printArg(arg interface{}, verb rune) {
 
 // printValue is similar to printArg but starts with a reflect value, not an interface{} value.
 // It does not handle 'p' and 'T' verbs because these should have been already handled by printArg.
+//
+// 'p'(用于打印指针)
+// 'T'(用于打印类型)
 func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 	// Handle values with special methods if not already handled by printArg (depth == 0).
 	if depth > 0 && value.IsValid() && value.CanInterface() {
@@ -737,18 +840,25 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 			p.buf.WriteString(mapString)
 		}
 		keys := f.MapKeys()
+		// 在下面的 for 循环中, 循环输出每个 key 和 value
 		for i, key := range keys {
 			if i > 0 {
+				// 不是第一个循环
 				if p.fmt.sharpV {
+					// 逗号分隔
 					p.buf.WriteString(commaSpaceString)
 				} else {
+					// 空格分隔
 					p.buf.WriteByte(' ')
 				}
 			}
+			// 递归调用,输出map key
 			p.printValue(key, verb, depth+1)
 			p.buf.WriteByte(':')
+			// 递归调用,输出map value
 			p.printValue(f.MapIndex(key), verb, depth+1)
 		}
+		// 每个 key 和 value 输出完毕
 		if p.fmt.sharpV {
 			p.buf.WriteByte('}')
 		} else {
@@ -756,11 +866,14 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 		}
 	case reflect.Struct:
 		if p.fmt.sharpV {
+			// 输出类型
 			p.buf.WriteString(f.Type().String())
 		}
 		p.buf.WriteByte('{')
 		for i := 0; i < f.NumField(); i++ {
+			// 循环 struct 中的每一个 field
 			if i > 0 {
+				// 如果不是第一次循环
 				if p.fmt.sharpV {
 					p.buf.WriteString(commaSpaceString)
 				} else {
@@ -769,10 +882,13 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 			}
 			if p.fmt.plusV || p.fmt.sharpV {
 				if name := f.Type().Field(i).Name; name != "" {
+					// 输出字段名
 					p.buf.WriteString(name)
+					// 输出字段名后面的冒号
 					p.buf.WriteByte(':')
 				}
 			}
+			// 递归调用,输出字段值
 			p.printValue(getField(f, i), verb, depth+1)
 		}
 		p.buf.WriteByte('}')
@@ -794,10 +910,12 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 			// Handle byte and uint8 slices and arrays special for the above verbs.
 			t := f.Type()
 			if t.Elem().Kind() == reflect.Uint8 {
+				// 下面一段都是在计算 bytes
 				var bytes []byte
 				if f.Kind() == reflect.Slice {
 					bytes = f.Bytes()
 				} else if f.CanAddr() {
+					// f.Slice 返回的也是一个 reflect.Value
 					bytes = f.Slice(0, f.Len()).Bytes()
 				} else {
 					// We have an array, but we cannot Slice() a non-addressable array,
@@ -808,6 +926,7 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 						bytes[i] = byte(f.Index(i).Uint())
 					}
 				}
+				// 上面一段都是在计算 bytes
 				p.fmtBytes(bytes, verb, t.String())
 				return
 			}
@@ -856,12 +975,19 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 }
 
 // intFromArg gets the argNumth element of a. On return, isInt reports whether the argument has integer type.
+// num 表示 a[argNum] 的内容
+// isInt 表示 a[argNum] 存储的是否是 int 类型
+// newArgNum 表示下次调用 intFromArg 函数时应该使用的索引
 func intFromArg(a []interface{}, argNum int) (num int, isInt bool, newArgNum int) {
+	// 设置 newArgNum 的初始值
 	newArgNum = argNum
 	if argNum < len(a) {
+		// 确保 argNum 在 a 的长度内
+		// type assertion: 确认 a[argNum] 是 int 类型
 		num, isInt = a[argNum].(int) // Almost always OK.
 		if !isInt {
 			// Work harder.
+			// v 是 a[argNum] 对应的 reflect.Value
 			switch v := reflect.ValueOf(a[argNum]); v.Kind() {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				n := v.Int()
@@ -877,6 +1003,7 @@ func intFromArg(a []interface{}, argNum int) (num int, isInt bool, newArgNum int
 				}
 			default:
 				// Already 0, false.
+			// num 和 isInt 的 zero value 已经是 0, false
 			}
 		}
 		newArgNum = argNum + 1
@@ -903,6 +1030,7 @@ func parseArgNumber(format string) (index int, wid int, ok bool) {
 	// Find closing bracket.
 	for i := 1; i < len(format); i++ {
 		if format[i] == ']' {
+			// 从 [ 之后的位置开始,一直到 ], 将 1, i (中括号之间的位置) 传递给 parsenum 进行解析
 			width, ok, newi := parsenum(format, 1, i)
 			if !ok || newi != i {
 				return 0, i + 1, false
