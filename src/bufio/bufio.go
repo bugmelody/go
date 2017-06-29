@@ -183,10 +183,13 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 		return nil, ErrNegativeCount
 	}
 
-	// b.w-b.r 代表当前在没有fill的情况下可以从b.buf中读到多少数据. 也就是当前实际被缓冲了多少字节.
-	// b.w-b.r < len(b.buf): buffer is not full, 还能继续从b.rd读取数据放入buffer.
-	// b.err == nil 代表上轮 b.rd.Read 读取操作没有错误.
+	b.lastByte = -1
+	b.lastRuneSize = -1
+
 	for b.w-b.r < n && b.w-b.r < len(b.buf) && b.err == nil {
+		// b.w-b.r 代表当前在没有fill的情况下可以从b.buf中读到多少数据. 也就是当前实际被缓冲了多少字节.
+		// b.w-b.r < len(b.buf): buffer is not full, 还能继续从b.rd读取数据放入buffer.
+		// b.err == nil 代表上轮 b.rd.Read 读取操作没有错误.
 		// b.fill() 内部会调用 b.rd.Read 进行读取操作
 		b.fill() // b.w-b.r < len(b.buf) => buffer is not full
 	}

@@ -79,6 +79,8 @@ import "errors"
 // RFC822, RFC822Z, RFC1123, and RFC1123Z are useful for formatting;
 // when used with time.Parse they do not accept all the time formats
 // permitted by the RFCs.
+// The RFC3339Nano format removes trailing zeros from the seconds field
+// and thus may not sort correctly once formatted.
 const (
 	// 参考格式是: Mon Jan 2 15:04:05 MST 2006 , 看做: 06年1月2日下午3点4分5秒 (时区-7)
 	//
