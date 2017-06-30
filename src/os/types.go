@@ -57,7 +57,7 @@ const (
 	ModeAppend                                     // a: append-only
 	// 00100000000000000000000000000000
 	ModeExclusive                                  // l: exclusive use
-	ModeTemporary                                  // T: temporary file (not backed up)
+	ModeTemporary                                  // T: temporary file; Plan 9 only
 	ModeSymlink                                    // L: symbolic link
 	ModeDevice                                     // D: device file
 	ModeNamedPipe                                  // p: named pipe (FIFO)
