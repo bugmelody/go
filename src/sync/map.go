@@ -1,6 +1,8 @@
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]] 2017-6-29 19:47:57
 
 package sync
 
@@ -295,6 +297,10 @@ func (e *entry) delete() (hadValue bool) {
 // contents: no key will be visited more than once, but if the value for any key
 // is stored or deleted concurrently, Range may reflect any mapping for that key
 // from any point during the Range call.
+//
+// Range并不会将Map的内容作为一个快照来进行迭代.
+// 一个key不会被访问超过一次.
+// 但如果一个key的value被并发的存储或删除,Range过程<可能>会在任意时间点反映出这个并发操作的映射.
 //
 // Range may be O(N) with the number of elements in the map even if f returns
 // false after a constant number of calls.

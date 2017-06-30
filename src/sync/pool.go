@@ -1,6 +1,8 @@
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-29 16:42:21
 
 package sync
 
@@ -18,6 +20,8 @@ import (
 // notification. If the Pool holds the only reference when this happens, the
 // item might be deallocated.
 //
+// deallocate: 释放,这里指内存垃圾回收
+//
 // A Pool is safe for use by multiple goroutines simultaneously.
 //
 // Pool's purpose is to cache allocated but unused items for later reuse,
@@ -30,10 +34,14 @@ import (
 // clients of a package. Pool provides a way to amortize allocation overhead
 // across many clients.
 //
+// amortize [ə'mɔ:taɪz] vt. 摊销（等于amortise）；分期偿还
+//
 // An example of good use of a Pool is in the fmt package, which maintains a
 // dynamically-sized store of temporary output buffers. The store scales under
 // load (when many goroutines are actively printing) and shrinks when
 // quiescent.
+//
+// quiescent [kwɪ'es(ə)nt; kwaɪ-]  adj. 静止的；不活动的；沉寂的
 //
 // On the other hand, a free list maintained as part of a short-lived object is
 // not a suitable use for a Pool, since the overhead does not amortize well in
@@ -50,6 +58,9 @@ type Pool struct {
 	// New optionally specifies a function to generate
 	// a value when Get would otherwise return nil.
 	// It may not be changed concurrently with calls to Get.
+	// New 是字段名,类型为函数,函数签名为 'func() interface{}'
+	// 它指定了一个函数,当Get返回nil的时候会调用New指定的函数来生成值.
+	// New 这个字段不能被修改(当并发调用Get的时候)
 	New func() interface{}
 }
 
@@ -85,6 +96,8 @@ func poolRaceAddr(x interface{}) unsafe.Pointer {
 }
 
 // Put adds x to the pool.
+//
+// 将 x 添加到池子.
 func (p *Pool) Put(x interface{}) {
 	if x == nil {
 		return
@@ -121,6 +134,8 @@ func (p *Pool) Put(x interface{}) {
 //
 // If Get would otherwise return nil and p.New is non-nil, Get returns
 // the result of calling p.New.
+//
+// 从池子中获取一个值.
 func (p *Pool) Get() interface{} {
 	if race.Enabled {
 		race.Disable()

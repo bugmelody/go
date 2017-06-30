@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-6-29 17:38:12
 
 package sync
 
@@ -17,6 +19,8 @@ import (
 // The lock can be held by an arbitrary number of readers or a single writer.
 // The zero value for a RWMutex is an unlocked mutex.
 //
+// 这把锁可以被任意数量的readers拥有,或者,被一个单独的writer拥有.
+//
 // An RWMutex must not be copied after first use.
 //
 // If a goroutine holds a RWMutex for reading and another goroutine might
@@ -25,6 +29,19 @@ import (
 // recursive read locking. This is to ensure that the lock eventually becomes
 // available; a blocked Lock call excludes new readers from acquiring the
 // lock.
+//
+// 如果一个goroutine持有一个RWMutex用于读取(read lock),此时其他的goroutine可能会调用Lock.
+// 这时所有的goroutine都不应该期望能够获取到read lock,直到最初始的read lock被释放.
+// 这就防止了无限的读锁.
+// 这就确保了lock最终会变得可用.
+// 一个Lock调用(阻塞中的)会阻止其他new readers获取lock.
+//
+// mutual ['mju:tʃuəl] adj.1.互相的，相互的，彼此的2.[口语]共同的；联合的
+// 3.【保险业】共同承担保险的；互助保险的4.【电子学】互相的
+//
+// (mutual exclusion 互斥；互斥现象)
+// (mutex n. 互斥；互斥元，互斥体；互斥量)
+// prohibit [prəu'hibit] vt.1.禁止，不准：
 type RWMutex struct {
 	w           Mutex  // held if there are pending writers
 	writerSem   uint32 // semaphore for writers to wait for completing readers
@@ -110,6 +127,8 @@ func (rw *RWMutex) Lock() {
 // As with Mutexes, a locked RWMutex is not associated with a particular
 // goroutine. One goroutine may RLock (Lock) an RWMutex and then
 // arrange for another goroutine to RUnlock (Unlock) it.
+//
+// (as with 正如；与…一样；就…来说)
 func (rw *RWMutex) Unlock() {
 	if race.Enabled {
 		_ = rw.w.state
@@ -137,11 +156,18 @@ func (rw *RWMutex) Unlock() {
 
 // RLocker returns a Locker interface that implements
 // the Lock and Unlock methods by calling rw.RLock and rw.RUnlock.
+//
+// 这有什么用 ??
+// 也就是说,调用RLocker(),返回了Locker后
+// 在Locker上调用Lock,Unlock方法,实际是对应RLock和RUnlock
+// 也就是防止调用方错误的使用写锁.
 func (rw *RWMutex) RLocker() Locker {
 	return (*rlocker)(rw)
 }
 
+// rlocker 实现了 Locker 接口
 type rlocker RWMutex
 
+// Lock,Unlock 是 Locker 接口要求实现的两个方法,都委托给 RLock 和 RUnlock
 func (r *rlocker) Lock()   { (*RWMutex)(r).RLock() }
 func (r *rlocker) Unlock() { (*RWMutex)(r).RUnlock() }

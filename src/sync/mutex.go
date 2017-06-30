@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-6-29 17:29:59
 
 // Package sync provides basic synchronization primitives such as mutual
 // exclusion locks. Other than the Once and WaitGroup types, most are intended
@@ -69,6 +71,8 @@ const (
 // Lock locks m.
 // If the lock is already in use, the calling goroutine
 // blocks until the mutex is available.
+//
+// 已经被锁定时此调用会阻塞
 func (m *Mutex) Lock() {
 	// Fast path: grab unlocked mutex.
 	if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) {
