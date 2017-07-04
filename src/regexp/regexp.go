@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] only-export 2017-7-3 17:06:17
 
 // Package regexp implements regular expression search.
 //
@@ -19,6 +21,8 @@
 //	http://swtch.com/~rsc/regexp/regexp1.html
 // or any book about automata theory.
 //
+// 本包中的实现保证运行时间只跟input的size有关.
+//
 // All characters are UTF-8-encoded code points.
 //
 // There are 16 methods of Regexp that match a regular expression and identify
@@ -32,6 +36,16 @@
 // return values of the corresponding non-'All' routine. These routines take
 // an extra integer argument, n; if n >= 0, the function returns at most n
 // matches/submatches.
+//
+// 上文中: These routines(指All系列的方法) take an extra integer argument, n
+//
+// 上文中: Empty matches abutting a preceding match are ignored
+// (如果有一个空匹配紧靠之前的匹配,此空匹配会被忽略)
+//
+// abutting [ə'bʌtɪŋ] adj. 邻接的 v. 靠近；与…邻接（abut的ing形式）
+// successive [sək'sesɪv] adj. 连续的；继承的；依次的；接替的
+// preceding [prɪ'siːdɪŋ] adj. 在前的；前述的 v. 在...之前（precede的ing形式）
+// adjusted [ə'dʒʌstɪd] adj. 调整过的，调节了的 v. 调整；校正（adjust的过去分词）
 //
 // If 'String' is present, the argument is a string; otherwise it is a slice
 // of bytes; return values are adjusted as appropriate.
@@ -49,6 +63,17 @@
 // expression. If 'Index' is not present, the match is identified by the
 // text of the match/submatch. If an index is negative, it means that
 // subexpression did not match any string in the input.
+//
+// 注意:上文中的'by byte index'
+//
+// 上面这段话怎么理解??
+//
+// 假设输入是 input
+// result[0:1] 是整个匹配 , 也就是 result[2*0:2*0+1], 匹配文本为 input[result[0]:result[1]] 
+// result[2:3] 是第1个子表达式匹配 , 也就是 result[2*1:2*1+1], 匹配文本为 input[result[2]:result[3]]
+// result[4:5] 是第2个子表达式匹配 , 也就是 result[2*2:2*2+1], 匹配文本为 input[result[4]:result[5]]
+// result[6:7] 是第3个子表达式匹配 , 也就是 result[2*3:2*3+1], 匹配文本为 input[result[6]:result[7]]
+// 如果 result[-1(负数):-1(负数)], 表示这个子表达式没有匹配到文本. ?????? 是这样理解吗 ??????
 //
 // There is also a subset of the methods that can be applied to text read
 // from a RuneReader:
@@ -103,6 +128,7 @@ type regexpRO struct {
 }
 
 // String returns the source text used to compile the regular expression.
+// String返回用来编译的正则源文本,也就是传递给Compile函数的字符串
 func (re *Regexp) String() string {
 	return re.expr
 }
@@ -111,6 +137,9 @@ func (re *Regexp) String() string {
 //
 // When using a Regexp in multiple goroutines, giving each goroutine
 // its own copy helps to avoid lock contention.
+//
+// 虽然Regexp支持并发使用,但是每个goroutine单独分配一
+// 个Regexp会更好,避免lock contention.
 func (re *Regexp) Copy() *Regexp {
 	// It is not safe to copy Regexp by value
 	// since it contains a sync.Mutex.
@@ -129,6 +158,10 @@ func (re *Regexp) Copy() *Regexp {
 // that Perl, Python, and other implementations use, although this
 // package implements it without the expense of backtracking.
 // For POSIX leftmost-longest matching, see CompilePOSIX.
+//
+//
+// backtracking ['bæk,træk] n. [计] 回溯；回溯法 v. 原路返回；跟踪（backtrack的ing形式）
+// expense [ɪk'spens; ek-] n. 损失，代价；消费；开支
 func Compile(expr string) (*Regexp, error) {
 	return compile(expr, syntax.Perl, false)
 }
@@ -146,12 +179,16 @@ func Compile(expr string) (*Regexp, error) {
 //
 // However, there can be multiple leftmost-longest matches, with different
 // submatch choices, and here this package diverges from POSIX.
+// 然而,可以存在多个leftmost-longest匹配(通过选择不同的submatch),在这点上本包与POSIX不同.
 // Among the possible leftmost-longest matches, this package chooses
 // the one that a backtracking search would have found first, while POSIX
 // specifies that the match be chosen to maximize the length of the first
 // subexpression, then the second, and so on from left to right.
 // The POSIX rule is computationally prohibitive and not even well-defined.
 // See http://swtch.com/~rsc/regexp/regexp2.html#posix for details.
+//
+// prohibitive [prəu'hibitiv] adj. 1.禁止性的；阻止的；抑制性的
+// 2.(指价格、费用等)高得令人望而生畏的[亦作prohibitory ／prəu'hibitəri／]
 func CompilePOSIX(expr string) (*Regexp, error) {
 	return compile(expr, syntax.POSIX, true)
 }
@@ -234,9 +271,12 @@ func (re *Regexp) put(z *machine) {
 // MustCompile is like Compile but panics if the expression cannot be parsed.
 // It simplifies safe initialization of global variables holding compiled regular
 // expressions.
+//
+// @see
 func MustCompile(str string) *Regexp {
 	regexp, error := Compile(str)
 	if error != nil {
+		// 无法编译时发生panic, 看看quote的源码
 		panic(`regexp: Compile(` + quote(str) + `): ` + error.Error())
 	}
 	return regexp
@@ -253,14 +293,18 @@ func MustCompilePOSIX(str string) *Regexp {
 	return regexp
 }
 
+// @see
 func quote(s string) string {
 	if strconv.CanBackquote(s) {
+		// 如果能进行Backquote,则进行Backquote.
 		return "`" + s + "`"
 	}
+	// 否则,使用双引号进行quote
 	return strconv.Quote(s)
 }
 
 // NumSubexp returns the number of parenthesized subexpressions in this Regexp.
+// NumSubexp返回正则表达式中有多少括号括起来的子表达式
 func (re *Regexp) NumSubexp() int {
 	return re.numSubexp
 }
@@ -420,22 +464,36 @@ func (i *inputReader) context(pos int) syntax.EmptyOp {
 // LiteralPrefix returns a literal string that must begin any match
 // of the regular expression re. It returns the boolean true if the
 // literal string comprises the entire regular expression.
+//
+// 返回正则表达式必须匹配到的字面前缀(不包含可变部分).
+// 也就是说,返回的prefix,是re对任意文本都能匹配到的前缀.
+// 如果整个正则表达式刚好等于prefix,则complete返回true.
+//
+// comprise /kəmˈpraɪz/ (comprising,comprised,comprises)
+// If you say that something comprises or is comprised of a number of things
+// or people, you mean it has them as its parts or members. 包含; 由…组成
 func (re *Regexp) LiteralPrefix() (prefix string, complete bool) {
 	return re.prefix, re.prefixComplete
 }
 
 // MatchReader reports whether the Regexp matches the text read by the
 // RuneReader.
+//
+// 用于测试是否匹配
 func (re *Regexp) MatchReader(r io.RuneReader) bool {
 	return re.doMatch(r, nil, "")
 }
 
 // MatchString reports whether the Regexp matches the string s.
+//
+// 用于测试是否匹配
 func (re *Regexp) MatchString(s string) bool {
 	return re.doMatch(nil, nil, s)
 }
 
 // Match reports whether the Regexp matches the byte slice b.
+//
+// 用于测试是否匹配
 func (re *Regexp) Match(b []byte) bool {
 	return re.doMatch(nil, b, "")
 }
@@ -476,6 +534,16 @@ func Match(pattern string, b []byte) (matched bool, err error) {
 // ReplaceAllString returns a copy of src, replacing matches of the Regexp
 // with the replacement string repl. Inside repl, $ signs are interpreted as
 // in Expand, so for instance $1 represents the text of the first submatch.
+//
+// src: 将要被替换的字符串
+// repl: 替换规则,可以使用 $1 等
+// 返回: 被替换后的字符串
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// fmt.Println(re.ReplaceAllString("abaabaaabaaaab", "x")) // 输出: xbxbxbxb
+// fmt.Println(re.ReplaceAllString("abaabaaabaaaab", "${1}x")) // 正确写法: 输出: axbaaxbaaaxbaaaaxb
+// fmt.Println(re.ReplaceAllString("abaabaaabaaaab", "{$1}x")) // 错误写法: 输出: {a}xb{aa}xb{aaa}xb{aaaa}xb
+// fmt.Println(re.ReplaceAllString("abaabaaabaaaab", "$1x")) // 错误写法: 输出: bbbb (因为不存在$1x这个匹配)
 func (re *Regexp) ReplaceAllString(src, repl string) string {
 	n := 2
 	if strings.Contains(repl, "$") {
@@ -490,6 +558,13 @@ func (re *Regexp) ReplaceAllString(src, repl string) string {
 // ReplaceAllLiteralString returns a copy of src, replacing matches of the Regexp
 // with the replacement string repl. The replacement repl is substituted directly,
 // without using Expand.
+//
+// src: 将要被替换的字符串
+// repl: 替换字符串,不会被Expand
+// 返回: 被替换后的字符串
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// fmt.Println(re.ReplaceAllLiteralString("abaabaaabaaaab", "x")) // 输出: xbxbxbxb
 func (re *Regexp) ReplaceAllLiteralString(src, repl string) string {
 	return string(re.replaceAll(nil, src, 2, func(dst []byte, match []int) []byte {
 		return append(dst, repl...)
@@ -500,6 +575,11 @@ func (re *Regexp) ReplaceAllLiteralString(src, repl string) string {
 // Regexp have been replaced by the return value of function repl applied
 // to the matched substring. The replacement returned by repl is substituted
 // directly, without using Expand.
+//
+//
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// fmt.Println(re.ReplaceAllStringFunc("abaabaaabaaaab", func(x string) string { return "x"})) // 输出: xbxbxbxb
 func (re *Regexp) ReplaceAllStringFunc(src string, repl func(string) string) string {
 	b := re.replaceAll(nil, src, 2, func(dst []byte, match []int) []byte {
 		return append(dst, repl(src[match[0]:match[1]])...)
@@ -575,6 +655,11 @@ func (re *Regexp) replaceAll(bsrc []byte, src string, nmatch int, repl func(dst 
 // ReplaceAll returns a copy of src, replacing matches of the Regexp
 // with the replacement text repl. Inside repl, $ signs are interpreted as
 // in Expand, so for instance $1 represents the text of the first submatch.
+//
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.ReplaceAll([]byte("abaabaaabaaaab"), []byte("x"))
+// fmt.Println(string(ret)) // xbxbxbxb
 func (re *Regexp) ReplaceAll(src, repl []byte) []byte {
 	n := 2
 	if bytes.IndexByte(repl, '$') >= 0 {
@@ -593,6 +678,11 @@ func (re *Regexp) ReplaceAll(src, repl []byte) []byte {
 // ReplaceAllLiteral returns a copy of src, replacing matches of the Regexp
 // with the replacement bytes repl. The replacement repl is substituted directly,
 // without using Expand.
+//
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.ReplaceAllLiteral([]byte("abaabaaabaaaab"), []byte("${1}x"))
+// fmt.Println(string(ret)) // ${1}xb${1}xb${1}xb${1}xb
 func (re *Regexp) ReplaceAllLiteral(src, repl []byte) []byte {
 	return re.replaceAll(src, "", 2, func(dst []byte, match []int) []byte {
 		return append(dst, repl...)
@@ -603,6 +693,11 @@ func (re *Regexp) ReplaceAllLiteral(src, repl []byte) []byte {
 // Regexp have been replaced by the return value of function repl applied
 // to the matched byte slice. The replacement returned by repl is substituted
 // directly, without using Expand.
+//
+//
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.ReplaceAllFunc([]byte("abaabaaabaaaab"), func(x []byte) []byte { return []byte("x") })
+// fmt.Println(string(ret)) // xbxbxbxb
 func (re *Regexp) ReplaceAllFunc(src []byte, repl func([]byte) []byte) []byte {
 	return re.replaceAll(src, "", 2, func(dst []byte, match []int) []byte {
 		return append(dst, repl(src[match[0]:match[1]])...)
@@ -626,6 +721,8 @@ func init() {
 // QuoteMeta returns a string that quotes all regular expression metacharacters
 // inside the argument text; the returned string is a regular expression matching
 // the literal text. For example, QuoteMeta(`[foo]`) returns `\[foo\]`.
+//
+// 其实不应该叫QuoteMeta,应该叫SlashMeta
 func QuoteMeta(s string) string {
 	// A byte loop is correct because all metacharacters are ASCII.
 	var i int
@@ -719,6 +816,14 @@ func (re *Regexp) allMatches(s string, b []byte, n int, deliver func([]int)) {
 
 // Find returns a slice holding the text of the leftmost match in b of the regular expression.
 // A return value of nil indicates no match.
+//
+// 之前match打头的方法判断是否匹配,而find打头的方法用于获取正则匹配的文本(第一个匹配).
+//
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.Find([]byte("abaabaaabaaaab"))
+// fmt.Println(ret) // [97]
+// ret = re.Find([]byte("222"))
+// fmt.Println(ret) // []
 func (re *Regexp) Find(b []byte) []byte {
 	var dstCap [2]int
 	a := re.doExecute(nil, b, "", 0, 2, dstCap[:0])
@@ -732,6 +837,15 @@ func (re *Regexp) Find(b []byte) []byte {
 // the leftmost match in b of the regular expression. The match itself is at
 // b[loc[0]:loc[1]].
 // A return value of nil indicates no match.
+//
+// 返回b中匹配开始位置和匹配结束位置组成的slice;如果没有匹配,返回nil
+// 注意,上面说到的 b[loc[0]:loc[1]] 是左开右闭.
+//
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.FindIndex([]byte("bbaab"))
+// fmt.Printf("%#v\n", ret) // []int{2, 4}
+// ret = re.FindIndex([]byte("222"))
+// fmt.Printf("%#v\n", ret) // []int(nil)
 func (re *Regexp) FindIndex(b []byte) (loc []int) {
 	a := re.doExecute(nil, b, "", 0, 2, nil)
 	if a == nil {
@@ -745,6 +859,16 @@ func (re *Regexp) FindIndex(b []byte) (loc []int) {
 // but it will also be empty if the regular expression successfully matches
 // an empty string. Use FindStringIndex or FindStringSubmatch if it is
 // necessary to distinguish these cases.
+//
+// 只有当正则可能会匹配空的时候才需要FindStringIndex或FindStringSubmatch来进行区分.
+// 大部分情况的正则都不会匹配空,因此需要通过FindStringIndex或FindStringSubmatch来进行区分的情况很少.
+//
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.FindString("bbaab")
+// fmt.Printf("%#v\n", ret) // "aa"
+// ret = re.FindString("222")
+// fmt.Printf("%#v\n", ret) // ""
 func (re *Regexp) FindString(s string) string {
 	var dstCap [2]int
 	a := re.doExecute(nil, nil, s, 0, 2, dstCap[:0])
@@ -758,6 +882,14 @@ func (re *Regexp) FindString(s string) string {
 // location of the leftmost match in s of the regular expression. The match
 // itself is at s[loc[0]:loc[1]].
 // A return value of nil indicates no match.
+//
+// 通过 s[loc[0]:loc[1]] 获取实际匹配的文本,位移是也是左闭右开.
+// 例子
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.FindStringIndex("01aa4")
+// fmt.Printf("%#v\n", ret) // []int{2, 4}
+// ret = re.FindStringIndex("222")
+// fmt.Printf("%#v\n", ret) // []int(nil)
 func (re *Regexp) FindStringIndex(s string) (loc []int) {
 	a := re.doExecute(nil, nil, s, 0, 2, nil)
 	if a == nil {
@@ -771,6 +903,16 @@ func (re *Regexp) FindStringIndex(s string) (loc []int) {
 // the RuneReader. The match text was found in the input stream at
 // byte offset loc[0] through loc[1]-1.
 // A return value of nil indicates no match.
+//
+// 本方法跟Regexp.FindStringIndex完全一样,只是输入参数的类型不同
+//
+// 例子
+// r := strings.NewReader("01aa4")
+// re := regexp.MustCompile(`(a+)`)
+// ret := re.FindReaderIndex(r)
+// fmt.Printf("%#v\n", ret) // []int{2, 4}
+// ret = re.FindStringIndex("222")
+// fmt.Printf("%#v\n", ret) // []int(nil)
 func (re *Regexp) FindReaderIndex(r io.RuneReader) (loc []int) {
 	a := re.doExecute(r, nil, "", 0, 2, nil)
 	if a == nil {
@@ -784,6 +926,15 @@ func (re *Regexp) FindReaderIndex(r io.RuneReader) (loc []int) {
 // subexpressions, as defined by the 'Submatch' descriptions in the package
 // comment.
 // A return value of nil indicates no match.
+//
+// 返回类型为 [][]byte, 假设为 a, 则 a[0] 代表re的完整匹配, a[1] 代表第1个子匹配, a[2] 代表第2个子匹配
+// 例子
+// re := regexp.MustCompile(`(a+)(b+)`)
+// ret := re.FindSubmatch([]byte("aaabbbbb"))
+// // ascii 中 0x61 对应 a, 0x62 对应 b
+// fmt.Printf("%#v\n", ret) // [][]uint8{[]uint8{0x61, 0x61, 0x61, 0x62, 0x62, 0x62, 0x62, 0x62}, []uint8{0x61, 0x61, 0x61}, []uint8{0x62, 0x62, 0x62, 0x62, 0x62}}
+// ret = re.FindSubmatch([]byte("222"))
+// fmt.Printf("%#v\n", ret) // [][]uint8(nil)
 func (re *Regexp) FindSubmatch(b []byte) [][]byte {
 	var dstCap [4]int
 	a := re.doExecute(nil, b, "", 0, re.prog.NumCap, dstCap[:0])
@@ -932,6 +1083,16 @@ func extract(str string) (name string, num int, rest string, ok bool) {
 // its subexpressions, as defined by the 'Submatch' and 'Index' descriptions
 // in the package comment.
 // A return value of nil indicates no match.
+// 到此
+//
+// 返回类型是 []int, 假设为 a, a[0:1] 是整个匹配, a[2:3] 是第一个子表达式的匹配 
+// 例子
+// re := regexp.MustCompile(`(a+)(b+)`)
+// ret := re.FindSubmatchIndex([]byte("aaabbbbb"))
+// // ascii 中 0x61 对应 a, 0x62 对应 b
+// fmt.Printf("%#v\n", ret) // []int{0, 8, 0, 3, 3, 8}
+// ret = re.FindSubmatchIndex([]byte("222"))
+// fmt.Printf("%#v\n", ret) // []int(nil)
 func (re *Regexp) FindSubmatchIndex(b []byte) []int {
 	return re.pad(re.doExecute(nil, b, "", 0, re.prog.NumCap, nil))
 }
@@ -941,6 +1102,18 @@ func (re *Regexp) FindSubmatchIndex(b []byte) []int {
 // its subexpressions, as defined by the 'Submatch' description in the
 // package comment.
 // A return value of nil indicates no match.
+//
+// 假设返回结果是a,
+// a[0]代表整个正则的匹配,
+// a[1]代表第一个正则子表达式的匹配,
+// a[2] 代表第二个正则子表达式的匹配
+// 例子
+// re := regexp.MustCompile(`(a+)(b+)`)
+// ret := re.FindStringSubmatch("aaabbbbb")
+// // ascii 中 0x61 对应 a, 0x62 对应 b
+// fmt.Printf("%#v\n", ret) // []string{"aaabbbbb", "aaa", "bbbbb"}
+// ret = re.FindStringSubmatch("222")
+// fmt.Printf("%#v\n", ret) // []string(nil)
 func (re *Regexp) FindStringSubmatch(s string) []string {
 	var dstCap [4]int
 	a := re.doExecute(nil, nil, s, 0, re.prog.NumCap, dstCap[:0])
@@ -961,6 +1134,18 @@ func (re *Regexp) FindStringSubmatch(s string) []string {
 // matches, if any, of its subexpressions, as defined by the 'Submatch' and
 // 'Index' descriptions in the package comment.
 // A return value of nil indicates no match.
+//
+// 假设返回结果是a,
+// a[0:1]代表整个正则的匹配位移,
+// a[2:3]代表第一个正则子表达式的匹配位移,
+// a[4:5] 代表第二个正则子表达式的匹配位移
+//
+// re := regexp.MustCompile(`(a+)(b+)`)
+// ret := re.FindStringSubmatchIndex("aaabbbbb")
+// // ascii 中 0x61 对应 a, 0x62 对应 b
+// fmt.Printf("%#v\n", ret) // []int{0, 8, 0, 3, 3, 8}
+// ret = re.FindStringSubmatchIndex("222")
+// fmt.Printf("%#v\n", ret) // []int(nil)
 func (re *Regexp) FindStringSubmatchIndex(s string) []int {
 	return re.pad(re.doExecute(nil, nil, s, 0, re.prog.NumCap, nil))
 }
@@ -970,6 +1155,9 @@ func (re *Regexp) FindStringSubmatchIndex(s string) []int {
 // the RuneReader, and the matches, if any, of its subexpressions, as defined
 // by the 'Submatch' and 'Index' descriptions in the package comment. A
 // return value of nil indicates no match.
+//
+// 与 func (re *Regexp) FindStringSubmatchIndex(s string) []int {
+// 一样,只是输入参数类型不同
 func (re *Regexp) FindReaderSubmatchIndex(r io.RuneReader) []int {
 	return re.pad(re.doExecute(r, nil, "", 0, re.prog.NumCap, nil))
 }
@@ -980,6 +1168,24 @@ const startSize = 10 // The size at which to start a slice in the 'All' routines
 // matches of the expression, as defined by the 'All' description in the
 // package comment.
 // A return value of nil indicates no match.
+//
+// 假设结果为a, a[0] 是整个正则的第1个匹配, a[1] 是整个正则的第2个匹配
+// 例子
+// re := regexp.MustCompile(`(a+)(b+)`)
+// ret := re.FindAll([]byte("x"), 0)
+// fmt.Printf("%s\n", ret) // []
+// ret = re.FindAll([]byte("abaabaaabaaaab"), 0)
+// fmt.Printf("%s\n", ret) // []
+// ret = re.FindAll([]byte("abaabaaabaaaab"), 1)
+// fmt.Printf("%s\n", ret) // [ab]
+// ret = re.FindAll([]byte("abaabaaabaaaab"), 2)
+// fmt.Printf("%s\n", ret) // [ab aab]
+// ret = re.FindAll([]byte("abaabaaabaaaab"), 3)
+// fmt.Printf("%s\n", ret) // [ab aab aaab]
+// ret = re.FindAll([]byte("abaabaaabaaaab"), 4)
+// fmt.Printf("%s\n", ret) // [ab aab aaab aaaab]
+// ret = re.FindAll([]byte("abaabaaabaaaab"), 5)
+// fmt.Printf("%s\n", ret) // [ab aab aaab aaaab]
 func (re *Regexp) FindAll(b []byte, n int) [][]byte {
 	if n < 0 {
 		n = len(b) + 1
@@ -998,6 +1204,23 @@ func (re *Regexp) FindAll(b []byte, n int) [][]byte {
 // successive matches of the expression, as defined by the 'All' description
 // in the package comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile(`(a+)(b+)`)
+// ret := re.FindAllIndex([]byte("x"), 0)
+// fmt.Printf("%#v\n", ret) // [][]int(nil)
+// ret = re.FindAllIndex([]byte("abaabaaabaaaab"), 0)
+// fmt.Printf("%#v\n", ret) // [][]int(nil)
+// ret = re.FindAllIndex([]byte("abaabaaabaaaab"), 1)
+// fmt.Printf("%#v\n", ret) // [][]int{[]int{0, 2}}
+// ret = re.FindAllIndex([]byte("abaabaaabaaaab"), 2)
+// fmt.Printf("%#v\n", ret) // [][]int{[]int{0, 2}, []int{2, 5}}
+// ret = re.FindAllIndex([]byte("abaabaaabaaaab"), 3)
+// fmt.Printf("%#v\n", ret) // [][]int{[]int{0, 2}, []int{2, 5}, []int{5, 9}}
+// ret = re.FindAllIndex([]byte("abaabaaabaaaab"), 4)
+// fmt.Printf("%#v\n", ret) // [][]int{[]int{0, 2}, []int{2, 5}, []int{5, 9}, []int{9, 14}}
+// ret = re.FindAllIndex([]byte("abaabaaabaaaab"), 5)
+// fmt.Printf("%#v\n", ret) // [][]int{[]int{0, 2}, []int{2, 5}, []int{5, 9}, []int{9, 14}}
 func (re *Regexp) FindAllIndex(b []byte, n int) [][]int {
 	if n < 0 {
 		n = len(b) + 1
@@ -1016,6 +1239,10 @@ func (re *Regexp) FindAllIndex(b []byte, n int) [][]int {
 // successive matches of the expression, as defined by the 'All' description
 // in the package comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile("a+")
+// fmt.Println(re.FindAllString("abaabaaabaaaab", -1)) // [a aa aaa aaaa]
 func (re *Regexp) FindAllString(s string, n int) []string {
 	if n < 0 {
 		n = len(s) + 1
@@ -1034,6 +1261,10 @@ func (re *Regexp) FindAllString(s string, n int) []string {
 // slice of all successive matches of the expression, as defined by the 'All'
 // description in the package comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile("a+")
+// fmt.Println(re.FindAllStringIndex("abaabaaabaaaab", -1)) // [[0 1] [2 4] [5 8] [9 13]]
 func (re *Regexp) FindAllStringIndex(s string, n int) [][]int {
 	if n < 0 {
 		n = len(s) + 1
@@ -1052,6 +1283,10 @@ func (re *Regexp) FindAllStringIndex(s string, n int) [][]int {
 // of all successive matches of the expression, as defined by the 'All'
 // description in the package comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile("a+")
+// fmt.Println(re.FindAllSubmatch([]byte("abaabaaabaaaab"), -1)) // [[[97]] [[97 97]] [[97 97 97]] [[97 97 97 97]]]
 func (re *Regexp) FindAllSubmatch(b []byte, n int) [][][]byte {
 	if n < 0 {
 		n = len(b) + 1
@@ -1076,6 +1311,10 @@ func (re *Regexp) FindAllSubmatch(b []byte, n int) [][][]byte {
 // a slice of all successive matches of the expression, as defined by the
 // 'All' description in the package comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile("a+")
+// fmt.Println(re.FindAllSubmatchIndex([]byte("abaabaaabaaaab"), -1)) // [[0 1] [2 4] [5 8] [9 13]]
 func (re *Regexp) FindAllSubmatchIndex(b []byte, n int) [][]int {
 	if n < 0 {
 		n = len(b) + 1
@@ -1094,6 +1333,10 @@ func (re *Regexp) FindAllSubmatchIndex(b []byte, n int) [][]int {
 // returns a slice of all successive matches of the expression, as defined by
 // the 'All' description in the package comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile("a+")
+// fmt.Println(re.FindAllStringSubmatch("abaabaaabaaaab", -1)) // [[a] [aa] [aaa] [aaaa]]
 func (re *Regexp) FindAllStringSubmatch(s string, n int) [][]string {
 	if n < 0 {
 		n = len(s) + 1
@@ -1119,6 +1362,10 @@ func (re *Regexp) FindAllStringSubmatch(s string, n int) [][]string {
 // the expression, as defined by the 'All' description in the package
 // comment.
 // A return value of nil indicates no match.
+//
+// 例子
+// re := regexp.MustCompile("a+")
+// fmt.Println(re.FindAllStringSubmatchIndex("abaabaaabaaaab", -1)) // [[0 1] [2 4] [5 8] [9 13]]
 func (re *Regexp) FindAllStringSubmatchIndex(s string, n int) [][]int {
 	if n < 0 {
 		n = len(s) + 1
@@ -1148,6 +1395,8 @@ func (re *Regexp) FindAllStringSubmatchIndex(s string, n int) [][]int {
 //   n > 0: at most n substrings; the last substring will be the unsplit remainder.
 //   n == 0: the result is nil (zero substrings)
 //   n < 0: all substrings
+//
+// 注意:当n==1:返回值len=1,并且ret[0]==s,参考:example.
 func (re *Regexp) Split(s string, n int) []string {
 
 	if n == 0 {
