@@ -462,12 +462,15 @@ func formatNano(b []byte, nanosec uint, n int, trim bool) []byte {
 
 // String returns the time formatted using the format string
 //	"2006-01-02 15:04:05.999999999 -0700 MST"
+// UTC-7 MST 山地标准时区
 //
 // If the time has a monotonic clock reading, the returned string
 // includes a final field "m=±<value>", where value is the monotonic
 // clock reading formatted as a decimal number of seconds.
 //
-// UTC-7 MST 山地标准时区
+// The returned string is meant for debugging; for a stable serialized
+// representation, use t.MarshalText, t.MarshalBinary, or t.Format
+// with an explicit format string.
 func (t Time) String() string {
 	s := t.Format("2006-01-02 15:04:05.999999999 -0700 MST")
 
