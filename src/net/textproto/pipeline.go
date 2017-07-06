@@ -1,6 +1,8 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-7-4 14:06:07
 
 package textproto
 
@@ -9,6 +11,8 @@ import (
 )
 
 // A Pipeline manages a pipelined in-order request/response sequence.
+//
+// in-order: 按次序的,有序的
 //
 // To use a Pipeline p to manage multiple clients on a connection,
 // each client should run:
@@ -43,12 +47,18 @@ func (p *Pipeline) Next() uint {
 
 // StartRequest blocks until it is time to send (or, if this is a server, receive)
 // the request with the given id.
+//
+// 方法名虽然叫StartRequest,其实并不会StartRequest.
+// 它只是阻塞,直到id对应的Request可以发送的时候返回.
 func (p *Pipeline) StartRequest(id uint) {
 	p.request.Start(id)
 }
 
 // EndRequest notifies p that the request with the given id has been sent
 // (or, if this is a server, received).
+//
+// 方法名虽然叫EndRequest,其实并不会EndRequest.
+// 它只是通知p,id对应的Request已经被发送.
 func (p *Pipeline) EndRequest(id uint) {
 	p.request.End(id)
 }
@@ -70,8 +80,11 @@ func (p *Pipeline) EndResponse(id uint) {
 // at 0 and increment without skipping. The event number wraps around
 // safely as long as there are not 2^32 simultaneous events pending.
 type sequencer struct {
+	//保护id和wait字段
 	mu   sync.Mutex
+	// 当前可以Start的id
 	id   uint
+	// 当前等待的id, map key 是当前等待的id,value是一个chan
 	wait map[uint]chan uint
 }
 
@@ -81,15 +94,20 @@ type sequencer struct {
 func (s *sequencer) Start(id uint) {
 	s.mu.Lock()
 	if s.id == id {
+		// 可以start了,无需阻塞,unlock后函数返回
 		s.mu.Unlock()
 		return
 	}
+	// 还未start,需要进行阻塞
 	c := make(chan uint)
 	if s.wait == nil {
+		// 确保map非nil
 		s.wait = make(map[uint]chan uint)
 	}
+	// 设置id和c的对应关系
 	s.wait[id] = c
 	s.mu.Unlock()
+	// 阻塞,直到从chan c中收到可以start的通知(通知是在下面的End方法中发送)
 	<-c
 }
 
@@ -97,21 +115,28 @@ func (s *sequencer) Start(id uint) {
 // allowing it to schedule the event numbered id+1.  It is a run-time error
 // to call End with an id that is not the number of the active event.
 func (s *sequencer) End(id uint) {
+	// 假设id=2,即想通知2已经结束
 	s.mu.Lock()
 	if s.id != id {
+		// 当前的s.id应该为2
 		panic("out of sync")
 	}
 	id++
+	// 现在,id变为3,设置id为3的任务可以Start
 	s.id = id
 	if s.wait == nil {
+		// 确保map非nil
 		s.wait = make(map[uint]chan uint)
 	}
+	// 获取id为3的对应的chan
 	c, ok := s.wait[id]
 	if ok {
+		// 删除id为3和c的对应关系
 		delete(s.wait, id)
 	}
 	s.mu.Unlock()
 	if ok {
+		// 通知id3可以解除Start中的阻塞
 		c <- 1
 	}
 }
