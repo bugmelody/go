@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[5-over]]] 2017-7-14 13:16:15
 
 // HTTP Request reading and parsing.
 
@@ -29,7 +31,44 @@ import (
 	"golang_org/x/net/idna"
 )
 
+/**
+	1KB等于1024B，B是英文Byte(比特)的缩写,KB即kilobyte,字面意思就是千比特。 byte是文件大小的一个计量
+	单位，大家都知道在计算机里面，文件都是以二进制方式存储的，这样一个最小的存储单元（譬如10、11、01、00）叫
+	做一个bit(位，位元)，八个字节等于一个比特。
+	转换关系：
+	8bit=1b
+	1024byte=1kb
+	1024kb=1mb
+	1024mb=1gb
+	1024gb=1tb
+	以上单位k指千、m指百万、g指10亿，t指万亿，大小写均可。 因为1024≈1000，所以1024b,也称为1k，以下类似。
+	 */
+
+/**
+用php来描述就是
+$bytes_array = array(
+			'B' => 1,
+			'KB' => 1024,
+			'MB' => 1024 * 1024,
+			'GB' => 1024 * 1024 * 1024,
+			'TB' => 1024 * 1024 * 1024 * 1024,
+			'PB' => 1024 * 1024 * 1024 * 1024 * 1024,
+		);
+ */
+
 const (
+	// 十进制 256  => 二进制 100000000
+	// 十进制 256  => 二进制 100000000
+	// 十进制 512  => 二进制 1000000000
+	// 十进制 1024 => 二进制 10000000000
+	// 十进制 32 => 二进制 100000
+	// --------------
+	// 
+	// 1 byte        => 1
+	// 1 kb          => 1 << 10 => 10000000000
+	// 可见, 1 << 10 是 1kb, 1 << 20 是 1mb
+	// 二进制左移10位 = 十进制 * 1024
+	// 32 << 20 是 32 mb
 	defaultMaxMemory = 32 << 20 // 32 MB
 )
 
@@ -81,6 +120,8 @@ type badStringError struct {
 func (e *badStringError) Error() string { return fmt.Sprintf("%s %q", e.what, e.str) }
 
 // Headers that Request.Write handles itself and should be skipped.
+//
+// 这些header是Request.Write(写请求数据)内部自己处理的头部字段.
 var reqWriteExcludeHeader = map[string]bool{
 	"Host":              true, // not in Header map anyway
 	"User-Agent":        true,
@@ -112,6 +153,22 @@ type Request struct {
 	// connect to, while the Request's Host field optionally
 	// specifies the Host header value to send in the HTTP
 	// request.
+	//
+	// 上文:
+	// fields other than Path(指:Request.URL.Path) and RawQuery(指:Request.URL.RawQuery)
+	// the URL's Host(指:Request.URL.Host) specifies the server to connect to
+	// other than 1.与…不同，非 2.除了
+	//
+	//
+	// URL在服务端表示被请求的URI，在客户端表示要访问的URL.
+	//
+	// 对于服务端请求来说,URL字段是解析Request-Line的URI(保存在Request.RequestURI字段)得到的,
+	// 对大多数请求来说，除了Request.URL.Path和Request.URL.RawQuery之外的字段都是空字符串.
+	// （参见RFC 2616, Section 5.1.2）
+	//
+	// 对于客户端请求来说,Request.URL.Host字段指定了要连接的服务器,
+	// 而Request.Host字段（optionally）指定要发送的HTTP请求中的Host头的值.
+	// 也就是说, 要连接的服务器和header中的Host头可以不同.
 	URL *url.URL
 
 	// The protocol version for incoming server requests.
@@ -145,6 +202,8 @@ type Request struct {
 	// For incoming requests, the Host header is promoted to the
 	// Request.Host field and removed from the Header map.
 	//
+	// 对于服务端收到的请求,Host这个header会提升为Request.Host字段,并且从Header map中移除
+	//
 	// HTTP defines that header names are case-insensitive. The
 	// request parser implements this by using CanonicalHeaderKey,
 	// making the first character and any characters following a
@@ -166,6 +225,10 @@ type Request struct {
 	// but will return EOF immediately when no body is present.
 	// The Server will close the request body. The ServeHTTP
 	// Handler does not need to.
+	//
+	// req.Body总是会被自动关闭
+	//   对于client请求,Client's Transport负责关闭.
+	//   对于server服务,Server负责关闭,因此ServeHTTP Handler不需要进行关闭.
 	Body io.ReadCloser
 
 	// GetBody defines an optional func to return a new copy of
@@ -189,14 +252,26 @@ type Request struct {
 	// TransferEncoding can usually be ignored; chunked encoding is
 	// automatically added and removed as necessary when sending and
 	// receiving requests.
+	//
+	// 传输数据编码：Transfer-Encoding 
+	// 数据编码，即表示数据在网络传输当中，使用怎么样的保证方式来保证数据是安全成功地传输处理。
+	// 可以是分段传输，也可以是不分段，直接使用原数据进行传输。
+	// 有效的值为：Trunked(分段)和Identity(不分段).
+	//
+	// transfer-encoding:chunked的含义 : http://blog.csdn.net/whatday/article/details/7571451
 	TransferEncoding []string
 
 	// Close indicates whether to close the connection after
 	// replying to this request (for servers) or after sending this
 	// request and reading its response (for clients).
 	//
+	// 对于server,Close表示reply请求后是否关闭连接.
+	// 对于client,Close表示send请求并读取响应后是否关闭连接.
+	//
 	// For server requests, the HTTP server handles this automatically
 	// and this field is not needed by Handlers.
+	//
+	// 对于服务端请求,HTTP server会自动处理这些关闭逻辑,此时这个字段无用.
 	//
 	// For client requests, setting this field prevents re-use of
 	// TCP connections between requests to the same hosts, as if
@@ -211,16 +286,31 @@ type Request struct {
 	// golang.org/x/net/idna to convert it to either format if
 	// needed.
 	//
+	// 关于域名的Punycode: http://tools.jb51.net/punycode/
+	// IDNs（国际化域名Internationalized Domain Names）
+	//
 	// For client requests Host optionally overrides the Host
 	// header to send. If empty, the Request.Write method uses
 	// the value of URL.Host. Host may contain an international
 	// domain name.
+	//
+	// 上文:For server requests Host specifies the host on which the
+	// URL is sought(想象一下一台机器上多个虚拟主机)
+	//
+	// 对于服务端收到的请求,此Host字段指定在哪个主机上寻找URL.
+	// 根据RFC 2616,该值可以是Host头的值，或者URL自身提供的主机名.
+	// Host的格式可以是"host:port".
+	// 对于客户端发起的请求,此Host字段(可选地)用来重写请求的Host头.
+	// 如过该字段为"", Request.Write 方法会使用 Request.URL.Host 的值.
 	Host string
 
 	// Form contains the parsed form data, including both the URL
 	// field's query parameters and the POST or PUT form data.
 	// This field is only available after ParseForm is called.
 	// The HTTP client ignores Form and uses Body instead.
+	//
+	// Request.Form包含了GET和POST
+	// 此字段只对于server有用,client会直接使用Body.
 	Form url.Values
 
 	// PostForm contains the parsed form data from POST, PATCH,
@@ -228,11 +318,16 @@ type Request struct {
 	//
 	// This field is only available after ParseForm is called.
 	// The HTTP client ignores PostForm and uses Body instead.
+	//
+	// Request.PostForm包含POST,不包含url中的query parameters.
+	// 此字段只对于server有用,client会直接使用Body.
 	PostForm url.Values
 
 	// MultipartForm is the parsed multipart form, including file uploads.
 	// This field is only available after ParseMultipartForm is called.
 	// The HTTP client ignores MultipartForm and uses Body instead.
+	//
+	// 此字段只对于server有用,client会直接使用Body.
 	MultipartForm *multipart.Form
 
 	// Trailer specifies additional headers that are sent after the request
@@ -253,6 +348,19 @@ type Request struct {
 	// not mutate Trailer.
 	//
 	// Few HTTP clients, servers, or proxies support HTTP trailers.
+	//
+	// HTTP1.1支持chunked transfer，所以可以有Transfer-Encoding头部域:
+	// Transfer-Encoding:chunked
+	// HTTP1.0则没有。
+	// HTTP消息中可以包含任意长度的实体，通常它们使用Content-Length来给出消息结束标志。
+	// 但是，对于很多动态产生的响应，只能通过缓冲完整的消息来判断消息的大小，但这样做会加大延迟。
+	// 如果不使用长连接，还可以通过连接关闭的信号来判定一个消息的结束。
+	// HTTP/1.1中引入了Chunked transfer-coding来解决上面这个问题，发送方将消息分割成若干个任意大小的数据块,每个数据块在发送
+	// 时都会附上块的长度,最后用一个零长度的块作为消息结束的标志.这种方法允许发送方只缓冲消息的一个片段,避免缓冲整个消息带来的过载。
+	//
+	// 在HTTP/1.0中，有一个Content-MD5的头域，要计算这个头域需要发送方缓冲完整个消息后才能进行。而HTTP/1.1中，采用chunked分块传
+	// 递的消息在最后一个块（零长度）结束之后会再传递一个拖尾（trailer），它包含一个或多个头域，这些头域是发送方在传递完所有块之后再
+	// 计算出值的。发送方会在消息中包含一个Trailer头域告诉接收方这个拖尾的存在。
 	Trailer Header
 
 	// RemoteAddr allows HTTP servers and other software to record
@@ -262,12 +370,17 @@ type Request struct {
 	// sets RemoteAddr to an "IP:port" address before invoking a
 	// handler.
 	// This field is ignored by the HTTP client.
+	//
+	// 此字段对于client没有意义
 	RemoteAddr string
 
 	// RequestURI is the unmodified Request-URI of the
 	// Request-Line (RFC 2616, Section 5.1) as sent by the client
 	// to a server. Usually the URL field should be used instead.
 	// It is an error to set this field in an HTTP client request.
+	//
+	// RequestURI代表server收到的 Request-Line 中的 Request-URI.
+	// 在 HTTP client request 中,不应该设置这个字段
 	RequestURI string
 
 	// TLS allows HTTP servers and other software to record
@@ -277,13 +390,20 @@ type Request struct {
 	// TLS-enabled connections before invoking a handler;
 	// otherwise it leaves the field nil.
 	// This field is ignored by the HTTP client.
+	//
+	// server使用,client无意义
 	TLS *tls.ConnectionState
 
 	// Cancel is an optional channel whose closure indicates that the client
 	// request should be regarded as canceled. Not all implementations of
 	// RoundTripper may support Cancel.
 	//
+	// Cancel是一个可选的字段,如果设置了的话,Cancel这
+	// 个channel的关闭表示client请求应该被视为已经取消.
+	// 不是所有RoundTripper的实现都支持Cancel.
+	//
 	// For server requests, this field is not applicable.
+	// 对于服务端的请求,此字段不适用.
 	//
 	// Deprecated: Use the Context and WithContext methods
 	// instead. If a Request's Cancel field and context are both
@@ -293,6 +413,9 @@ type Request struct {
 	// Response is the redirect response which caused this request
 	// to be created. This field is only populated during client
 	// redirects.
+	//
+	// 引发此Request的响应(通过跳转).
+	// 也就是说,对于Request.Response,是Response触发了Request.
 	Response *Response
 
 	// ctx is either the client or server context. It should only
@@ -313,7 +436,12 @@ type Request struct {
 // For incoming server requests, the context is canceled when the
 // client's connection closes, the request is canceled (with HTTP/2),
 // or when the ServeHTTP method returns.
+//
+// client requests(客户端请求)
+// server requests(服务端服务)
 func (r *Request) Context() context.Context {
+	// ??为什么与nil作比较??r.ctx类型为context.Context,这是一个interface
+	// interface 的 zero value 是 nil
 	if r.ctx != nil {
 		return r.ctx
 	}
@@ -327,7 +455,9 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 		panic("nil context")
 	}
 	r2 := new(Request)
+	// a shallow copy of r, 浅复制
 	*r2 = *r
+	// 文档:with its context changed to ctx
 	r2.ctx = ctx
 
 	// Deep copy the URL because it isn't
@@ -355,7 +485,10 @@ func (r *Request) UserAgent() string {
 }
 
 // Cookies parses and returns the HTTP cookies sent with the request.
+//
+// Cookies解析并返回此请求发送的所有cookie
 func (r *Request) Cookies() []*Cookie {
+	// 因为传递了empty的字符串,因此返回了所有的cookie
 	return readCookies(r.Header, "")
 }
 
@@ -377,11 +510,18 @@ func (r *Request) Cookie(name string) (*Cookie, error) {
 // AddCookie does not attach more than one Cookie header field. That
 // means all cookies, if any, are written into the same line,
 // separated by semicolon.
+//
+// http请求中的Header[Cookie]的格式为:
+// 'LAST_LANG=en; LAST_NEWS=1488337564; COUNTRY=NA%2C221.237.152.85'
+// 每个cookie之间以'; '分隔
 func (r *Request) AddCookie(c *Cookie) {
 	s := fmt.Sprintf("%s=%s", sanitizeCookieName(c.Name), sanitizeCookieValue(c.Value))
+	// 文档:Get("Cookie"):If there are no values associated with the key, Get returns ""
 	if c := r.Header.Get("Cookie"); c != "" {
+		// 如果r.Header中已经有Cookie头,进行追加
 		r.Header.Set("Cookie", c+"; "+s)
 	} else {
+		// 否则,是直接设置
 		r.Header.Set("Cookie", s)
 	}
 }
@@ -394,6 +534,9 @@ func (r *Request) AddCookie(c *Cookie) {
 // as a method is that the compiler can diagnose programs that use the
 // alternate (correct English) spelling req.Referrer() but cannot
 // diagnose programs that use Header["Referrer"].
+//
+// Referer其实是一个错误拼写,正确应该写为Referrer,这
+// 里提供此方法是为了让编译器检查拼写错误
 func (r *Request) Referer() string {
 	return r.Header.Get("Referer")
 }
@@ -401,6 +544,12 @@ func (r *Request) Referer() string {
 // multipartByReader is a sentinel value.
 // Its presence in Request.MultipartForm indicates that parsing of the request
 // body has been handed off to a MultipartReader instead of ParseMultipartFrom.
+//
+// 如果Request.MultipartForm==multipartByReader,表
+// 示解析请求body的任务已经交给MultipartReader
+//
+// sentinel value: 标志值；标记值；警示值
+// handed off to:交给
 var multipartByReader = &multipart.Form{
 	Value: make(map[string][]string),
 	File:  make(map[string][]*multipart.FileHeader),
@@ -410,28 +559,74 @@ var multipartByReader = &multipart.Form{
 // multipart/form-data POST request, else returns nil and an error.
 // Use this function instead of ParseMultipartForm to
 // process the request body as a stream.
+//
+// 如果使用ParseMultipartForm方法则一次性的对表单数据进行解析
+// 如果使用MultipartReader返回的multipart.Reader,可以对表单数据进行流式处理.
+//
+// 什么是 MIME:
+// http://zhidao.baidu.com/link?url=YDg8bUoHKRg4B2vOMWIk4jrP3QNjhnzOqIJWZr2eyA8E9kQgxynyWtoHaJzynjV6QaoU7_sM-6dUWSBZBaOGca
+//
+// 表单中enctype="multipart/form-data"的意思,是设置表单的MIME编码.
+// 默认情况，这个编码格式是application/x-www-form-urlencoded,不能用于文件上传.
+// 只有使用了multipart/form-data，才能完整的传递文件数据
+//
+// @see
 func (r *Request) MultipartReader() (*multipart.Reader, error) {
 	if r.MultipartForm == multipartByReader {
+		// if r.MultipartForm==multipartByReader,表示解析请求body的
+		// 任务已经转移,因此MultipartReader方法不能调用超过1次
 		return nil, errors.New("http: MultipartReader called twice")
 	}
+	// 现在,r.MultipartForm!=multipartByReader,也就是本方法还没有调用过
 	if r.MultipartForm != nil {
+		// 此时如果不为nil,说明已经被ParseMultipartForm处理
 		return nil, errors.New("http: multipart handled by ParseMultipartForm")
 	}
+	// 设置已经转移标志
 	r.MultipartForm = multipartByReader
 	return r.multipartReader()
 }
 
+/**
+http post 例子:
+
+POST /sso/loginUser/uploadLogo?qcdebug=1 HTTP/1.1
+Host: i.ludashi.com
+User-Agent: Go-http-client/1.1
+Content-Length: 1639
+Content-Type: multipart/form-data; boundary=9e4333274ca910d7f21776c84733a592aee6de4a8d848632bc0c5ba42db2
+Accept-Encoding: gzip
+
+--9e4333274ca910d7f21776c84733a592aee6de4a8d848632bc0c5ba42db2
+Content-Disposition: form-data; name="logo"; filename="upload_logo_test.go"
+Content-Type: application/octet-stream
+
+文件内容
+
+--9e4333274ca910d7f21776c84733a592aee6de4a8d848632bc0c5ba42db2
+Content-Disposition: form-data; name="reqjson"
+
+reqjson字段的值
+--9e4333274ca910d7f21776c84733a592aee6de4a8d848632bc0c5ba42db2--
+ */
+
+// 根据http header信息获取一个 multipart.Reader 对象
+// 文件上传时,会传递请求头: 'Content-Type: multipart/form-data; boundary=随机数'
+// @see
 func (r *Request) multipartReader() (*multipart.Reader, error) {
 	v := r.Header.Get("Content-Type")
 	if v == "" {
+		// 文档:request Content-Type isn't multipart/form-data
 		return nil, ErrNotMultipart
 	}
 	d, params, err := mime.ParseMediaType(v)
 	if err != nil || d != "multipart/form-data" {
+		// 文档:request Content-Type isn't multipart/form-data
 		return nil, ErrNotMultipart
 	}
 	boundary, ok := params["boundary"]
 	if !ok {
+		// 文档:no multipart boundary param in Content-Type
 		return nil, ErrMissingBoundary
 	}
 	return multipart.NewReader(r.Body, boundary), nil
@@ -444,6 +639,9 @@ func (r *Request) isH2Upgrade() bool {
 }
 
 // Return value if nonempty, def otherwise.
+//
+// def 是 default 的缩写.
+// @see
 func valueOrDefault(value, def string) string {
 	if value != "" {
 		return value
@@ -488,8 +686,10 @@ func (r *Request) WriteProxy(w io.Writer) error {
 // the Request.
 var errMissingHost = errors.New("http: Request.Write on Request with no Host or URL set")
 
+// usingProxy:该请求是否使用代理
 // extraHeaders may be nil
 // waitForContinue may be nil
+// @see
 func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitForContinue func() bool) (err error) {
 	trace := httptrace.ContextClientTrace(req.Context())
 	if trace != nil && trace.WroteRequest != nil {
@@ -519,9 +719,12 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 
 	ruri := req.URL.RequestURI()
 	if usingProxy && req.URL.Scheme != "" && req.URL.Opaque == "" {
+		// 重设 ruri
 		ruri = req.URL.Scheme + "://" + host + ruri
 	} else if req.Method == "CONNECT" && req.URL.Path == "" {
 		// CONNECT requests normally give just the host and port, not a full URL.
+		// 重设 ruri
+		// http CONNECT:把请求连接转换到透明的TCP/IP通道。
 		ruri = host
 	}
 	// TODO(bradfitz): escape at least newlines in ruri?
@@ -532,15 +735,28 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	// size.
 	var bw *bufio.Writer
 	if _, ok := w.(io.ByteWriter); !ok {
+		// 如果 w 实现了 io.ByteWriter 接口, 将 w 重新设置为 bufio.Writer
+
+		/**
+		注意: bufio.NewWriter
+		// NewWriter returns a new Writer whose buffer has the default size.
+		func NewWriter(w io.Writer) *Writer {
+		这里所谓的 default size 在 bufio 包中定义为 4096字节,也就是 4k
+		
+		bufio.Writer 实现了 io.ByteWriter
+		 */
 		bw = bufio.NewWriter(w)
 		w = bw
 	}
+	// 现在 w 肯定实现了 io.ByteWriter 接口, 也就是拥有  WriteByte(c byte) error 方法
 
+	// ++++写入请求行
 	_, err = fmt.Fprintf(w, "%s %s HTTP/1.1\r\n", valueOrDefault(req.Method, "GET"), ruri)
 	if err != nil {
 		return err
 	}
 
+	// ++++写入 Host Header
 	// Header lines
 	_, err = fmt.Fprintf(w, "Host: %s\r\n", host)
 	if err != nil {
@@ -551,9 +767,11 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	// may be blank to not send the header.
 	userAgent := defaultUserAgent
 	if _, ok := req.Header["User-Agent"]; ok {
+		// 如果req.Header中设置了,使用之
 		userAgent = req.Header.Get("User-Agent")
 	}
 	if userAgent != "" {
+		// 不为空的时候才发送 User-Agent 头, 如果为空,则不发送
 		_, err = fmt.Fprintf(w, "User-Agent: %s\r\n", userAgent)
 		if err != nil {
 			return err
@@ -565,16 +783,19 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	if err != nil {
 		return err
 	}
+	// 写入部分header,这些header是自动计算
 	err = tw.WriteHeader(w)
 	if err != nil {
 		return err
 	}
 
+	// 写入部分header,这些header是req.Header减去reqWriteExcludeHeader
 	err = req.Header.WriteSubset(w, reqWriteExcludeHeader)
 	if err != nil {
 		return err
 	}
 
+	// 写入额外header
 	if extraHeaders != nil {
 		err = extraHeaders.Write(w)
 		if err != nil {
@@ -582,6 +803,7 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 		}
 	}
 
+	// http header写完, 补上与http body之间的分隔符 \r\n
 	_, err = io.WriteString(w, "\r\n")
 	if err != nil {
 		return err
@@ -591,8 +813,29 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 		trace.WroteHeaders()
 	}
 
+	/**
+	8.2.3 Use of the 100 (Continue) Status
+The purpose of the 100 (Continue) status (see section 10.1.1) is to allow a client that is sending a request message with a request body to determine if the origin server is willing to accept the request (based on the request headers) before the client sends the request body. In some cases, it might either be inappropriate or highly inefficient for the client to send the body if the server will reject the message without looking at the body.
+Requirements for HTTP/1.1 clients:
+– If a client will wait for a 100 (Continue) response before
+sending the request body, it MUST send an Expect request-header
+field (section 14.20) with the “100-continue” expectation.
+– A client MUST NOT send an Expect request-header field (section
+14.20) with the “100-continue” expectation if it does not intend
+to send a request body.
+
+简单翻译一下：
+使用100（不中断，继续）状态码的目的是为了在客户端发出请求体之前，让服务器根据客户端发出的请求信息（根据请求的头信息）来决定是否愿意接受来自客户端的包含了请求内容的请求；在某些情况下，在有些情况下，如果服务器拒绝查看消息主体，这时客户端发送消息主体是不合适的或会降低效率
+
+对HTTP/1.1客户端的要求：
+-如果客户端在发送请求体之前，想等待服务器返回100状态码，那么客户端必须要发送一个Expect请求头信息，即：”100-continue”请求头信息；
+
+-如果一个客户端不打算发送请求体的时候，一定不要使用“100-continue”发送Expect的请求头信息；
+	 */
+	
 	// Flush and wait for 100-continue if expected.
 	if waitForContinue != nil {
+		// waitForContinue 是函数参数,类型是函数 waitForContinue func() bool
 		if bw, ok := w.(*bufio.Writer); ok {
 			err = bw.Flush()
 			if err != nil {
@@ -603,6 +846,7 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 			trace.Wait100Continue()
 		}
 		if !waitForContinue() {
+			// 如果waitForContinue返回false,关闭req.Body,函数返回,根本不会写body
 			req.closeBody()
 			return nil
 		}
@@ -614,6 +858,7 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 		}
 	}
 
+	// ++++写入 Body 和 Trailer
 	// Write body and trailer
 	err = tw.WriteBody(w)
 	if err != nil {
@@ -663,6 +908,8 @@ func idnaASCII(v string) (string, error) {
 // issue 11206, where a malformed Host header used in the proxy context
 // would create a bad request. So it is enough to just truncate at the
 // first offending character.
+//
+// @notsee
 func cleanHost(in string) string {
 	if i := strings.IndexAny(in, " /"); i != -1 {
 		in = in[:i]
@@ -686,14 +933,18 @@ func cleanHost(in string) string {
 // E.g., "[fe80::1%en0]:8080" to "[fe80::1]:8080"
 func removeZone(host string) string {
 	if !strings.HasPrefix(host, "[") {
+		// 没有以 "[" 开头
 		return host
 	}
 	i := strings.LastIndex(host, "]")
 	if i < 0 {
+		// 不是以 "]" 结尾
 		return host
 	}
+	// 最后一个 % 的位置
 	j := strings.LastIndex(host[:i], "%")
 	if j < 0 {
+		// 不存在 %
 		return host
 	}
 	return host[:j] + host[i:]
@@ -701,6 +952,10 @@ func removeZone(host string) string {
 
 // ParseHTTPVersion parses a HTTP version string.
 // "HTTP/1.0" returns (1, 0, true).
+//
+// ok==false表示解析失败
+//
+// @notsee
 func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 	const Big = 1000000 // arbitrary upper bound
 	switch vers {
@@ -710,12 +965,17 @@ func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 		return 1, 0, true
 	}
 	if !strings.HasPrefix(vers, "HTTP/") {
+		// 不是以 "HTTP/" 开头
 		return 0, 0, false
 	}
+	// 现在， 是以 "HTTP/" 开头
+	// dot 代表点号位置
 	dot := strings.Index(vers, ".")
 	if dot < 0 {
+		// 不含点号
 		return 0, 0, false
 	}
+	// 现在， 包含点号
 	major, err := strconv.Atoi(vers[5:dot])
 	if err != nil || major < 0 || major > Big {
 		return 0, 0, false
@@ -727,6 +987,7 @@ func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 	return major, minor, true
 }
 
+// 判断是否是合法的http方法
 func validMethod(method string) bool {
 	/*
 	     Method         = "OPTIONS"                ; Section 9.2
@@ -750,6 +1011,8 @@ func validMethod(method string) bool {
 // Request.Body is set to body and will be closed by the Client
 // methods Do, Post, and PostForm, and Transport.RoundTrip.
 //
+// 此时自动Close
+//
 // NewRequest returns a Request suitable for use with Client.Do or
 // Transport.RoundTrip. To create a request for use with testing a
 // Server Handler, either use the NewRequest function in the
@@ -762,6 +1025,9 @@ func validMethod(method string) bool {
 // exact value (instead of -1), GetBody is populated (so 307 and 308
 // redirects can replay the body), and Body is set to NoBody if the
 // ContentLength is 0.
+//
+// 根据 Request 的文档,如果 body 参数是 nil,表示请求时不需要 http body
+// 比如: req, err := NewRequest("GET", url, nil)
 func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 	if method == "" {
 		// We document that "" means "GET" for Request.Method, and people have
@@ -778,10 +1044,14 @@ func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 	}
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
+		// 如果body参数没有实现ReadCloser接口
+		// 由于在函数签名中指定了body是io.Reader类型,因此如果这里不是ReadCloser接口,实际是说明body没有实现Close方法
+		// 这里的意思是如果 body 没有实现 Close 方法, 则通过 ioutil.NopCloser 添加 Close 方法
 		rc = ioutil.NopCloser(body)
 	}
 	// The host's colon:port should be normalized. See Issue 14836.
 	u.Host = removeEmptyPort(u.Host)
+	// 开始构造要返回的 *Request 对象，固定使用http 1.1，
 	req := &Request{
 		Method:     method,
 		URL:        u,
@@ -792,6 +1062,8 @@ func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 		Body:       rc,
 		Host:       u.Host,
 	}
+	// 这个body是整个函数的参数
+	// 以下3个case的v.Len,看文档,都是返回未读区域的长度
 	if body != nil {
 		switch v := body.(type) {
 		case *bytes.Buffer:
@@ -842,6 +1114,8 @@ func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 // BasicAuth returns the username and password provided in the request's
 // Authorization header, if the request uses HTTP Basic Authentication.
 // See RFC 2617, Section 2.
+//
+// 从 Header 中获取认证信息
 func (r *Request) BasicAuth() (username, password string, ok bool) {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
@@ -855,6 +1129,7 @@ func (r *Request) BasicAuth() (username, password string, ok bool) {
 func parseBasicAuth(auth string) (username, password string, ok bool) {
 	const prefix = "Basic "
 	if !strings.HasPrefix(auth, prefix) {
+		// 如果不是以 "Basic " 开头
 		return
 	}
 	c, err := base64.StdEncoding.DecodeString(auth[len(prefix):])
@@ -864,8 +1139,10 @@ func parseBasicAuth(auth string) (username, password string, ok bool) {
 	cs := string(c)
 	s := strings.IndexByte(cs, ':')
 	if s < 0 {
+		// 不存在冒号
 		return
 	}
+	// s现在代表:位移
 	return cs[:s], cs[s+1:], true
 }
 
@@ -879,24 +1156,38 @@ func (r *Request) SetBasicAuth(username, password string) {
 }
 
 // parseRequestLine parses "GET /foo HTTP/1.1" into its three parts.
+// 将请求行解析为 method, requestURI, proto 三个部分
 func parseRequestLine(line string) (method, requestURI, proto string, ok bool) {
+	// s1: space 1 position,相对于 "^GET /foo HTTP/1.1"
 	s1 := strings.Index(line, " ")
+	// s2: space 2 position,相对于 "GET ^/foo HTTP/1.1"
 	s2 := strings.Index(line[s1+1:], " ")
 	if s1 < 0 || s2 < 0 {
+		// 只有一个空格,或者没有空格
 		return
 	}
+	// 现在, line 中有两个空格, s1 和 s2 肯定都 >= 0
+	// s1 是第一个空格位置,相对于 "^GET /foo HTTP/1.1"
+	// s2 是第二个空格位置,相对于 "GET ^/foo HTTP/1.1"
+
+	// 让 s2 相对于 GET 起点
 	s2 += s1 + 1
+	// 现在, s1 和 s2 都是相对于 "^GET /foo HTTP/1.1" 的空格1 空格2 位置
 	return line[:s1], line[s1+1 : s2], line[s2+1:], true
+	//     GET        /foo             HTTP/1.1
 }
 
 var textprotoReaderPool sync.Pool
 
 func newTextprotoReader(br *bufio.Reader) *textproto.Reader {
 	if v := textprotoReaderPool.Get(); v != nil {
+		// 从pool中获取到了
+		// v的实际底层类型是 *textproto.Reader
 		tr := v.(*textproto.Reader)
 		tr.R = br
 		return tr
 	}
+	// 没有从pool中获取到
 	return textproto.NewReader(br)
 }
 
@@ -916,8 +1207,12 @@ const (
 	keepHostHeader   = false
 )
 
+// 如果 deleteHostHeader==true,将会进行 delete(req.Header, "Host") 操作
+// @see
 func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err error) {
+	// 使用b得到一个textproto.Reader,可能是从pool中得到的
 	tp := newTextprotoReader(b)
+	// 本函数最后的返回结果
 	req = new(Request)
 
 	// First line: GET /index.html HTTP/1.0
@@ -925,23 +1220,31 @@ func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err erro
 	if s, err = tp.ReadLine(); err != nil {
 		return nil, err
 	}
+	// 现在,读取first line没有出错
 	defer func() {
+		// 确保本函数返回时一定将tp归还pool
 		putTextprotoReader(tp)
 		if err == io.EOF {
+			// 修改命名返回值
 			err = io.ErrUnexpectedEOF
 		}
 	}()
 
 	var ok bool
+	// 现在, 请求行的数据已经被读取到s,解析请求行
 	req.Method, req.RequestURI, req.Proto, ok = parseRequestLine(s)
 	if !ok {
+		// 解析请求行失败
 		return nil, &badStringError{"malformed HTTP request", s}
 	}
 	if !validMethod(req.Method) {
+		// 请求行中的请求方法不合法
 		return nil, &badStringError{"invalid method", req.Method}
 	}
+	// rawurl是根据RequestURI解析出来的
 	rawurl := req.RequestURI
 	if req.ProtoMajor, req.ProtoMinor, ok = ParseHTTPVersion(req.Proto); !ok {
+		// 解析http version失败
 		return nil, &badStringError{"malformed HTTP version", req.Proto}
 	}
 
@@ -959,20 +1262,24 @@ func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err erro
 		rawurl = "http://" + rawurl
 	}
 
+	// req.URL是根据请求行解析出来的
 	if req.URL, err = url.ParseRequestURI(rawurl); err != nil {
 		return nil, err
 	}
 
 	if justAuthority {
 		// Strip the bogus "http://" back off.
+		// bogus ['bəʊgəs] adj. 假的；伪造的 	n. 伪币
 		req.URL.Scheme = ""
 	}
 
 	// Subsequent lines: Key: value.
+	// 读取头部
 	mimeHeader, err := tp.ReadMIMEHeader()
 	if err != nil {
 		return nil, err
 	}
+	// 底层类型都是map[string][]string,因此可用Header(mimeHeader)进行类型转换
 	req.Header = Header(mimeHeader)
 
 	// RFC 2616: Must treat
@@ -982,8 +1289,10 @@ func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err erro
 	//	GET http://www.google.com/index.html HTTP/1.1
 	//	Host: doesntmatter
 	// the same. In the second case, any Host line is ignored.
+	// req.URL是根据请求行解析出来的
 	req.Host = req.URL.Host
 	if req.Host == "" {
+		// 当设置req.Host的时候,优先使用请求行中的host,如果请求行中不存在host,再考虑使用Header[Host]
 		req.Host = req.Header.get("Host")
 	}
 	if deleteHostHeader {
@@ -1020,6 +1329,12 @@ func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err erro
 //
 // MaxBytesReader prevents clients from accidentally or maliciously
 // sending a large request and wasting server resources.
+//
+// maliciously [mə'lɪʃəsli] adv. 有敌意地，恶意地
+// 来对比一下: $ go doc io.LimitReader
+// func LimitReader(r Reader, n int64) Reader
+// LimitReader returns a Reader that reads from r but stops with EOF after n
+// bytes. The underlying implementation is a *LimitedReader.
 func MaxBytesReader(w ResponseWriter, r io.ReadCloser, n int64) io.ReadCloser {
 	return &maxBytesReader{w: w, r: r, n: n}
 }
@@ -1047,11 +1362,14 @@ func (l *maxBytesReader) Read(p []byte) (n int, err error) {
 	n, err = l.r.Read(p)
 
 	if int64(n) <= l.n {
+		// 读取到的字节数 <= 剩余限制字节数
 		l.n -= int64(n)
 		l.err = err
 		return n, err
 	}
 
+	// 到了这里,说明l.r.Read(p)超过了希望的限制
+	// n是函数返回值,这里修改n为l.n(整个剩余数据字节数),模拟l.r被读取完的效果
 	n = int(l.n)
 	l.n = 0
 
@@ -1076,6 +1394,10 @@ func (l *maxBytesReader) Close() error {
 	return l.r.Close()
 }
 
+// 复制src到dst
+// 注意,并不是覆盖,而是dst.Add
+// 这就造成了src中存在,dst中存在,进行Add,其实之后Get是Get到第一个
+// 也就是双方都存在是,是dst中的值优先
 func copyValues(dst, src url.Values) {
 	for k, vs := range src {
 		for _, value := range vs {
@@ -1084,6 +1406,7 @@ func copyValues(dst, src url.Values) {
 	}
 }
 
+// @see 一定要多看看本函数
 func parsePostForm(r *Request) (vs url.Values, err error) {
 	if r.Body == nil {
 		err = errors.New("missing form body")
@@ -1098,6 +1421,7 @@ func parsePostForm(r *Request) (vs url.Values, err error) {
 	ct, _, err = mime.ParseMediaType(ct)
 	switch {
 	case ct == "application/x-www-form-urlencoded":
+		// 普通表单提交
 		var reader io.Reader = r.Body
 		maxFormSize := int64(1<<63 - 1)
 		if _, ok := r.Body.(*maxBytesReader); !ok {
@@ -1120,6 +1444,7 @@ func parsePostForm(r *Request) (vs url.Values, err error) {
 			err = e
 		}
 	case ct == "multipart/form-data":
+		// 文件表单提交
 		// handled by ParseMultipartForm (which is calling us, or should be)
 		// TODO(bradfitz): there are too many possible
 		// orders to call too many functions here.
@@ -1135,6 +1460,8 @@ func parsePostForm(r *Request) (vs url.Values, err error) {
 // For all requests, ParseForm parses the raw query from the URL and updates
 // r.Form.
 //
+// 上文中的For all requests是指所有的http method
+//
 // For POST, PUT, and PATCH requests, it also parses the request body as a form
 // and puts the results into both r.PostForm and r.Form. Request body parameters
 // take precedence over URL query string values in r.Form.
@@ -1148,24 +1475,36 @@ func parsePostForm(r *Request) (vs url.Values, err error) {
 //
 // ParseMultipartForm calls ParseForm automatically.
 // ParseForm is idempotent.
+//
+// @see
 func (r *Request) ParseForm() error {
+	// 方法的返回值
 	var err error
+	// +++ 处理 r.PostForm
+	// if r.PostForm == nil: 在没有计算过的情况下才进行计算
 	if r.PostForm == nil {
 		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
+			// 如果是POST,PUT,PATCH,从body解析出表单数据
 			r.PostForm, err = parsePostForm(r)
 		}
 		if r.PostForm == nil {
+			// 确保r.PostForm不是nil map
 			r.PostForm = make(url.Values)
 		}
 	}
+	// +++ 处理 r.Form
+	// if r.Form == nil: 在没有计算过的情况下才进行计算
 	if r.Form == nil {
 		if len(r.PostForm) > 0 {
+			// 如果r.PostForm有了数据,copy r.PostForm 到 r.Form
 			r.Form = make(url.Values)
 			copyValues(r.Form, r.PostForm)
 		}
+		// newValues代表从请求url中的query string解析的数据
 		var newValues url.Values
 		if r.URL != nil {
 			var e error
+			// 确保 newValues 不是 nil map
 			newValues, e = url.ParseQuery(r.URL.RawQuery)
 			if err == nil {
 				err = e
@@ -1189,7 +1528,17 @@ func (r *Request) ParseForm() error {
 // disk in temporary files.
 // ParseMultipartForm calls ParseForm if necessary.
 // After one call to ParseMultipartForm, subsequent calls have no effect.
+//
+// multipart/form-data(文件上传)
+//
+// @see
 func (r *Request) ParseMultipartForm(maxMemory int64) error {
+	/**
+	发送post请求时候，表单<form>属性enctype共有二个值可选，这个属性管理的是表单的MIME编码：
+	application/x-www-form-urlencoded(默认值)
+	multipart/form-data
+	其实form表单在你不写enctype属性时，也默认为其添加了enctype属性值，默认值是enctype="application/x- www-form-urlencoded"
+	 */
 	if r.MultipartForm == multipartByReader {
 		return errors.New("http: multipart handled by MultipartReader")
 	}
@@ -1200,20 +1549,25 @@ func (r *Request) ParseMultipartForm(maxMemory int64) error {
 		}
 	}
 	if r.MultipartForm != nil {
+		// 之前已经调用过本方法
 		return nil
 	}
 
+	// 根据http header信息获取一个multipart.Reader对象,文件上传时,
+	// 会传递请求头: 'Content-Type: multipart/form-data; boundary=随机数'
 	mr, err := r.multipartReader()
 	if err != nil {
 		return err
 	}
 
+	// f类型为multipart.Form
 	f, err := mr.ReadForm(maxMemory)
 	if err != nil {
 		return err
 	}
 
 	if r.PostForm == nil {
+		// 确保r.PostForm不是nil map
 		r.PostForm = make(url.Values)
 	}
 	for k, v := range f.Value {
@@ -1234,6 +1588,9 @@ func (r *Request) ParseMultipartForm(maxMemory int64) error {
 // If key is not present, FormValue returns the empty string.
 // To access multiple values of the same key, call ParseForm and
 // then inspect Request.Form directly.
+//
+// FormValue只与r.Form相关
+// @see
 func (r *Request) FormValue(key string) string {
 	if r.Form == nil {
 		r.ParseMultipartForm(defaultMaxMemory)
@@ -1249,6 +1606,9 @@ func (r *Request) FormValue(key string) string {
 // PostFormValue calls ParseMultipartForm and ParseForm if necessary and ignores
 // any errors returned by these functions.
 // If key is not present, PostFormValue returns the empty string.
+//
+// PostFormValue只与r.PostForm相关
+// @see
 func (r *Request) PostFormValue(key string) string {
 	if r.PostForm == nil {
 		r.ParseMultipartForm(defaultMaxMemory)
@@ -1261,11 +1621,18 @@ func (r *Request) PostFormValue(key string) string {
 
 // FormFile returns the first file for the provided form key.
 // FormFile calls ParseMultipartForm and ParseForm if necessary.
+//
+// multipart.File和multipart.FileHeader是什么关系???
+// *multipart.FileHeader拥有Open方法,该方法返回multipart.File
+// func (fh *FileHeader) Open() (File, error) {
+//
+// @see
 func (r *Request) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
 	if r.MultipartForm == multipartByReader {
 		return nil, nil, errors.New("http: multipart handled by MultipartReader")
 	}
 	if r.MultipartForm == nil {
+		// 之前没有调用过ParseMultipartForm
 		err := r.ParseMultipartForm(defaultMaxMemory)
 		if err != nil {
 			return nil, nil, err
@@ -1333,6 +1700,7 @@ func (r *Request) outgoingLength() int64 {
 func requestMethodUsuallyLacksBody(method string) bool {
 	switch method {
 	case "GET", "HEAD", "DELETE", "OPTIONS", "PROPFIND", "SEARCH":
+		// 这些http方法都无需body
 		return true
 	}
 	return false

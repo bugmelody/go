@@ -1,6 +1,9 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-7-11 21:03:46
+// 本文件暂时只看 func DetectContentType 的文档
 
 package http
 

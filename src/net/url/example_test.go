@@ -1,6 +1,8 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-7-11 18:55:54
 
 package url_test
 
@@ -35,15 +37,20 @@ func ExampleURL() {
 	}
 	u.Scheme = "https"
 	u.Host = "google.com"
+	// 获取query,得到的是url.Values类型
 	q := u.Query()
+	// 修改query
 	q.Set("q", "golang")
+	// 将修改后的query设置回去
 	u.RawQuery = q.Encode()
+	// 自动调用u.String()
 	fmt.Println(u)
 	// Output: https://google.com/search?q=golang
 }
 
 func ExampleURL_roundtrip() {
 	// Parse + String preserve the original encoding.
+	// 这句指的是先使用Parse,再使用String,仍然能得到原始的值
 	u, err := url.Parse("https://example.com/foo%2fbar")
 	if err != nil {
 		log.Fatal(err)
@@ -58,6 +65,7 @@ func ExampleURL_roundtrip() {
 }
 
 func ExampleURL_ResolveReference() {
+	// url.Parse的参数:The rawurl may be relative or absolute.
 	u, err := url.Parse("../../..//search?q=dotnet")
 	if err != nil {
 		log.Fatal(err)
@@ -66,12 +74,15 @@ func ExampleURL_ResolveReference() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// 基于base这个绝对地址解析u这个相对地址
 	fmt.Println(base.ResolveReference(u))
 	// Output:
 	// http://example.com/search?q=dotnet
 }
 
 func ExampleParseQuery() {
+	// 文档中提到: Query(指参数) is expected to be a list of key=value settings separated by ampersands or semicolons
+	// golang中的queryString可以是&分隔,也可以是;分隔
 	m, err := url.ParseQuery(`x=1&y=2&y=3;z`)
 	if err != nil {
 		log.Fatal(err)
@@ -91,6 +102,9 @@ func ExampleURL_Hostname() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// Hostname文档中提到:If Host is an IPv6 literal with a port number, Hostname returns the
+	// IPv6 literal without the square brackets. IPv6 literals may include
+	// a zone identifier.
 	fmt.Println(u.Hostname())
 	// Output:
 	// example.org

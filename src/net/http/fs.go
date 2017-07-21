@@ -68,7 +68,8 @@ import (
 //
 // An empty Dir is treated as ".".
 //
-// 上文中: implements FileSystem(指FileSystem interface)
+// 上文中: implements FileSystem(指http.FileSystem接口)
+// files and directories starting with a period: 指隐藏文件或目录
 type Dir string
 
 // mapDirOpenError maps the provided non-nil error from opening name

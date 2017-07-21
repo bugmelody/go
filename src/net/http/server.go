@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[6-over]]] 2017-7-18 08:38:05
 
 // HTTP server. See RFC 2616.
 
@@ -43,6 +45,8 @@ var (
 	// Hijacker interface. A zero-byte write on a hijacked
 	// connection will return ErrHijacked without any other side
 	// effects.
+	//
+	// hijack ['haɪdʒæk] vt.抢劫;揩油 vi.拦路抢劫 n.劫持;威逼;敲诈
 	ErrHijacked = errors.New("http: connection has been hijacked")
 
 	// ErrContentLength is returned by ResponseWriter.Write calls
@@ -54,6 +58,17 @@ var (
 	// Deprecated: ErrWriteAfterFlush is no longer used.
 	ErrWriteAfterFlush = errors.New("unused")
 )
+
+/**
+intermediary [,intə'mi:diəri]
+adj.
+1.居间的；中间的
+2.中间人的；调解的；媒介的
+n.
+1.中间人；调解人
+2.媒介；手段；工具
+3.中间形态；中间阶段
+ */
 
 // A Handler responds to an HTTP request.
 //
@@ -78,6 +93,10 @@ var (
 // and hangs up the connection. To abort a handler so the client sees
 // an interrupted response but the server doesn't log an error, panic
 // with the value ErrAbortHandler.
+//
+// cautious ['kɔ:ʃəs] adj. 细心的，谨小慎微的，慎重的；警惕的
+// hang up: 挂断电话；搁置，拖延
+// server: 指的是ServeHTTP的调用者. 
 type Handler interface {
 	ServeHTTP(ResponseWriter, *Request)
 }
@@ -108,6 +127,12 @@ type ResponseWriter interface {
 	//
 	// To suppress implicit response headers (such as "Date"), set
 	// their value to nil.
+	//
+	// Changing the header(返回的Header)
+	// unless(除非)
+	// 注意:返回的是http.Header,底层数据类型是map,可以看做struct,是可以进行修改的
+	// 参考: 'func ExampleResponseWriter_trailers() {'
+	// 通常的使用方式是在handler中调用 w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	Header() Header
 
 	// Write writes the data to the connection as part of an HTTP reply.
@@ -136,6 +161,9 @@ type ResponseWriter interface {
 	// will trigger an implicit WriteHeader(http.StatusOK).
 	// Thus explicit calls to WriteHeader are mainly used to
 	// send error codes.
+	//
+	// 通常不需要你主动调用WriteHeader.
+	// 只有在你想发送http错误代码时才需要主动调用WriteHeader.
 	WriteHeader(int)
 }
 
@@ -158,10 +186,14 @@ type Flusher interface {
 // The Hijacker interface is implemented by ResponseWriters that allow
 // an HTTP handler to take over the connection.
 //
+// take over 接管;接收
+//
 // The default ResponseWriter for HTTP/1.x connections supports
 // Hijacker, but HTTP/2 connections intentionally do not.
 // ResponseWriter wrappers may also not support Hijacker. Handlers
 // should always test for this ability at runtime.
+//
+// intentionally(故意地)
 type Hijacker interface {
 	// Hijack lets the caller take over the connection.
 	// After a call to Hijack the HTTP server library
@@ -196,6 +228,8 @@ type CloseNotifier interface {
 	// After the Handler has returned, there is no guarantee
 	// that the channel receives a value.
 	//
+	// 因此,应该只在Handler处理过程中使用.
+	//
 	// If the protocol is HTTP/1.1 and CloseNotify is called while
 	// processing an idempotent request (such a GET) while
 	// HTTP/1.1 pipelining is in use, the arrival of a subsequent
@@ -204,6 +238,13 @@ type CloseNotifier interface {
 	// enabled in browsers and not seen often in the wild. If this
 	// is a problem, use HTTP/2 or only use CloseNotify on methods
 	// such as POST.
+	//
+	// idempotent [ai'dempətənt] adj., n.【数学】幂等(的)
+	// in the wild 在野外，野生的；在自然环境下
+	//
+	// 关于 HTTP/1.1 pipelining:
+	// http://blog.csdn.net/dongzhiquan/article/details/6114040
+	// http://cshbbrain.iteye.com/blog/1559055
 	CloseNotify() <-chan bool
 }
 
@@ -218,6 +259,8 @@ var (
 	// HTTP handlers with context.WithValue to access the address
 	// the local address the connection arrived on.
 	// The associated value will be of type net.Addr.
+	//
+	// 参考: go doc net.Addr
 	LocalAddrContextKey = &contextKey{"local-addr"}
 )
 
@@ -821,6 +864,9 @@ func putBufioWriter(bw *bufio.Writer) {
 // DefaultMaxHeaderBytes is the maximum permitted size of the headers
 // in an HTTP request.
 // This can be overridden by setting Server.MaxHeaderBytes.
+//
+// 1 << 10 是 1KB, 1 << 20 是 1MB
+// 左移10就是乘以 1024
 const DefaultMaxHeaderBytes = 1 << 20 // 1 MB
 
 func (srv *Server) maxHeaderBytes() int {
@@ -1663,6 +1709,7 @@ func (e badRequestError) Error() string { return "Bad Request: " + string(e) }
 // While any panic from ServeHTTP aborts the response to the client,
 // panicking with ErrAbortHandler also suppresses logging of a stack
 // trace to the server's error log.
+// 跟不同的panic相比只是让server不进行error log
 var ErrAbortHandler = errors.New("net/http: abort Handler")
 
 // isCommonNetReadError reports whether err is a common error
@@ -1907,9 +1954,14 @@ func requestBodyRemains(rc io.ReadCloser) bool {
 // ordinary functions as HTTP handlers. If f is a function
 // with the appropriate signature, HandlerFunc(f) is a
 // Handler that calls f.
+//
+// HandlerFunc(f) (这是一个类型转换) 会将普通函数f转换为一个Handler interface
+// 因为普通函数f并没有ServeHTTP方法,因此在对HandlerFunc定义了一个ServeHTTP方
+// 法,委托调用 f(w, r)
 type HandlerFunc func(ResponseWriter, *Request)
 
 // ServeHTTP calls f(w, r).
+// 在HandlerFunc类型上面实现了 Handler interface
 func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 	f(w, r)
 }
@@ -1920,8 +1972,20 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 // It does not otherwise end the request; the caller should ensure no further
 // writes are done to w.
 // The error message should be plain text.
+//
+// 本函数并不会自己结束请求,应当由调用者确保之后没有其他写入
 func Error(w ResponseWriter, error string, code int) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	/**
+	互联网上的资源有各种类型，通常浏览器会根据响应头的Content-Type字段来分辨它们的类型。
+	例如："text/html"代表html文档，"image/png"是PNG图片，"text/css"是CSS样式文档。
+	然而，有些资源的Content-Type是错的或者未定义。这时，某些浏览器会启用MIME-sniffing来猜测该资源的类型，解析内容并执行。
+	例如，我们即使给一个html文档指定Content-Type为"text/plain"，在IE8-中这个文档依然会被当做html来解析。利用浏览器的
+	这个特性，攻击者甚至可以让原本应该解析为图片的请求被解析为JavaScript。通过下面这个响应头可以禁用浏览器的类型猜测行为：
+	X-Content-Type-Options: nosniff
+	
+	X-Content-Type-Options: nosniff  用来禁止浏览器进行类型猜测
+	 */
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
 	fmt.Fprintln(w, error)
@@ -1932,6 +1996,8 @@ func NotFound(w ResponseWriter, r *Request) { Error(w, "404 page not found", Sta
 
 // NotFoundHandler returns a simple request handler
 // that replies to each request with a ``404 page not found'' reply.
+//
+// 将函数NotFound转换为HandlerFunc类型,从而支持Handler interface
 func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
 
 // StripPrefix returns a handler that serves HTTP requests
@@ -1939,19 +2005,46 @@ func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
 // and invoking the handler h. StripPrefix handles a
 // request for a path that doesn't begin with prefix by
 // replying with an HTTP 404 not found error.
+//
+// StripPrefix返回一个Handler,该Handler会将请求的URL.Path字段
+// 中给定前缀prefix去除后再交由h处理。
+// StripPrefix会向URL.Path字段中没有给定前缀的请求回复404 page not found。
+//
+// 例子:
+// To serve a directory on disk (/tmp) under an alternate URL
+// path (/tmpfiles/), use StripPrefix to modify the request
+// URL's path before the FileServer sees it:
+// http.Handle("/tmpfiles/", http.StripPrefix("/tmpfiles/", http.FileServer(http.Dir("/tmp"))))
+// 对于到达的"/tmpfiles/xxx"请求,          去掉 "/tmpfiles/", 再交给FileServer处理
+//
 func StripPrefix(prefix string, h Handler) Handler {
+	/**
+	golang中的http.FileServer通常要跟http.StripPrefix结合使用
+	http://www.th7.cn/Program/go/201508/539502.shtml
+	golang http设置静态目录
+	http://www.tuicool.com/articles/VVRbmaZ
+	http.StripPrefix 的参数含义
+	http://www.cnblogs.com/ghj1976/p/5102556.html
+	 */
 	if prefix == "" {
+		// 没有需要去掉的前缀字符串
 		return h
 	}
+	// HandlerFunc(xx)是将xx进行类型转换,将其参数转型为Handler
 	return HandlerFunc(func(w ResponseWriter, r *Request) {
 		if p := strings.TrimPrefix(r.URL.Path, prefix); len(p) < len(r.URL.Path) {
+			// strings.TrimPrefix发生了替换
 			r2 := new(Request)
 			*r2 = *r
 			r2.URL = new(url.URL)
 			*r2.URL = *r.URL
+			// 修改path为TrimPrefix后的路径
 			r2.URL.Path = p
 			h.ServeHTTP(w, r2)
 		} else {
+			// strings.TrimPrefix没有发生替换,根据文档: StripPrefix handles a
+			// request for a path that doesn't begin with prefix by
+			// replying with an HTTP 404 not found error.
 			NotFound(w, r)
 		}
 	})
@@ -1962,12 +2055,17 @@ func StripPrefix(prefix string, h Handler) Handler {
 //
 // The provided code should be in the 3xx range and is usually
 // StatusMovedPermanently, StatusFound or StatusSeeOther.
+//
+// urlStr: 可以是相对路径,也可以是绝对路径
 func Redirect(w ResponseWriter, r *Request, urlStr string, code int) {
 	if u, err := url.Parse(urlStr); err == nil {
 		// If url was relative, make absolute by
 		// combining with request path.
 		// The browser would probably do this for us,
 		// but doing it ourselves is more reliable.
+
+		// 比如当用户访问: http://www.xx.com/a/b/ , 服务端进行跳转 '/c/d'
+		// 大多数浏览器会自己进行最终跳转url的组装: 'http://www.xx.com/a/b/c/d' 
 
 		// NOTE(rsc): RFC 2616 says that the Location
 		// line must be an absolute URI, like
@@ -1980,7 +2078,9 @@ func Redirect(w ResponseWriter, r *Request, urlStr string, code int) {
 		// Because of this problem, no one pays attention
 		// to the RFC; they all send back just a new path.
 		// So do we.
+		// 尽量在服务端确保跳转的url是绝对路径
 		if u.Scheme == "" && u.Host == "" {
+			// 如果是相对地址,用oldpath记录原始请求的Path
 			oldpath := r.URL.Path
 			if oldpath == "" { // should not happen, but avoid a crash if it does
 				oldpath = "/"
@@ -1989,21 +2089,28 @@ func Redirect(w ResponseWriter, r *Request, urlStr string, code int) {
 			// no leading http://server
 			if urlStr == "" || urlStr[0] != '/' {
 				// make relative path absolute
+				// 此时urlStr是相对路径,需要转换为绝对路径
 				olddir, _ := path.Split(oldpath)
 				urlStr = olddir + urlStr
 			}
+			// 现在,urlStr是绝对地址
 
 			var query string
 			if i := strings.Index(urlStr, "?"); i != -1 {
+				// 如果urlStr存在 '?' ,分离路径和queryString
 				urlStr, query = urlStr[:i], urlStr[i:]
+				// 现在, urlStr = 'http://xxx.com/', query = '?a=1&b=2'
 			}
 
 			// clean up but preserve trailing slash
 			trailing := strings.HasSuffix(urlStr, "/")
 			urlStr = path.Clean(urlStr)
 			if trailing && !strings.HasSuffix(urlStr, "/") {
+				// 本身末尾有'/',但是Clean之后被去掉了
+				// 补回来
 				urlStr += "/"
 			}
+			// 补上queryString
 			urlStr += query
 		}
 	}
@@ -2035,11 +2142,13 @@ func htmlEscape(s string) string {
 }
 
 // Redirect to a fixed URL
+// 重定向到一个固定的URL,使用固定的code
 type redirectHandler struct {
 	url  string
 	code int
 }
 
+// redirectHandler实现Handler interface
 func (rh *redirectHandler) ServeHTTP(w ResponseWriter, r *Request) {
 	Redirect(w, r, rh.url, rh.code)
 }
@@ -2068,6 +2177,8 @@ func RedirectHandler(url string, code int) Handler {
 // former will receive requests for any other paths in the
 // "/images/" subtree.
 //
+// Patterns name都是固定的,以'/'开头的路径.
+//
 // Note that since a pattern ending in a slash names a rooted subtree,
 // the pattern "/" matches all paths not matched by other registered
 // patterns, not just the URL with Path == "/".
@@ -2089,15 +2200,23 @@ func RedirectHandler(url string, code int) Handler {
 // ServeMux also takes care of sanitizing the URL request path,
 // redirecting any request containing . or .. elements or repeated slashes
 // to an equivalent, cleaner URL.
+//
+// multiplexer: 多路传输器;多路复用器
+// sanitize ['sænɪtaɪz] vt. 使…无害；给…消毒；对…采取卫生措施
+// 注意: *ServeMux实现了Handler接口
 type ServeMux struct {
 	mu    sync.RWMutex
+	// key是注册的path
 	m     map[string]muxEntry
 	hosts bool // whether any patterns contain hostnames
 }
 
 type muxEntry struct {
+	// 此规则是显式指定的还是隐式插入的,参考: func (mux *ServeMux) Handle(pattern string, handler Handler)
 	explicit bool
+	// 注册的handler
 	h        Handler
+	// 注册的pattern
 	pattern  string
 }
 
@@ -2105,11 +2224,15 @@ type muxEntry struct {
 func NewServeMux() *ServeMux { return new(ServeMux) }
 
 // DefaultServeMux is the default ServeMux used by Serve.
+// 上文的used by Serve(指http.Serve)
+// 注意: DefaultServeMux的类型是 *ServeMux
 var DefaultServeMux = &defaultServeMux
 
 var defaultServeMux ServeMux
 
 // Does path match pattern?
+// 检查 pattern 和 path 是否匹配
+// @see
 func pathMatch(pattern, path string) bool {
 	if len(pattern) == 0 {
 		// should not happen
@@ -2117,23 +2240,29 @@ func pathMatch(pattern, path string) bool {
 	}
 	n := len(pattern)
 	if pattern[n-1] != '/' {
+		// 如果pattern最后一个字符不是'/',根据patern和path是否完全相等来判断是否匹配
 		return pattern == path
 	}
+	// 现在,pattern最后一个字符是'/',根据path的前缀是否等于pattern判断是否匹配
 	return len(path) >= n && path[0:n] == pattern
 }
 
 // Return the canonical path for p, eliminating . and .. elements.
+// p是指path
+// @see
 func cleanPath(p string) string {
 	if p == "" {
 		return "/"
 	}
 	if p[0] != '/' {
+		// 不是以'/' 开头,转换为以'/'开头
 		p = "/" + p
 	}
 	np := path.Clean(p)
 	// path.Clean removes trailing slash except for root;
 	// put the trailing slash back if necessary.
 	if p[len(p)-1] == '/' && np != "/" {
+		// 如果原始p中以'/'结尾 && np不是以'/'结尾, 补回'/'
 		np += "/"
 	}
 	return np
@@ -2154,20 +2283,29 @@ func stripHostPort(h string) string {
 
 // Find a handler on a handler map given a path string.
 // Most-specific (longest) pattern wins.
+//
+// Find a handler(h返回值)
+// given a path string(path参数)
 func (mux *ServeMux) match(path string) (h Handler, pattern string) {
 	// Check for exact match first.
 	v, ok := mux.m[path]
 	if ok {
+		// 找到了一个精确匹配
 		return v.h, v.pattern
 	}
+	// 现在,不存在精确匹配,需要进行前缀检查
+	// 在满足前缀检查的情况下,选择最长的匹配
 
 	// Check for longest valid match.
 	var n = 0
 	for k, v := range mux.m {
 		if !pathMatch(k, path) {
+			// 不匹配,进行下轮循环
 			continue
 		}
+		// 现在,找到一个匹配
 		if h == nil || len(k) > n {
+			// 如果比之前找到的匹配的前缀长,更新返回值
 			n = len(k)
 			h = v.h
 			pattern = v.pattern
@@ -2183,6 +2321,10 @@ func (mux *ServeMux) match(path string) (h Handler, pattern string) {
 // to the canonical path. If the host contains a port, it is ignored
 // when matching handlers.
 //
+// canonical [kə'nɒnɪk(ə)l] adj. 依教规的；权威的；牧师的 n. 牧师礼服
+// 如果path不是规范格式,将返回一个内部生成的handler,
+// 此handler用于重定向到等价的规范路径.
+//
 // The path and host are used unchanged for CONNECT requests.
 //
 // Handler also returns the registered pattern that matches the
@@ -2195,17 +2337,23 @@ func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
 
 	// CONNECT requests are not canonicalized.
 	if r.Method == "CONNECT" {
+		// 文档: The path and host are used unchanged for CONNECT requests.
 		return mux.handler(r.Host, r.URL.Path)
 	}
 
 	// All other requests have any port stripped and path cleaned
 	// before passing to mux.handler.
+	// 根据文档:If the host contains a port, it is ignored when matching handlers.
 	host := stripHostPort(r.Host)
 	path := cleanPath(r.URL.Path)
 	if path != r.URL.Path {
+		// 文档: If the path is not in its canonical form, the handler will be
+		// an internally-generated handler that redirects to the canonical path.
+		// 如果r.URL.Path不是规范化格式,返回的handler是内部生成的handler(此handler的行为是重定向到规范化path)
 		_, pattern = mux.handler(host, path)
 		url := *r.URL
 		url.Path = path
+		// 重定向到规范化的path, 返回的pattern是(the pattern that will match after following the redirect.)
 		return RedirectHandler(url.String(), StatusMovedPermanently), pattern
 	}
 
@@ -2214,18 +2362,24 @@ func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
 
 // handler is the main implementation of Handler.
 // The path is known to be in canonical form, except for CONNECT methods.
+//
+// @see
 func (mux *ServeMux) handler(host, path string) (h Handler, pattern string) {
 	mux.mu.RLock()
 	defer mux.mu.RUnlock()
 
 	// Host-specific pattern takes precedence over generic ones
 	if mux.hosts {
+		// 如果注册的pattern中包含hostname
 		h, pattern = mux.match(host + path)
 	}
 	if h == nil {
+		// 如果上一条规则没有找到
 		h, pattern = mux.match(path)
 	}
 	if h == nil {
+		// 如果上一条规则没有找到,根据文档: If there is no registered handler that applies to the request,
+		// Handler returns a ``page not found'' handler and an empty pattern.
 		h, pattern = NotFoundHandler(), ""
 	}
 	return
@@ -2233,20 +2387,65 @@ func (mux *ServeMux) handler(host, path string) (h Handler, pattern string) {
 
 // ServeHTTP dispatches the request to the handler whose
 // pattern most closely matches the request URL.
+//
+//
+// ServeHTTP会将请求分发到注册的pattern和请求url匹配度最高的handler
+// *ServeMux实现了Handler接口,因此,*ServeMux也属于Handler
+//
+// *ServeMux.ServeHTTP实际是进行了委托,它首先根据 mux.Handler(r) 获取一个\
+// 可以处理请求的handler h,然后调用h.ServeHTTP进行委托处理
 func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
+	/**
+	rfc2616
+	5.1.2 Request-URI
+
+   The Request-URI is a Uniform Resource Identifier (section 3.2) and
+   identifies the resource upon which to apply the request.
+
+       Request-URI    = "*" | absoluteURI | abs_path | authority
+
+   The four options for Request-URI are dependent on the nature of the
+   request. The asterisk "*" means that the request does not apply to a
+   particular resource, but to the server itself, and is only allowed
+   when the method used does not necessarily apply to a resource. One
+   example would be
+
+       OPTIONS * HTTP/1.1
+
+   The absoluteURI form is REQUIRED when the request is being made to a
+   proxy. The proxy is requested to forward the request or service it
+   from a valid cache, and return the response. Note that the proxy MAY
+   forward the request on to another proxy or directly to the server
+   
+   
+   RequestURI == "*": 意味着不是要请求什么固定的资源,而是对server做的整体请求
+	 */
 	if r.RequestURI == "*" {
 		if r.ProtoAtLeast(1, 1) {
 			w.Header().Set("Connection", "close")
 		}
+		// ServeMux.ServeHTTP不支持 RequestURI=="*"
 		w.WriteHeader(StatusBadRequest)
 		return
 	}
+	// 获取应该由ServeMux中哪个内部的Handler来进行实际的处理
 	h, _ := mux.Handler(r)
+	// 使用mux.Handler(r)返回的新的Handler来处理请求
+	// 文档:dispatches the request to the handler whose pattern most closely matches the request URL.
 	h.ServeHTTP(w, r)
 }
 
 // Handle registers the handler for the given pattern.
 // If a handler already exists for pattern, Handle panics.
+//
+// 此方法用于注册 pattern => Handler 的对应关系
+// 如果 pattern 已经被注册,会 panic
+// 如果 pattern 为空字符串 "",会 panic
+// if handler == nil : 会 panic
+//
+// 查看源码,发现:
+// 如果注册的pattern='/tree/',会隐式的插入一条规则:(pattern='/tree',该规则自动跳转到pattern='/tree/')
+// 如果不需要这样的自动插入规则,应该显示指定一条规则(pattern='/tree'), (可以在 pattern='/tree/' 这条规则之前或之后指定都行)
 func (mux *ServeMux) Handle(pattern string, handler Handler) {
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
@@ -2258,15 +2457,19 @@ func (mux *ServeMux) Handle(pattern string, handler Handler) {
 		panic("http: nil handler")
 	}
 	if mux.m[pattern].explicit {
+		// 注意,这个if只针对explicit=true
 		panic("http: multiple registrations for " + pattern)
 	}
 
 	if mux.m == nil {
+		// 确保map不是nil
 		mux.m = make(map[string]muxEntry)
 	}
+	// explicit: true 显式指定的规则
 	mux.m[pattern] = muxEntry{explicit: true, h: handler, pattern: pattern}
 
 	if pattern[0] != '/' {
+		// 规则中包含hostname
 		mux.hosts = true
 	}
 
@@ -2277,19 +2480,29 @@ func (mux *ServeMux) Handle(pattern string, handler Handler) {
 	if n > 0 && pattern[n-1] == '/' && !mux.m[pattern[0:n-1]].explicit {
 		// If pattern contains a host name, strip it and use remaining
 		// path for redirect.
+		// if n > 0 && pattern[n-1] == '/' && !mux.m[pattern[0:n-1]].explicit: 说明 If pattern is /tree/
 		path := pattern
 		if pattern[0] != '/' {
 			// In pattern, at least the last character is a '/', so
 			// strings.Index can't be -1.
+			// if pattern[0] != '/': 说明 pattern contains a host name.
+			// 第一个 / 到最后的位置,属于host后面的字符串.
 			path = pattern[strings.Index(pattern, "/"):]
 		}
+		// 为什么这里一定要通过构造url.URL,下面使用url.String()? 而不是直接使用 path ? 因为url.String会返回一个绝对是合法的url
 		url := &url.URL{Path: path}
+		// insert an implicit permanent redirect for /tree,由于没有提到muxEntry.explicit,自动获得默认值false, 因此是implict,是属于隐式插入的规则 
 		mux.m[pattern[0:n-1]] = muxEntry{h: RedirectHandler(url.String(), StatusMovedPermanently), pattern: pattern}
 	}
 }
 
 // HandleFunc registers the handler function for the given pattern.
+// handler参数只是普通函数,内部会将handler转型为Handler后,再进行路由处理的注册
 func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	// HandlerFunc(handler)会将参数handler转型为HandlerFunc
+	// HandlerFunc类型定义了ServeHTTP方法,实现了Handler接口
+	// HandlerFunc(handler)进行了类型转换后,得到一个Handler
+	// 最后使用mux.Handle将pattern和上面得到的Handler进行注册
 	mux.Handle(pattern, HandlerFunc(handler))
 }
 
@@ -2301,6 +2514,7 @@ func Handle(pattern string, handler Handler) { DefaultServeMux.Handle(pattern, h
 // HandleFunc registers the handler function for the given pattern
 // in the DefaultServeMux.
 // The documentation for ServeMux explains how patterns are matched.
+// handler参数只是普通函数,内部会将handler转型为Handler后,再进行路由处理的注册
 func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 	DefaultServeMux.HandleFunc(pattern, handler)
 }
@@ -2309,6 +2523,13 @@ func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 // creating a new service goroutine for each. The service goroutines
 // read requests and then call handler to reply to them.
 // Handler is typically nil, in which case the DefaultServeMux is used.
+//
+// Serve在Listener上接收到达的http连接,对每个连接创建一
+// 个service goroutine,该service goroutine会读取到达的
+// 请求然后调用handler进行响应.
+//
+// 注意上文中的 [service goroutine]
+// 注意: DefaultServeMux类型为ServeMux,实现了Handler接口.
 func Serve(l net.Listener, handler Handler) error {
 	srv := &Server{Handler: handler}
 	return srv.Serve(l)
@@ -2379,6 +2600,9 @@ type Server struct {
 	// automatically closed when the function returns.
 	// If TLSNextProto is not nil, HTTP/2 support is not enabled
 	// automatically.
+	//
+	// take over 接管；接收
+	// 关于http2, NPN/ALPN, 参考: https://segmentfault.com/a/1190000002757622
 	TLSNextProto map[string]func(*Server, *tls.Conn, Handler)
 
 	// ConnState specifies an optional callback function that is
@@ -2506,6 +2730,8 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 // undergone NPN/ALPN protocol upgrade or that have been hijacked.
 // This function should start protocol-specific graceful shutdown,
 // but should not wait for shutdown to complete.
+//
+// 添加回调函数:当Shutdown方法被调用时被运行
 func (srv *Server) RegisterOnShutdown(f func()) {
 	srv.mu.Lock()
 	srv.onShutdown = append(srv.onShutdown, f)
@@ -2600,11 +2826,14 @@ type serverHandler struct {
 }
 
 func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	// 默认使用sh.srv.Handler
 	handler := sh.srv.Handler
 	if handler == nil {
+		// 如果sh.srv.Handler==nil,使用DefaultServeMux
 		handler = DefaultServeMux
 	}
 	if req.RequestURI == "*" && req.Method == "OPTIONS" {
+		// 如果是'OPTIONS *'请求,使用globalOptionsHandler
 		handler = globalOptionsHandler{}
 	}
 	handler.ServeHTTP(rw, req)
@@ -2666,6 +2895,9 @@ var ErrServerClosed = errors.New("http: Server closed")
 //
 // Serve always returns a non-nil error. After Shutdown or Close, the
 // returned error is ErrServerClosed.
+//
+// 注意这里的名词: [service goroutines: 用于处理每个连接请求]
+// @see
 func (srv *Server) Serve(l net.Listener) error {
 	defer l.Close()
 	if fn := testHookServerServe; fn != nil {
@@ -2685,29 +2917,36 @@ func (srv *Server) Serve(l net.Listener) error {
 	for {
 		rw, e := l.Accept()
 		if e != nil {
+			// if e != nil: 如果 l.Accept() 出错
 			select {
 			case <-srv.getDoneChan():
 				return ErrServerClosed
 			default:
 			}
 			if ne, ok := e.(net.Error); ok && ne.Temporary() {
+				// 如果是net.Error并且是临时类错误,写日志并且sleep
 				if tempDelay == 0 {
 					tempDelay = 5 * time.Millisecond
 				} else {
 					tempDelay *= 2
 				}
 				if max := 1 * time.Second; tempDelay > max {
+					// 确保tempDelay最大不超过max
 					tempDelay = max
 				}
+				// 记录Accept的错误信息
 				srv.logf("http: Accept error: %v; retrying in %v", e, tempDelay)
 				time.Sleep(tempDelay)
 				continue
 			}
+			// 如果是其他错误,返回
 			return e
 		}
 		tempDelay = 0
+		// rw是l.Accept返回的net.Conn
 		c := srv.newConn(rw)
 		c.setState(c.rwc, StateNew) // before Serve can return
+		// 文档:creating a new service goroutine for each
 		go c.serve(ctx)
 	}
 }
@@ -2812,6 +3051,10 @@ func (s *Server) shuttingDown() bool {
 // By default, keep-alives are always enabled. Only very
 // resource-constrained environments or servers in the process of
 // shutting down should disable them.
+//
+// resource-constrained environments(资源受限的环境)
+// 或者
+// 在server关闭的过程中(因为需要优雅的关闭)
 func (srv *Server) SetKeepAlivesEnabled(v bool) {
 	if v {
 		atomic.StoreInt32(&srv.disableKeepAlives, 0)
@@ -2901,6 +3144,8 @@ func ListenAndServe(addr string, handler Handler) error {
 // One can use generate_cert.go in crypto/tls to generate cert.pem and key.pem.
 //
 // ListenAndServeTLS always returns a non-nil error.
+//
+// Certificate Authority (CA): 证书权威机构（CA）
 func ListenAndServeTLS(addr, certFile, keyFile string, handler Handler) error {
 	server := &Server{Addr: addr, Handler: handler}
 	return server.ListenAndServeTLS(certFile, keyFile)
@@ -3001,6 +3246,8 @@ func TimeoutHandler(h Handler, dt time.Duration, msg string) Handler {
 // in handlers which have timed out.
 var ErrHandlerTimeout = errors.New("http: Handler timeout")
 
+// @see
+// 实现了Handler接口
 type timeoutHandler struct {
 	handler Handler
 	body    string
@@ -3011,6 +3258,7 @@ type timeoutHandler struct {
 	testTimeout <-chan time.Time
 }
 
+// @see
 func (h *timeoutHandler) errorBody() string {
 	if h.body != "" {
 		return h.body
@@ -3018,8 +3266,11 @@ func (h *timeoutHandler) errorBody() string {
 	return "<html><head><title>Timeout</title></head><body><h1>Timeout</h1></body></html>"
 }
 
+// @see
 func (h *timeoutHandler) ServeHTTP(w ResponseWriter, r *Request) {
 	var t *time.Timer
+	// 文档:When timeoutHandler.testTimeout set, no timer will be created and
+	// this channel(指timeoutHandler.testTimeout) will be used instead.
 	timeout := h.testTimeout
 	if timeout == nil {
 		t = time.NewTimer(h.dt)
@@ -3036,6 +3287,7 @@ func (h *timeoutHandler) ServeHTTP(w ResponseWriter, r *Request) {
 	}()
 	select {
 	case <-done:
+	// ServeHTTP正常处理完毕
 		tw.mu.Lock()
 		defer tw.mu.Unlock()
 		dst := w.Header()
@@ -3048,9 +3300,11 @@ func (h *timeoutHandler) ServeHTTP(w ResponseWriter, r *Request) {
 		w.WriteHeader(tw.code)
 		w.Write(tw.wbuf.Bytes())
 		if t != nil {
+			// 停止定时器
 			t.Stop()
 		}
 	case <-timeout:
+	// 超时
 		tw.mu.Lock()
 		defer tw.mu.Unlock()
 		w.WriteHeader(StatusServiceUnavailable)
@@ -3060,6 +3314,7 @@ func (h *timeoutHandler) ServeHTTP(w ResponseWriter, r *Request) {
 	}
 }
 
+// timeoutWriter实现了ResponseWriter interface
 type timeoutWriter struct {
 	w    ResponseWriter
 	h    Header
@@ -3118,8 +3373,10 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 }
 
 // globalOptionsHandler responds to "OPTIONS *" requests.
+// 实现了Handler接口
 type globalOptionsHandler struct{}
 
+// @see
 func (globalOptionsHandler) ServeHTTP(w ResponseWriter, r *Request) {
 	w.Header().Set("Content-Length", "0")
 	if r.ContentLength != 0 {
@@ -3128,7 +3385,11 @@ func (globalOptionsHandler) ServeHTTP(w ResponseWriter, r *Request) {
 		// over that is considered a waste of server resources
 		// (or an attack) and we abort and close the connection,
 		// courtesy of MaxBytesReader's EOF behavior.
+		//
+		// courtesy ['kɜːtɪsɪ] n. 礼貌;好意;恩惠 adj. 殷勤的;被承认的;出于礼节的
+		// 4<<10 : 4k
 		mb := MaxBytesReader(w, r.Body, 4<<10)
+		// 按照规范读取4k,但实际中读取了4k也没什么用
 		io.Copy(ioutil.Discard, mb)
 	}
 }
@@ -3200,19 +3461,25 @@ func (c *loggingConn) Close() (err error) {
 // checkConnErrorWriter writes to c.rwc and records any write errors to c.werr.
 // It only contains one field (and a pointer field at that), so it
 // fits in an interface value without an extra allocation.
+// @see
 type checkConnErrorWriter struct {
 	c *conn
 }
 
+// @see
 func (w checkConnErrorWriter) Write(p []byte) (n int, err error) {
 	n, err = w.c.rwc.Write(p)
 	if err != nil && w.c.werr == nil {
+		// 记录错误
 		w.c.werr = err
 		w.c.cancelCtx()
 	}
 	return
 }
 
+// 计算v中开头的位置有多少连续的\r或\n
+// 比如:
+// \r\n\r\rddd  => 4
 func numLeadingCRorLF(v []byte) (n int) {
 	for _, b := range v {
 		if b == '\r' || b == '\n' {
@@ -3225,6 +3492,7 @@ func numLeadingCRorLF(v []byte) (n int) {
 
 }
 
+// 返回ss中是否包含s
 func strSliceContains(ss []string, s string) bool {
 	for _, v := range ss {
 		if v == s {

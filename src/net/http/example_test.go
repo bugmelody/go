@@ -1,6 +1,8 @@
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-7-18 08:33:22到此
 
 package http_test
 
@@ -13,12 +15,15 @@ import (
 )
 
 func ExampleHijacker() {
+	// http.ResponseWriter是接口: type ResponseWriter interface
 	http.HandleFunc("/hijack", func(w http.ResponseWriter, r *http.Request) {
 		hj, ok := w.(http.Hijacker)
 		if !ok {
+			// w没有实现http.Hijacker接口
 			http.Error(w, "webserver doesn't support hijacking", http.StatusInternalServerError)
 			return
 		}
+		// 现在,w实现了http.Hijacker接口
 		conn, bufrw, err := hj.Hijack()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -27,13 +32,16 @@ func ExampleHijacker() {
 		// Don't forget to close the connection:
 		defer conn.Close()
 		bufrw.WriteString("Now we're speaking raw TCP. Say hi: ")
+		// 必须要Flush才能确保写入成功
 		bufrw.Flush()
+		// 读取client的数据,直到遇到换行符
 		s, err := bufrw.ReadString('\n')
 		if err != nil {
 			log.Printf("error reading string: %v", err)
 			return
 		}
 		fmt.Fprintf(bufrw, "You said: %q\nBye.\n", s)
+		// 必须要Flush才能确保写入成功
 		bufrw.Flush()
 	})
 }
@@ -53,6 +61,9 @@ func ExampleGet() {
 
 func ExampleFileServer() {
 	// Simple static webserver:
+	// http.ListenAndServe 原型为 func ListenAndServe(addr string, handler Handler) error {
+	// http.FileServer 正好返回 Handler
+	// func FileServer(root FileSystem) Handler
 	log.Fatal(http.ListenAndServe(":8080", http.FileServer(http.Dir("/usr/share/doc"))))
 }
 
@@ -60,6 +71,7 @@ func ExampleFileServer_stripPrefix() {
 	// To serve a directory on disk (/tmp) under an alternate URL
 	// path (/tmpfiles/), use StripPrefix to modify the request
 	// URL's path before the FileServer sees it:
+	// 请求 /tmpfiles/ , 实际是请求的操作系统 /tmp 目录下的内容.
 	http.Handle("/tmpfiles/", http.StripPrefix("/tmpfiles/", http.FileServer(http.Dir("/tmp"))))
 }
 
@@ -70,6 +82,7 @@ func ExampleStripPrefix() {
 	http.Handle("/tmpfiles/", http.StripPrefix("/tmpfiles/", http.FileServer(http.Dir("/tmp"))))
 }
 
+// apiHandler实现了Handler接口
 type apiHandler struct{}
 
 func (apiHandler) ServeHTTP(http.ResponseWriter, *http.Request) {}
@@ -84,12 +97,15 @@ func ExampleServeMux_Handle() {
 			http.NotFound(w, req)
 			return
 		}
+		// 现在, 已经确保用户访问的是根目录 '/'
 		fmt.Fprintf(w, "Welcome to the home page!")
 	})
 }
 
 // HTTP Trailers are a set of key/value pairs like headers that come
 // after the HTTP response, instead of before.
+//
+// 参考: $ go doc http.ResponseWriter.Header
 func ExampleResponseWriter_trailers() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sendstrailers", func(w http.ResponseWriter, req *http.Request) {

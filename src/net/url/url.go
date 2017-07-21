@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[4-over]]] 2017-7-7 13:23:27
 
 // Package url parses URLs and implements query escaping.
 package url
@@ -32,8 +34,12 @@ type timeout interface {
 	Timeout() bool
 }
 
+// 是否是超时引起的错误
+// Error 实现了上面定义的 timeout interface
+// 实际是委托给 e.Err.Timeout(如果 e.Err实现了timeout interface)
 func (e *Error) Timeout() bool {
 	t, ok := e.Err.(timeout)
+	// 如果e.Err实现了timeout接口,委托给timeout方法
 	return ok && t.Timeout()
 }
 
@@ -41,12 +47,17 @@ type temporary interface {
 	Temporary() bool
 }
 
+// 是否是临时错误
+// Error 实现了上面定义的 temporary interface
+// 实际是委托给 e.Err.Temporary
 func (e *Error) Temporary() bool {
 	t, ok := e.Err.(temporary)
 	return ok && t.Temporary()
 }
 
+// ishex 判断 c 是否是16进制的字符( [0-9a-fA-F] )
 func ishex(c byte) bool {
+	// 注意case后面可以跟条件,而不是必须是固定值
 	switch {
 	case '0' <= c && c <= '9':
 		return true
@@ -58,6 +69,9 @@ func ishex(c byte) bool {
 	return false
 }
 
+// 参数 c 是 0-f 之间的字节
+// 返回 c 对应十进制是多少
+// 如果 c 不是十六进制返回 0
 func unhex(c byte) byte {
 	switch {
 	case '0' <= c && c <= '9':
@@ -70,6 +84,7 @@ func unhex(c byte) byte {
 	return 0
 }
 
+// 要encode url的哪个部分
 type encoding int
 
 const (
@@ -99,6 +114,8 @@ func (e InvalidHostError) Error() string {
 //
 // Please be informed that for now shouldEscape does not check all
 // reserved characters correctly. See golang.org/issue/5684.
+//
+// @notsee
 func shouldEscape(c byte, mode encoding) bool {
 	// §2.3 Unreserved characters (alphanum)
 	if 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' || '0' <= c && c <= '9' {
@@ -166,6 +183,13 @@ func shouldEscape(c byte, mode encoding) bool {
 // QueryUnescape does the inverse transformation of QueryEscape, converting
 // %AB into the byte 0xAB and '+' into ' ' (space). It returns an error if
 // any % is not followed by two hexadecimal digits.
+//
+//
+// QueryUnescape会做与QueryEscape相反的转换(用于 query string).
+// 将 %AB 转换为 byte 0xAB
+// 将 '+' 转换为 ' '.
+// 如果有 % 后面跟的不是两个十六进制数字,会返回一个 error
+// 注意, 使用的是 encodeQueryComponent 模式
 func QueryUnescape(s string) (string, error) {
 	return unescape(s, encodeQueryComponent)
 }
@@ -181,6 +205,8 @@ func PathUnescape(s string) (string, error) {
 
 // unescape unescapes a string; the mode specifies
 // which section of the URL string is being unescaped.
+//
+// @notsee
 func unescape(s string, mode encoding) (string, error) {
 	// Count %, check that they're well-formed.
 	n := 0
@@ -261,6 +287,8 @@ func unescape(s string, mode encoding) (string, error) {
 
 // QueryEscape escapes the string so it can be safely placed
 // inside a URL query.
+//
+// 用于转义encodeQueryComponent
 func QueryEscape(s string) string {
 	return escape(s, encodeQueryComponent)
 }
@@ -271,6 +299,7 @@ func PathEscape(s string) string {
 	return escape(s, encodePathSegment)
 }
 
+// @notsee
 func escape(s string, mode encoding) string {
 	spaceCount, hexCount := 0, 0
 	for i := 0; i < len(s); i++ {
@@ -325,6 +354,13 @@ func escape(s string, mode encoding) string {
 // The Parse function sets both Path and RawPath in the URL it returns,
 // and URL's String method uses RawPath if it is a valid encoding of Path,
 // by calling the EscapedPath method.
+//
+// 注意:
+// URL.Path 存储的是 decoded form
+// URL.RawPath 是存储的是 encoded form
+// 假设原始URL.RawPath是 '/%47%6f%2f', 则 URL.Path='/Go/'
+// 因此无法在 URL.Path 中区别 '/' 到底是原始 URL 中的 '/' 还是 '%2f'.
+// 此区别通常不重要. 一般情况下使用 URL.Path 即可. 但如果需要区别的时候, 就不应该使用 URL.Path.
 type URL struct {
 	Scheme     string
 	Opaque     string    // encoded opaque data
@@ -339,6 +375,8 @@ type URL struct {
 
 // User returns a Userinfo containing the provided username
 // and no password set.
+//
+// User构造一个*Userinfo,只包含username,不含password.
 func User(username string) *Userinfo {
 	return &Userinfo{username, "", false}
 }
@@ -351,6 +389,8 @@ func User(username string) *Userinfo {
 // ``is NOT RECOMMENDED, because the passing of authentication
 // information in clear text (such as URI) has proven to be a
 // security risk in almost every case where it has been used.''
+//
+// legacy ['leɡəsi] n. 1.遗产；遗赠(物) 2.[比喻]遗产；传统；祖传的东西  adj.【计算机】(软件)使用时间过长而难以维护的
 func UserPassword(username, password string) *Userinfo {
 	return &Userinfo{username, password, true}
 }
@@ -388,20 +428,25 @@ func (u *Userinfo) String() string {
 // Maybe rawurl is of the form scheme:path.
 // (Scheme must be [a-zA-Z][a-zA-Z0-9+-.]*)
 // If so, return scheme, path; else return "", rawurl.
+// @notsee,不要看,太细节了
 func getscheme(rawurl string) (scheme, path string, err error) {
 	for i := 0; i < len(rawurl); i++ {
+		// 当前循环的字节
 		c := rawurl[i]
 		switch {
 		case 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z':
 		// do nothing
 		case '0' <= c && c <= '9' || c == '+' || c == '-' || c == '.':
 			if i == 0 {
+				// 根据函数文档中的正则,第一个字符不能是这些
 				return "", rawurl, nil
 			}
 		case c == ':':
 			if i == 0 {
+				// 第一个字符不能是冒号
 				return "", "", errors.New("missing protocol scheme")
 			}
+			// 现在, 冒号不是第一个字符
 			return rawurl[:i], rawurl[i+1:], nil
 		default:
 			// we have encountered an invalid character,
@@ -415,29 +460,45 @@ func getscheme(rawurl string) (scheme, path string, err error) {
 // Maybe s is of the form t c u.
 // If so, return t, c u (or t, u if cutc == true).
 // If not, return s, "".
+//
+// 用 分隔符字符串 c 切割 字符串 s
+// cutc 表示返回的两段是否包含分隔符 c
+// 如果=true,切割出来的两个字符串不含c;
+// 如果=false,切割出来的第一个字符串不含c,第二个字符串含c
+// @notsee,太细节了
 func split(s string, c string, cutc bool) (string, string) {
 	i := strings.Index(s, c)
 	if i < 0 {
+		// c不在s中
 		return s, ""
 	}
+	// 现在, c在s中
 	if cutc {
+		// 如果函数参数 cutc 为 true, 返回  t, u
 		return s[:i], s[i+len(c):]
 	}
+	// 否则,返回 t, c u
 	return s[:i], s[i:]
 }
 
 // Parse parses rawurl into a URL structure.
 // The rawurl may be relative or absolute.
+//
+// 返回的*URL中Fragment字段已经被设置
+// @notsee
 func Parse(rawurl string) (*URL, error) {
 	// Cut off #frag
+	// split的cutc参数传递了true,表示返回的frag变量以'#'开头
 	u, frag := split(rawurl, "#", true)
 	url, err := parse(u, false)
 	if err != nil {
 		return nil, &Error{"parse", u, err}
 	}
 	if frag == "" {
+		// 如果没有frag
 		return url, nil
 	}
+	// 现在,有frag
 	if url.Fragment, err = unescape(frag, encodeFragment); err != nil {
 		return nil, &Error{"parse", rawurl, err}
 	}
@@ -449,6 +510,13 @@ func Parse(rawurl string) (*URL, error) {
 // only as an absolute URI or an absolute path.
 // The string rawurl is assumed not to have a #fragment suffix.
 // (Web browsers strip #fragment before sending the URL to a web server.)
+//
+// 注意对比ParseRequestURI和Parse:
+//
+// ParseRequestURI用于让server解析client请求的url(浏览器会strip掉#fragment,然后再发给server)
+// 因此,ParseRequestURI的rawurl应该是absolute URI or an absolute path,也就是absolute URLs or path-absolute relative URLs are allowed.
+//
+// 而Parse中的rawurl参数,可以是相对,也可以是绝对
 func ParseRequestURI(rawurl string) (*URL, error) {
 	url, err := parse(rawurl, true)
 	if err != nil {
@@ -461,6 +529,7 @@ func ParseRequestURI(rawurl string) (*URL, error) {
 // viaRequest is true, the URL is assumed to have arrived via an HTTP request,
 // in which case only absolute URLs or path-absolute relative URLs are allowed.
 // If viaRequest is false, all forms of relative URLs are allowed.
+// @notsee,千万别看,太繁琐了
 func parse(rawurl string, viaRequest bool) (*URL, error) {
 	var rest string
 	var err error
@@ -531,6 +600,7 @@ func parse(rawurl string, viaRequest bool) (*URL, error) {
 	return url, nil
 }
 
+// @notsee,千万别看,太繁琐
 func parseAuthority(authority string) (user *Userinfo, host string, err error) {
 	i := strings.LastIndex(authority, "@")
 	if i < 0 {
@@ -565,6 +635,7 @@ func parseAuthority(authority string) (user *Userinfo, host string, err error) {
 
 // parseHost parses host as an authority without user
 // information. That is, as host[:port].
+// @notsee
 func parseHost(host string) (string, error) {
 	if strings.HasPrefix(host, "[") {
 		// Parse an IP-Literal in RFC 3986 and RFC 6874.
@@ -641,6 +712,9 @@ func (u *URL) setPath(p string) error {
 // their results.
 // In general, code should call EscapedPath instead of
 // reading u.RawPath directly.
+//
+// 通常情况下,应该调用EscapedPath 方法,而不是直接使用u.RawPath
+// @notsee
 func (u *URL) EscapedPath() string {
 	if u.RawPath != "" && validEncodedPath(u.RawPath) {
 		p, err := unescape(u.RawPath, encodePath)
@@ -649,6 +723,7 @@ func (u *URL) EscapedPath() string {
 		}
 	}
 	if u.Path == "*" {
+		// u.Path == "*" 是什么意思??
 		return "*" // don't escape (Issue 11202)
 	}
 	return escape(u.Path, encodePath)
@@ -681,6 +756,8 @@ func validEncodedPath(s string) bool {
 
 // validOptionalPort reports whether port is either an empty string
 // or matches /^:\d*$/
+//
+// 函数内部避免使用正则提升性能
 func validOptionalPort(port string) bool {
 	if port == "" {
 		return true
@@ -716,6 +793,9 @@ func validOptionalPort(port string) bool {
 //	   the form host/path does not add its own /.
 //	- if u.RawQuery is empty, ?query is omitted.
 //	- if u.Fragment is empty, #fragment is omitted.
+//
+// reassemble [,ri:ə'sembl] vt.,vi. 1.再次集合；重新聚集 2.重行装配；重新组装
+// 上文中:To obtain the path, String uses u.EscapedPath() (指 /%47%6f%2f 这种形式).
 func (u *URL) String() string {
 	var buf bytes.Buffer
 	if u.Scheme != "" {
@@ -735,7 +815,7 @@ func (u *URL) String() string {
 				buf.WriteString(escape(h, encodeHost))
 			}
 		}
-		path := u.EscapedPath()
+		path := u.EscapedPath() // ***注意,根据文档:To obtain the path, String uses u.EscapedPath()***
 		if path != "" && path[0] != '/' && u.Host != "" {
 			buf.WriteByte('/')
 		}
@@ -767,6 +847,9 @@ func (u *URL) String() string {
 // It is typically used for query parameters and form values.
 // Unlike in the http.Header map, the keys in a Values map
 // are case-sensitive.
+//
+// url.Values:区分大小写
+// http.Header:不区分大小写
 type Values map[string][]string
 
 // Get gets the first value associated with the given key.
@@ -775,12 +858,18 @@ type Values map[string][]string
 // directly.
 func (v Values) Get(key string) string {
 	if v == nil {
+		// receiver本身是nil, nil map
 		return ""
 	}
+	// 现在,receiver不是nil
+	// 如果 key 不存在,会返回  []string 对应的 zero value, 也就是 nil slice
 	vs := v[key]
 	if len(vs) == 0 {
+		// 根据 len 文档,对于 slice:Slice, or map: the number of elements in v; if v is nil, len(v) is zero.
+		// len 可以作用于 nil slice
 		return ""
 	}
+	// 现在, len(vs) > 0
 	return vs[0]
 }
 
@@ -793,6 +882,7 @@ func (v Values) Set(key, value string) {
 // Add adds the value to key. It appends to any existing
 // values associated with key.
 func (v Values) Add(key, value string) {
+	// 在append发生前,v[key]可能会返回nil,而append可以作用于nil slice
 	v[key] = append(v[key], value)
 }
 
@@ -810,12 +900,20 @@ func (v Values) Del(key string) {
 // Query is expected to be a list of key=value settings separated by
 // ampersands or semicolons. A setting without an equals sign is
 // interpreted as a key set to an empty value.
+//
+// 上文中,URL-encoded query(指'/%47%6f%2f'这种形式)
+// Query(指参数query) is expected to be a list of key=value settings separated by ampersands or semicolons
+//
+// 本函数用于解析queryString
 func ParseQuery(query string) (Values, error) {
+	// 注意, 传入参数是 Values, 底层类型是 map
 	m := make(Values)
+	// 解析 query string
 	err := parseQuery(m, query)
 	return m, err
 }
 
+// @notsee
 func parseQuery(m Values, query string) (err error) {
 	for query != "" {
 		key := query
@@ -878,6 +976,8 @@ func (v Values) Encode() string {
 
 // resolvePath applies special path segments from refs and applies
 // them to base, per RFC 3986.
+//
+// @notsee
 func resolvePath(base, ref string) string {
 	var full string
 	if ref == "" {
@@ -921,6 +1021,11 @@ func (u *URL) IsAbs() bool {
 // Parse parses a URL in the context of the receiver. The provided URL
 // may be relative or absolute. Parse returns nil, err on parse
 // failure, otherwise its return value is the same as ResolveReference.
+//
+// 上文中:The provided URL(指ref参数) may be relative or absolute
+// 在u的环境下解析ref,如果ref是相对路径,解析后返回URL是基于u的绝对路径
+//
+// @see 看看url.Parse和url.URL.Parse的关系
 func (u *URL) Parse(ref string) (*URL, error) {
 	refurl, err := Parse(ref)
 	if err != nil {
@@ -935,6 +1040,11 @@ func (u *URL) Parse(ref string) (*URL, error) {
 // URL instance, even if the returned URL is identical to either the
 // base or reference. If ref is an absolute URL, then ResolveReference
 // ignores base and returns a copy of ref.
+//
+// 上文的 (URI reference) 是指 ref 这个参数
+// 上文中的 (base) 是指 receiver u
+//
+// @notsee
 func (u *URL) ResolveReference(ref *URL) *URL {
 	url := *ref
 	if ref.Scheme == "" {
@@ -971,6 +1081,8 @@ func (u *URL) ResolveReference(ref *URL) *URL {
 // Query parses RawQuery and returns the corresponding values.
 // It silently discards malformed value pairs.
 // To check errors use ParseQuery.
+//
+// @see
 func (u *URL) Query() Values {
 	v, _ := ParseQuery(u.RawQuery)
 	return v
@@ -978,6 +1090,8 @@ func (u *URL) Query() Values {
 
 // RequestURI returns the encoded path?query or opaque?query
 // string that would be used in an HTTP request for u.
+//
+// @see
 func (u *URL) RequestURI() string {
 	result := u.Opaque
 	if result == "" {
@@ -1039,10 +1153,12 @@ func portOnly(hostport string) string {
 // Marshaling interface implementations.
 // Would like to implement MarshalText/UnmarshalText but that will change the JSON representation of URLs.
 
+// @see
 func (u *URL) MarshalBinary() (text []byte, err error) {
 	return []byte(u.String()), nil
 }
 
+// @see
 func (u *URL) UnmarshalBinary(text []byte) error {
 	u1, err := Parse(string(text))
 	if err != nil {

@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-3-3 10:53:57
 
 // HTTP client implementation. See RFC 2616.
 //
@@ -39,7 +41,10 @@ import (
 // $no_proxy) environment variables.
 var DefaultTransport RoundTripper = &Transport{
 	Proxy: ProxyFromEnvironment,
+	// 这里的 &net.Dialer{...}.DialContext 不是调用方法,而是将其作为func类型
+	// 设置到Transport.DialContext字段
 	DialContext: (&net.Dialer{
+		// 等待连接完成的时间
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
 		DualStack: true,
@@ -52,6 +57,7 @@ var DefaultTransport RoundTripper = &Transport{
 
 // DefaultMaxIdleConnsPerHost is the default value of Transport's
 // MaxIdleConnsPerHost.
+// 默认每个Host最大多少个空闲连接.
 const DefaultMaxIdleConnsPerHost = 2
 
 // Transport is an implementation of RoundTripper that supports HTTP,
@@ -78,6 +84,8 @@ type Transport struct {
 	wantIdle   bool                                // user has requested to close all idle conns
 	idleConn   map[connectMethodKey][]*persistConn // most recently used at end
 	idleConnCh map[connectMethodKey]chan *persistConn
+	// 什么是LRU算法 
+	// LRU是Least Recently Used的缩写,即最近最久未使用,常用于页面置换算法,是为虚拟页式存储管理服务的
 	idleLRU    connLRU
 
 	reqMu       sync.Mutex
@@ -95,11 +103,15 @@ type Transport struct {
 	// "http" is assumed.
 	//
 	// If Proxy is nil or returns a nil *URL, no proxy is used.
+	//
+	// 如何实现Proxy字段可以参考http.ProxyFromEnvironment
 	Proxy func(*Request) (*url.URL, error)
 
 	// DialContext specifies the dial function for creating unencrypted TCP connections.
 	// If DialContext is nil (and the deprecated Dial below is also nil),
 	// then the transport dials using package net.
+	//
+	// 如何实现本字段可以参考: http.DefaultTransport
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	// Dial specifies the dial function for creating unencrypted TCP connections.
@@ -142,6 +154,11 @@ type Transport struct {
 	// decoded in the Response.Body. However, if the user
 	// explicitly requested gzip it is not automatically
 	// uncompressed.
+	//
+	// 如果DisableCompression为真,会禁止(Transport在请求中没有Accept-Encoding头时,主动添加"Accept-Encoding: gzip"头,以获取压缩版本数据.)
+	// 如果Transport自己请求gzip(非用户设置的"Accept-Encoding: gzip"头)并得到了压缩后的回复,它会主动解压缩回复的主体.
+	// 但如果用户显式的请求"Accept-Encoding: gzip"压缩数据,Transport是不会主动解压缩的.
+	// ???????(If the Transport requests gzip on its own) 和 (if the user explicitly requested gzip) 有什么区别???????
 	DisableCompression bool
 
 	// MaxIdleConns controls the maximum number of idle (keep-alive)
@@ -163,6 +180,8 @@ type Transport struct {
 	// time to wait for a server's response headers after fully
 	// writing the request (including its body, if any). This
 	// time does not include the time to read the response body.
+	//
+	// 从请求写入完毕到等待response header的超时时间
 	ResponseHeaderTimeout time.Duration
 
 	// ExpectContinueTimeout, if non-zero, specifies the amount of
@@ -172,6 +191,10 @@ type Transport struct {
 	// causes the body to be sent immediately, without
 	// waiting for the server to approve.
 	// This time does not include the time to send the request header.
+	//
+	// "Expect: 100-continue" header 说明:
+	// 		http://www.cnblogs.com/cxd4321/archive/2012/01/30/2331621.html
+	//		http://www.laruence.com/2011/01/20/1840.html
 	ExpectContinueTimeout time.Duration
 
 	// TLSNextProto specifies how the Transport switches to an
@@ -195,6 +218,8 @@ type Transport struct {
 	// header.
 	//
 	// Zero means to use a default limit.
+	//
+	// 那么问题来了,如果超过了这个限制,会怎么样
 	MaxResponseHeaderBytes int64
 
 	// nextProtoOnce guards initialization of TLSNextProto and
@@ -207,6 +232,7 @@ type Transport struct {
 
 // onceSetNextProtoDefaults initializes TLSNextProto.
 // It must be called via t.nextProtoOnce.Do.
+// @notsee
 func (t *Transport) onceSetNextProtoDefaults() {
 	if strings.Contains(os.Getenv("GODEBUG"), "http2client=0") {
 		return
@@ -263,18 +289,27 @@ func (t *Transport) onceSetNextProtoDefaults() {
 //
 // As a special case, if req.URL.Host is "localhost" (with or without
 // a port number), then a nil URL and nil error will be returned.
+//
+// 本函数是 DefaultTransport.Proxy 使用的值.
+// @see
 func ProxyFromEnvironment(req *Request) (*url.URL, error) {
+	// proxy url,本函数最后返回的*url.URL是对proxy进行url.Parse后的结果
 	var proxy string
 	if req.URL.Scheme == "https" {
+		// 如果当前请求的是https,根据文档:HTTPS_PROXY takes precedence over HTTP_PROXY for https requests.
 		proxy = httpsProxyEnv.Get()
 	}
 	if proxy == "" {
+		// if proxy == "",说明当前请求的不是https或者么有从httpsProxyEnv.Get()获取到值
 		proxy = httpProxyEnv.Get()
 		if proxy != "" && os.Getenv("REQUEST_METHOD") != "" {
 			return nil, errors.New("net/http: refusing to use HTTP_PROXY value in CGI environment; see golang.org/s/cgihttpproxy")
 		}
 	}
 	if proxy == "" {
+		// 文档A nil URL and nil error are returned if no proxy is defined in the
+		// environment, or a proxy should not be used for the given request,
+		// as defined by NO_PROXY.
 		return nil, nil
 	}
 	if !useProxy(canonicalAddr(req.URL)) {
@@ -301,8 +336,15 @@ func ProxyFromEnvironment(req *Request) (*url.URL, error) {
 
 // ProxyURL returns a proxy function (for use in a Transport)
 // that always returns the same URL.
+//
+// 函数名: ProxyURL
+// 参数名: fixedURL
+// 参数类型: *url.URL
+// 返回值: func(*Request) (*url.URL, error)
+// 关于ProxyURL的具体使用,参考: $ go doc http.Transport | grep  -C 8 Proxy
 func ProxyURL(fixedURL *url.URL) func(*Request) (*url.URL, error) {
 	return func(*Request) (*url.URL, error) {
+		// 返回匿名闭包引用外层的fixedURL
 		return fixedURL, nil
 	}
 }
@@ -338,6 +380,9 @@ func (tr *transportRequest) setError(err error) {
 //
 // For higher-level HTTP client support (such as handling of cookies
 // and redirects), see Get, Post, and the Client type.
+//
+// 参考: $ go doc http.RoundTripper
+// @notsee
 func (t *Transport) RoundTrip(req *Request) (*Response, error) {
 	t.nextProtoOnce.Do(t.onceSetNextProtoDefaults)
 	ctx := req.Context()

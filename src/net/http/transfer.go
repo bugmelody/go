@@ -268,6 +268,11 @@ func (t *transferWriter) shouldSendContentLength() bool {
 	return false
 }
 
+// 自动写入部分header,包括:
+// Connection: close
+// Content-Length
+// Transfer-Encoding
+// Trailer
 func (t *transferWriter) WriteHeader(w io.Writer) error {
 	if t.Close && !hasToken(t.Header.get("Connection"), "close") {
 		if _, err := io.WriteString(w, "Connection: close\r\n"); err != nil {
@@ -685,6 +690,7 @@ func fixLength(isResponse bool, status int, requestMethod string, header Header,
 // Determine whether to hang up after sending a request and body, or
 // receiving a response and body
 // 'header' is the request headers
+// @see
 func shouldClose(major, minor int, header Header, removeCloseHeader bool) bool {
 	if major < 1 {
 		return true
