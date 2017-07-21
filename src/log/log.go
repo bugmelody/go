@@ -251,7 +251,7 @@ func (l *Logger) Output(calldepth int, s string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.flag&(Lshortfile|Llongfile) != 0 {
-		// release lock while getting caller info - it's expensive.
+		// Release lock while getting caller info - it's expensive.
 		// 在获取 caller info 的过程中释放锁.
 		l.mu.Unlock()
 		// 注意在unlock和lock之间并没有对l.xxx有写操作

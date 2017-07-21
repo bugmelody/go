@@ -9,6 +9,7 @@ package syscall_test
 import (
 	"flag"
 	"fmt"
+	"internal/testenv"
 	"io"
 	"io/ioutil"
 	"os"
@@ -54,6 +55,14 @@ func checkUserNS(t *testing.T) {
 		data, errRead := ioutil.ReadFile("/proc/sys/kernel/unprivileged_userns_clone")
 		if errRead == nil && data[0] == '0' {
 			t.Skip("kernel prohibits user namespace in unprivileged process")
+		}
+	}
+	// On Centos 7 make sure they set the kernel parameter user_namespace=1
+	// See issue 16283 and 20796.
+	if _, err := os.Stat("/sys/module/user_namespace/parameters/enable"); err == nil {
+		buf, _ := ioutil.ReadFile("/sys/module/user_namespace/parameters/enabled")
+		if !strings.HasPrefix(string(buf), "Y") {
+			t.Skip("kernel doesn't support user namespaces")
 		}
 	}
 	// When running under the Go continuous build, skip tests for
@@ -181,6 +190,12 @@ func TestUnshare(t *testing.T) {
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if strings.Contains(err.Error(), "operation not permitted") {
+			// Issue 17206: despite all the checks above,
+			// this still reportedly fails for some users.
+			// (older kernels?). Just skip.
+			t.Skip("skipping due to permission error")
+		}
 		t.Fatalf("Cmd failed with err %v, output: %s", err, out)
 	}
 
@@ -349,7 +364,7 @@ func TestUnshareMountNameSpaceChroot(t *testing.T) {
 	// Since we are doing a chroot, we need the binary there,
 	// and it must be statically linked.
 	x := filepath.Join(d, "syscall.test")
-	cmd := exec.Command("go", "test", "-c", "-o", x, "syscall")
+	cmd := exec.Command(testenv.GoToolPath(t), "test", "-c", "-o", x, "syscall")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if o, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Build of syscall in chroot failed, output %v, err %v", o, err)

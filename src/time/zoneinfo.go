@@ -97,7 +97,7 @@ func (l *Location) get() *Location {
 }
 
 // String returns a descriptive name for the time zone information,
-// corresponding to the argument to LoadLocation.
+// corresponding to the name argument to LoadLocation or FixedZone.
 //
 // 返回的name其实就是LoadLocation的参数.
 func (l *Location) String() string {

@@ -60,7 +60,6 @@ type tester struct {
 	goroot     string
 	goarch     string
 	gohostarch string
-	goarm      string
 	goos       string
 	gohostos   string
 	cgoEnabled bool
@@ -104,7 +103,6 @@ func (t *tester) run() {
 	t.gohostos = mustEnv("GOHOSTOS")
 	t.goarch = mustEnv("GOARCH")
 	t.gohostarch = mustEnv("GOHOSTARCH")
-	t.goarm = os.Getenv("GOARM")
 	slurp, err := exec.Command("go", "env", "CGO_ENABLED").Output()
 	if err != nil {
 		log.Fatalf("Error running go env CGO_ENABLED: %v", err)
@@ -432,6 +430,42 @@ func (t *tester) registerTests() {
 				// creation of first goroutines and first garbage collections in the parallel setting.
 				cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
 				return nil
+			},
+		})
+	}
+
+	// On the builders only, test that a moved GOROOT still works.
+	// Fails on iOS because CC_FOR_TARGET refers to clangwrap.sh
+	// in the unmoved GOROOT.
+	// Fails on Android with an exec format error.
+	// Fails on plan9 with "cannot find GOROOT" (issue #21016).
+	if os.Getenv("GO_BUILDER_NAME") != "" && t.goos != "android" && !t.iOS() && t.goos != "plan9" {
+		t.tests = append(t.tests, distTest{
+			name:    "moved_goroot",
+			heading: "moved GOROOT",
+			fn: func(dt *distTest) error {
+				t.runPending(dt)
+				moved := t.goroot + "-moved"
+				if err := os.Rename(t.goroot, moved); err != nil {
+					return err
+				}
+
+				// Run `go test fmt` in the moved GOROOT.
+				cmd := exec.Command(filepath.Join(moved, "bin", "go"), "test", "fmt")
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				// Don't set GOROOT in the environment.
+				for _, e := range os.Environ() {
+					if !strings.HasPrefix(e, "GOROOT=") {
+						cmd.Env = append(cmd.Env, e)
+					}
+				}
+				err := cmd.Run()
+
+				if rerr := os.Rename(moved, t.goroot); rerr != nil {
+					log.Fatalf("failed to restore GOROOT: %v", rerr)
+				}
+				return err
 			},
 		})
 	}
@@ -797,12 +831,6 @@ func (t *tester) supportedBuildmode(mode string) bool {
 			// causing build failures potentially
 			// obscuring other issues. This is hopefully a
 			// temporary workaround. See golang.org/issue/17937.
-			return false
-		}
-
-		if pair == "linux-arm" && t.goarm == "5" {
-			// Skip the plugin tests for now on ARMv5 because it causes a
-			// SIGILL. See https://golang.org/issue/19674
 			return false
 		}
 

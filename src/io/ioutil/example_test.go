@@ -78,3 +78,15 @@ func ExampleTempFile() {
 		log.Fatal(err)
 	}
 }
+
+func ExampleReadFile() {
+	content, err := ioutil.ReadFile("testdata/hello")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("File contents: %s", content)
+
+	// Output:
+	// File contents: Hello, Gophers!
+}

@@ -2463,7 +2463,7 @@ func StructOf(fields []StructField) Type {
 				ift := (*interfaceType)(unsafe.Pointer(ft))
 				for im, m := range ift.methods {
 					if ift.nameOff(m.name).pkgPath() != "" {
-						// TODO(sbinet)
+						// TODO(sbinet).  Issue 15924.
 						panic("reflect: embedded interface with unexported method(s) not implemented")
 					}
 
@@ -2521,10 +2521,15 @@ func StructOf(fields []StructField) Type {
 			case Ptr:
 				ptr := (*ptrType)(unsafe.Pointer(ft))
 				if unt := ptr.uncommon(); unt != nil {
+					if i > 0 && unt.mcount > 0 {
+						// Issue 15924.
+						panic("reflect: embedded type with methods not implemented if type is not first field")
+					}
 					for _, m := range unt.methods() {
 						mname := ptr.nameOff(m.name)
 						if mname.pkgPath() != "" {
-							// TODO(sbinet)
+							// TODO(sbinet).
+							// Issue 15924.
 							panic("reflect: embedded interface with unexported method(s) not implemented")
 						}
 						methods = append(methods, method{
@@ -2540,6 +2545,7 @@ func StructOf(fields []StructField) Type {
 						mname := ptr.nameOff(m.name)
 						if mname.pkgPath() != "" {
 							// TODO(sbinet)
+							// Issue 15924.
 							panic("reflect: embedded interface with unexported method(s) not implemented")
 						}
 						methods = append(methods, method{
@@ -2552,10 +2558,15 @@ func StructOf(fields []StructField) Type {
 				}
 			default:
 				if unt := ft.uncommon(); unt != nil {
+					if i > 0 && unt.mcount > 0 {
+						// Issue 15924.
+						panic("reflect: embedded type with methods not implemented if type is not first field")
+					}
 					for _, m := range unt.methods() {
 						mname := ft.nameOff(m.name)
 						if mname.pkgPath() != "" {
 							// TODO(sbinet)
+							// Issue 15924.
 							panic("reflect: embedded interface with unexported method(s) not implemented")
 						}
 						methods = append(methods, method{

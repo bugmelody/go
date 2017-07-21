@@ -1028,7 +1028,7 @@ func validMethod(method string) bool {
 //
 // 根据 Request 的文档,如果 body 参数是 nil,表示请求时不需要 http body
 // 比如: req, err := NewRequest("GET", url, nil)
-func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
+func NewRequest(method, url string, body io.Reader) (*Request, error) {
 	if method == "" {
 		// We document that "" means "GET" for Request.Method, and people have
 		// relied on that from NewRequest, so keep that working.
@@ -1038,7 +1038,7 @@ func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 	if !validMethod(method) {
 		return nil, fmt.Errorf("net/http: invalid method %q", method)
 	}
-	u, err := url.Parse(urlStr)
+	u, err := parseURL(url) // Just url.Parse (url is shadowed for godoc).
 	if err != nil {
 		return nil, err
 	}
