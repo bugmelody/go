@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-07-23 09:48:39
 
 package csv
 
@@ -95,17 +97,24 @@ func (w *Writer) Write(record []string) error {
 
 // Flush writes any buffered data to the underlying io.Writer.
 // To check if an error occurred during the Flush, call Error.
+//
+// @see
+// 实际是调用了bufio.Writer.Flush()
 func (w *Writer) Flush() {
 	w.w.Flush()
 }
 
 // Error reports any error that has occurred during a previous Write or Flush.
+//
+// @see
 func (w *Writer) Error() error {
 	_, err := w.w.Write(nil)
 	return err
 }
 
 // WriteAll writes multiple CSV records to w using Write and then calls Flush.
+//
+// @see
 func (w *Writer) WriteAll(records [][]string) error {
 	for _, record := range records {
 		err := w.Write(record)

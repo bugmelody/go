@@ -1,6 +1,8 @@
 // Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-07-23 20:48:44
 
 package csv_test
 
@@ -42,6 +44,7 @@ Ken,Thompson,ken
 // This example shows how csv.Reader can be configured to handle other
 // types of CSV files.
 func ExampleReader_options() {
+	// 分号分隔,第三行是注释行
 	in := `first_name;last_name;username
 "Rob";"Pike";rob
 # lines beginning with a # character are ignored

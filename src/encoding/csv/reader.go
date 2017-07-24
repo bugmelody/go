@@ -1,6 +1,8 @@
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[3-over]]] 2017-07-22 22:09:49
 
 // Package csv reads and writes comma-separated values (CSV) files.
 // There are many kinds of CSV files; this package supports the format
@@ -16,8 +18,12 @@
 //
 // Carriage returns before newline characters are silently removed.
 //
+// carriage return: 回车;  \r\n中的\r会被丢弃.
+//
 // Blank lines are ignored. A line with only whitespace characters (excluding
 // the ending newline character) is not considered a blank line.
+//
+// 上面这段话的意思是说: Blank line ('^$') 会被忽略, '^\s+$' 不会被当做 Blank line.
 //
 // Fields which start and stop with the quote character " are called
 // quoted-fields. The beginning and ending quote are not part of the
@@ -75,6 +81,7 @@ func (e *ParseError) Error() string {
 // These are the errors that can be returned in ParseError.Error
 var (
 	ErrTrailingComma = errors.New("extra delimiter at end of line") // no longer used
+	// non-quoted-field 中不允许出现 \"
 	ErrBareQuote     = errors.New("bare \" in non-quoted-field")
 	ErrQuote         = errors.New("extraneous \" in field")
 	ErrFieldCount    = errors.New("wrong number of fields in line")
@@ -132,6 +139,8 @@ type Reader struct {
 }
 
 // NewReader returns a new Reader that reads from r.
+//
+// 通过NewReader返回的*Reader已经设置Reader.Comma=','
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
 		Comma: ',',
@@ -156,6 +165,8 @@ func (r *Reader) error(err error) error {
 // If there is no data left to be read, Read returns nil, io.EOF.
 // If ReuseRecord is true, the returned slice may be shared
 // between multiple calls to Read.
+//
+// Read用于读取一行记录.
 func (r *Reader) Read() (record []string, err error) {
 	if r.ReuseRecord {
 		record, err = r.readRecord(r.lastRecord)
@@ -172,6 +183,8 @@ func (r *Reader) Read() (record []string, err error) {
 // A successful call returns err == nil, not err == io.EOF. Because ReadAll is
 // defined to read until EOF, it does not treat end of file as an error to be
 // reported.
+//
+// @see
 func (r *Reader) ReadAll() (records [][]string, err error) {
 	for {
 		record, err := r.readRecord(nil)
@@ -179,6 +192,7 @@ func (r *Reader) ReadAll() (records [][]string, err error) {
 			return records, nil
 		}
 		if err != nil {
+			// 非EOF错误
 			return nil, err
 		}
 		records = append(records, record)
