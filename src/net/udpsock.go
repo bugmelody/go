@@ -19,6 +19,7 @@ import (
 // implemented.
 
 // UDPAddr represents the address of a UDP end point.
+// UDPAddr实现了Addr interface
 type UDPAddr struct {
 	IP   IP
 	Port int

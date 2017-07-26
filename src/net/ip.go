@@ -68,6 +68,8 @@ func IPv4Mask(a, b, c, d byte) IPMask {
 // CIDRMask returns an IPMask consisting of `ones' 1 bits
 // followed by 0s up to a total length of `bits' bits.
 // For a mask of this form, CIDRMask is the inverse of IPMask.Size.
+//
+// http://blog.csdn.net/mr_orange_klj/article/details/46128305  .
 func CIDRMask(ones, bits int) IPMask {
 	if bits != 8*IPv4len && bits != 8*IPv6len {
 		return nil
@@ -115,6 +117,8 @@ func (ip IP) IsUnspecified() bool {
 }
 
 // IsLoopback reports whether ip is a loopback address.
+//
+// @see
 func (ip IP) IsLoopback() bool {
 	if ip4 := ip.To4(); ip4 != nil {
 		return ip4[0] == 127
@@ -218,6 +222,8 @@ var (
 // DefaultMask returns the default IP mask for the IP address ip.
 // Only IPv4 addresses have default masks; DefaultMask returns
 // nil if ip is not a valid IPv4 address.
+//
+// @see
 func (ip IP) DefaultMask() IPMask {
 	if ip = ip.To4(); ip == nil {
 		return nil
@@ -643,6 +649,8 @@ func parseIPv6(s string, zoneAllowed bool) (ip IP, zone string) {
 // or IPv6 ("2001:db8::68") form.
 // If s is not a valid textual representation of an IP address,
 // ParseIP returns nil.
+//
+// @see:内部通过包含'.'或':'调用ipv4或ipv6的解析算法
 func ParseIP(s string) IP {
 	for i := 0; i < len(s); i++ {
 		switch s[i] {

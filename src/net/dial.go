@@ -1,8 +1,6 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-//
-// [[[1-over]]] 2017-7-12 08:48:52
 
 package net
 
@@ -18,6 +16,8 @@ import (
 // The zero value for each field is equivalent to dialing
 // without that option. Dialing with the zero value of Dialer
 // is therefore equivalent to just calling the Dial function.
+//
+// Dialer名字虽然以er结尾,但不是接口,而是struct
 type Dialer struct {
 	// Timeout is the maximum amount of time a dial will wait for
 	// a connect to complete. If Deadline is also set, it may fail
@@ -288,6 +288,8 @@ func (r *Resolver) resolveAddrList(ctx context.Context, op, network, addr string
 // assumed.
 //
 // For Unix networks, the address must be a file system path.
+//
+// @see
 func Dial(network, address string) (Conn, error) {
 	var d Dialer
 	return d.Dial(network, address)
@@ -303,6 +305,8 @@ func Dial(network, address string) (Conn, error) {
 //
 // See func Dial for a description of the network and address
 // parameters.
+//
+// @see
 func DialTimeout(network, address string, timeout time.Duration) (Conn, error) {
 	d := Dialer{Timeout: timeout}
 	return d.Dial(network, address)

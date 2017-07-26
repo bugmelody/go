@@ -15,6 +15,8 @@ import (
 // Reads on one end are matched with writes on the other,
 // copying data directly between the two; there is no internal
 // buffering.
+//
+// full duplex:全双工
 func Pipe() (Conn, Conn) {
 	r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()

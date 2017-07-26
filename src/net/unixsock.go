@@ -13,6 +13,8 @@ import (
 )
 
 // UnixAddr represents the address of a Unix domain socket end point.
+//
+// UnixAddr实现了Addr interface
 type UnixAddr struct {
 	Name string
 	Net  string

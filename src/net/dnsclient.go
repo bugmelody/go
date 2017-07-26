@@ -246,6 +246,9 @@ func (addrs byPriorityWeight) sort() {
 }
 
 // An MX represents a single DNS MX record.
+//
+// http://blog.csdn.net/dai451954706/article/details/37696651
+// https://www.v2ex.com/t/140216
 type MX struct {
 	Host string
 	Pref uint16

@@ -28,6 +28,8 @@ import (
 // implemented.
 
 // IPAddr represents the address of an IP end point.
+//
+// IPAddr实现了Addr interface
 type IPAddr struct {
 	IP   IP
 	Zone string // IPv6 scoped addressing zone

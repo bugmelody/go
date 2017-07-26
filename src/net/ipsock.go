@@ -223,6 +223,8 @@ func splitHostZone(s string) (host, zone string) {
 // IPv6 addresses, then JoinHostPort returns "[host]:port".
 //
 // See func Dial for a description of the host and port parameters.
+//
+// @see
 func JoinHostPort(host, port string) string {
 	// We assume that host is a literal IPv6 address if host has
 	// colons.

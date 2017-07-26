@@ -53,6 +53,7 @@ var flagNames = []string{
 	"multicast",
 }
 
+// @see
 func (f Flags) String() string {
 	s := ""
 	for i, name := range flagNames {
@@ -71,6 +72,8 @@ func (f Flags) String() string {
 
 // Addrs returns a list of unicast interface addresses for a specific
 // interface.
+//
+// unicast ['ju:nikɑ:st; -kæst] n.单路广播,单路传送(网络计算机传送技术)
 func (ifi *Interface) Addrs() ([]Addr, error) {
 	if ifi == nil {
 		return nil, &OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errInvalidInterface}
@@ -84,6 +87,8 @@ func (ifi *Interface) Addrs() ([]Addr, error) {
 
 // MulticastAddrs returns a list of multicast, joined group addresses
 // for a specific interface.
+//
+// multicast ['mʌltikɑ:st; -kæst] n.多路广播,多路传送(网络计算机发送技术)
 func (ifi *Interface) MulticastAddrs() ([]Addr, error) {
 	if ifi == nil {
 		return nil, &OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errInvalidInterface}

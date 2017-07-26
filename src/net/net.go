@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]] 2017-07-24 17:46:27 本包只看导出,即使对源码的注释也放入外层,因为可能的变化太大
 
 /*
 Package net provides a portable interface for network I/O, including
@@ -122,6 +124,8 @@ type Conn interface {
 
 	// Close closes the connection.
 	// Any blocked Read or Write operations will be unblocked and return errors.
+	//
+	// Close后,任何阻塞中的读写操作会被解除阻塞状态从而直接返回errors.
 	Close() error
 
 	// LocalAddr returns the local network address.
@@ -435,6 +439,7 @@ type OpError struct {
 	Err error
 }
 
+// @see
 func (e *OpError) Error() string {
 	if e == nil {
 		return "<nil>"
@@ -486,6 +491,7 @@ type temporary interface {
 	Temporary() bool
 }
 
+// @see
 func (e *OpError) Temporary() bool {
 	if ne, ok := e.Err.(*os.SyscallError); ok {
 		t, ok := ne.Err.(temporary)

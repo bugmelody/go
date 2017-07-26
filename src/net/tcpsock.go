@@ -16,6 +16,8 @@ import (
 // implemented.
 
 // TCPAddr represents the address of a TCP end point.
+//
+// TCPAddr实现了Addr interface
 type TCPAddr struct {
 	IP   IP
 	Port int
@@ -82,6 +84,8 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 
 // TCPConn is an implementation of the Conn interface for TCP network
 // connections.
+//
+// TCPConn是对net.Conn在TCP中的实现
 type TCPConn struct {
 	conn
 }
@@ -221,6 +225,8 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 
 // TCPListener is a TCP network listener. Clients should typically
 // use variables of type Listener instead of assuming TCP.
+//
+// TCPListener是Listener interface在TCP中的实现
 type TCPListener struct {
 	fd *netFD
 }
