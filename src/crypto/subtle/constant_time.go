@@ -1,9 +1,13 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]]
 
 // Package subtle implements functions that are often useful in cryptographic
 // code but require careful thought to use correctly.
+//
+// cryptographic [,krɪptə'græfɪk] adj. 关于暗号的,用密码写的
 package subtle
 
 // ConstantTimeCompare returns 1 if and only if the two slices, x

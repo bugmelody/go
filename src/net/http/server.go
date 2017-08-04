@@ -155,6 +155,8 @@ type ResponseWriter interface {
 	// writing the response. However, such behavior may not be supported
 	// by all HTTP/2 clients. Handlers should read before writing if
 	// possible to maximize compatibility.
+	//
+	// 写入http body
 	Write([]byte) (int, error)
 
 	// WriteHeader sends an HTTP response header with status code.
@@ -165,6 +167,7 @@ type ResponseWriter interface {
 	//
 	// 通常不需要你主动调用WriteHeader.
 	// 只有在你想发送http错误代码时才需要主动调用WriteHeader.
+	// 参考: http.ResponseWriter.Header
 	WriteHeader(int)
 }
 
@@ -3149,6 +3152,8 @@ func ListenAndServe(addr string, handler Handler) error {
 // ListenAndServeTLS always returns a non-nil error.
 //
 // Certificate Authority (CA): 证书权威机构（CA）
+// 比如: certFile="./testdata/server.pem" , keyFile="./testdata/server.key"
+// SSL中，公钥、私钥、证书的后缀名都是些啥？ https://www.zhihu.com/question/29620953
 func ListenAndServeTLS(addr, certFile, keyFile string, handler Handler) error {
 	server := &Server{Addr: addr, Handler: handler}
 	return server.ListenAndServeTLS(certFile, keyFile)
@@ -3168,6 +3173,9 @@ func ListenAndServeTLS(addr, certFile, keyFile string, handler Handler) error {
 // If srv.Addr is blank, ":https" is used.
 //
 // ListenAndServeTLS always returns a non-nil error.
+//
+// 比如: certFile="./testdata/server.pem" , keyFile="./testdata/server.key"
+// SSL中，公钥、私钥、证书的后缀名都是些啥？ https://www.zhihu.com/question/29620953
 func (srv *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	addr := srv.Addr
 	if addr == "" {

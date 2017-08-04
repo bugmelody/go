@@ -381,6 +381,8 @@ type Request struct {
 	//
 	// RequestURI代表server收到的 Request-Line 中的 Request-URI.
 	// 在 HTTP client request 中,不应该设置这个字段
+	//
+	// 比如: Request.RequestURI == "/favicon.ico"
 	RequestURI string
 
 	// TLS allows HTTP servers and other software to record

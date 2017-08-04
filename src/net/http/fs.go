@@ -69,7 +69,7 @@ import (
 // An empty Dir is treated as ".".
 //
 // 上文中: implements FileSystem(指http.FileSystem接口)
-// files and directories starting with a period: 指隐藏文件或目录
+// files and directories starting with a period: 指隐藏文件或目录(比如.git)
 type Dir string
 
 // mapDirOpenError maps the provided non-nil error from opening name
@@ -126,6 +126,8 @@ func (d Dir) Open(name string) (File, error) {
 // A FileSystem implements access to a collection of named files.
 // The elements in a file path are separated by slash ('/', U+002F)
 // characters, regardless of host operating system convention.
+//
+// The elements in a file path(指name参数)
 type FileSystem interface {
 	Open(name string) (File, error)
 }
@@ -134,6 +136,9 @@ type FileSystem interface {
 // served by the FileServer implementation.
 //
 // The methods should behave the same as those on an *os.File.
+//
+// http.FileSystem的Open方法会返回http.File,而在FileServer的实现中,
+// 用到了http.File接口的Close,Read,Seek,Readdir,Stat等方法
 type File interface {
 	io.Closer
 	io.Reader
