@@ -109,7 +109,7 @@ func Example_sortKeys() {
 	}
 	// 按照 distance 字段 降序 排序
 	decreasingDistance := func(p1, p2 *Planet) bool {
-		return !distance(p1, p2)
+		return distance(p2, p1)
 	}
 
 	// Sort the planets by the various criteria.

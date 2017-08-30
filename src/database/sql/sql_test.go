@@ -439,6 +439,20 @@ func TestTxContextWait(t *testing.T) {
 	waitForFree(t, db, 5*time.Second, 0)
 }
 
+// TestUnsupportedOptions checks that the database fails when a driver that
+// doesn't implement ConnBeginTx is used with non-default options and an
+// un-cancellable context.
+func TestUnsupportedOptions(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+	_, err := db.BeginTx(context.Background(), &TxOptions{
+		Isolation: LevelSerializable, ReadOnly: true,
+	})
+	if err == nil {
+		t.Fatal("expected error when using unsupported options, got nil")
+	}
+}
+
 func TestMultiResultSetQuery(t *testing.T) {
 	db := newTestDB(t, "people")
 	defer closeDB(t, db)
@@ -3376,7 +3390,7 @@ func (c *nvcConn) CheckNamedValue(nv *driver.NamedValue) error {
 	case Out:
 		switch ov := v.Dest.(type) {
 		default:
-			return errors.New("unkown NameValueCheck OUTPUT type")
+			return errors.New("unknown NameValueCheck OUTPUT type")
 		case *string:
 			*ov = "from-server"
 			nv.Value = "OUT:*string"

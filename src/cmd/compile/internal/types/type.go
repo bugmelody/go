@@ -707,6 +707,10 @@ func (t *Type) Recvs() *Type   { return t.FuncType().Receiver }
 func (t *Type) Params() *Type  { return t.FuncType().Params }
 func (t *Type) Results() *Type { return t.FuncType().Results }
 
+func (t *Type) NumRecvs() int   { return t.FuncType().Receiver.NumFields() }
+func (t *Type) NumParams() int  { return t.FuncType().Params.NumFields() }
+func (t *Type) NumResults() int { return t.FuncType().Results.NumFields() }
+
 // Recv returns the receiver of function type t, if any.
 func (t *Type) Recv() *Field {
 	s := t.Recvs()
@@ -1315,6 +1319,23 @@ func (t *Type) SetNumElem(n int64) {
 		Fatalf("SetNumElem array %v already has bound %d", t, at.Bound)
 	}
 	at.Bound = n
+}
+
+func (t *Type) NumComponents() int64 {
+	switch t.Etype {
+	case TSTRUCT:
+		if t.IsFuncArgStruct() {
+			Fatalf("NumComponents func arg struct")
+		}
+		var n int64
+		for _, f := range t.FieldSlice() {
+			n += f.Type.NumComponents()
+		}
+		return n
+	case TARRAY:
+		return t.NumElem() * t.Elem().NumComponents()
+	}
+	return 1
 }
 
 // ChanDir returns the direction of a channel type t.

@@ -191,6 +191,12 @@ func deepValueEqual(v1, v2 Value, visited map[visit]bool, depth int) bool {
 // they are deeply equal regardless of content.
 //
 // @notsee
+//
+// As DeepEqual traverses the data values it may find a cycle. The
+// second and subsequent times that DeepEqual compares two pointer
+// values that have been compared before, it treats the values as
+// equal rather than examining the values to which they point.
+// This ensures that DeepEqual terminates.
 func DeepEqual(x, y interface{}) bool {
 	if x == nil || y == nil {
 		return x == y

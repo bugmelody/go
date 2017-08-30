@@ -200,7 +200,7 @@ func Import(imp *types.Pkg, in *bufio.Reader) {
 				body = []*Node{nod(OEMPTY, nil, nil)}
 			}
 			f.Func.Inl.Set(body)
-			funcbody(f)
+			funcbody()
 		} else {
 			// function already imported - read body but discard declarations
 			dclcontext = PDISCARD // throw away any declarations
@@ -326,29 +326,29 @@ func idealType(typ *types.Type) *types.Type {
 func (p *importer) obj(tag int) {
 	switch tag {
 	case constTag:
-		p.pos()
+		pos := p.pos()
 		sym := p.qualifiedName()
 		typ := p.typ()
 		val := p.value(typ)
-		importconst(p.imp, sym, idealType(typ), nodlit(val))
+		importconst(p.imp, sym, idealType(typ), npos(pos, nodlit(val)))
 
 	case aliasTag:
-		p.pos()
+		pos := p.pos()
 		sym := p.qualifiedName()
 		typ := p.typ()
-		importalias(p.imp, sym, typ)
+		importalias(pos, p.imp, sym, typ)
 
 	case typeTag:
 		p.typ()
 
 	case varTag:
-		p.pos()
+		pos := p.pos()
 		sym := p.qualifiedName()
 		typ := p.typ()
-		importvar(p.imp, sym, typ)
+		importvar(pos, p.imp, sym, typ)
 
 	case funcTag:
-		p.pos()
+		pos := p.pos()
 		sym := p.qualifiedName()
 		params := p.paramList()
 		result := p.paramList()
@@ -364,7 +364,7 @@ func (p *importer) obj(tag int) {
 			break
 		}
 
-		n := newfuncname(sym)
+		n := newfuncnamel(pos, sym)
 		n.Type = sig
 		declare(n, PFUNC)
 		p.funcList = append(p.funcList, n)
@@ -479,11 +479,12 @@ func (p *importer) typ() *types.Type {
 	var t *types.Type
 	switch i {
 	case namedTag:
-		p.pos()
+		pos := p.pos()
 		tsym := p.qualifiedName()
 
-		t = pkgtype(p.imp, tsym)
+		t = pkgtype(pos, p.imp, tsym)
 		p.typList = append(p.typList, t)
+		dup := !t.IsKind(types.TFORW) // type already imported
 
 		// read underlying type
 		t0 := p.typ()
@@ -501,7 +502,7 @@ func (p *importer) typ() *types.Type {
 
 		// read associated methods
 		for i := p.int(); i > 0; i-- {
-			p.pos()
+			mpos := p.pos()
 			sym := p.fieldSym()
 
 			// during import unexported method names should be in the type's package
@@ -514,10 +515,19 @@ func (p *importer) typ() *types.Type {
 			result := p.paramList()
 			nointerface := p.bool()
 
-			n := newfuncname(methodname(sym, recv[0].Type))
-			n.Type = functypefield(recv[0], params, result)
+			mt := functypefield(recv[0], params, result)
+			addmethod(sym, mt, false, nointerface)
+
+			if dup {
+				// An earlier import already declared this type and its methods.
+				// Discard the duplicate method declaration.
+				p.funcList = append(p.funcList, nil)
+				continue
+			}
+
+			n := newfuncnamel(mpos, methodname(sym, recv[0].Type))
+			n.Type = mt
 			checkwidth(n.Type)
-			addmethod(sym, n.Type, false, nointerface)
 			p.funcList = append(p.funcList, n)
 			importlist = append(importlist, n)
 
@@ -616,7 +626,7 @@ func (p *importer) fieldList() (fields []*types.Field) {
 }
 
 func (p *importer) field() *types.Field {
-	p.pos()
+	pos := p.pos()
 	sym, alias := p.fieldName()
 	typ := p.typ()
 	note := p.string()
@@ -636,7 +646,7 @@ func (p *importer) field() *types.Field {
 	}
 
 	f.Sym = sym
-	f.Nname = asTypesNode(newname(sym))
+	f.Nname = asTypesNode(newnamel(pos, sym))
 	f.Type = typ
 	f.Note = note
 
@@ -660,14 +670,14 @@ func (p *importer) methodList() (methods []*types.Field) {
 }
 
 func (p *importer) method() *types.Field {
-	p.pos()
+	pos := p.pos()
 	sym := p.methodName()
 	params := p.paramList()
 	result := p.paramList()
 
 	f := types.NewField()
 	f.Sym = sym
-	f.Nname = asTypesNode(newname(sym))
+	f.Nname = asTypesNode(newnamel(pos, sym))
 	f.Type = functypefield(fakeRecvField(), params, result)
 	return f
 }
@@ -922,10 +932,10 @@ func (p *importer) node() *Node {
 			// again. Re-introduce explicit uintptr(c) conversion.
 			// (issue 16317).
 			if typ.IsUnsafePtr() {
-				n = nod(OCONV, n, nil)
+				n = nodl(pos, OCONV, n, nil)
 				n.Type = types.Types[TUINTPTR]
 			}
-			n = nod(OCONV, n, nil)
+			n = nodl(pos, OCONV, n, nil)
 			n.Type = typ
 		}
 		return n

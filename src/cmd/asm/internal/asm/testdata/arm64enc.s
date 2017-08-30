@@ -242,9 +242,9 @@ TEXT asmtest(SB),DUPOK|NOSPLIT,$-8
    ORRW $16252928, ZR, R21                    // f5130d32
    MOVD $-4260607558625, R11                  // eb6b16b2
    MOVD R30, R7                               // e7031eaa
-   // MOVKW $(3905<<0), R21                   // MOVKW $3905, R21              // 35e88172
-   // MOVKW $(3905<<16), R21                  // MOVKW $255918080, R21         // 35e8a172
-   // MOVK $(3905<<32), R21                   // MOVK $16771847290880, R21     // 35e8c1f2
+   MOVKW $(3905<<0), R21                      // MOVKW $3905, R21              // 35e88172
+   MOVKW $(3905<<16), R21                     // MOVKW $255918080, R21         // 35e8a172
+   MOVK $(3905<<32), R21                      // MOVK $16771847290880, R21     // 35e8c1f2
    MOVD $0, R5                                // 050080d2
    // MRS $4567, R16                          // f03a32d5
    // MRS $32345, R6                          // 26cb3fd5
@@ -345,10 +345,10 @@ TEXT asmtest(SB),DUPOK|NOSPLIT,$-8
    //TODO STTRH 9(R10), R18                   // 52990078
    //TODO STXP (R20), R18, R5, ZR             // 854a3f88
    //TODO STXP (R22), R9, R17, R0             // d12620c8
-   // STXRW R2, (R19), R18                    // 627e1288
-   // STXR R15, (R21), R13                    // af7e0dc8
-   // STXRB R7, (R9), R24                     // 277d1808
-   // STXRH R12, (R3), R8                     // 6c7c0848
+   STXRW R2, (R19), R18                       // 627e1288
+   STXR R15, (R21), R13                       // af7e0dc8
+   STXRB R7, (R9), R24                        // 277d1808
+   STXRH R12, (R3), R8                        // 6c7c0848
    //TODO SUBW R20.UXTW<<7, R23, R18          // f25e344b
    //TODO SUB R5.SXTW<<2, R1, R26             // 3ac825cb
    SUB $(1923<<12), R4, R27                   // SUB $7876608, R4, R27         // 9b0c5ed1
@@ -398,16 +398,16 @@ TEXT asmtest(SB),DUPOK|NOSPLIT,$-8
    FCCMPD HI, F11, F15, $15                   // ef856b1e
    FCCMPES HS, F28, F13, $13                  // bd253c1e
    FCCMPED LT, F20, F4, $9                    // 99b4741e
-   // FCMPS F3, F17                           // 2022231e
-   // FCMPS $(0.0), F8                        // 0821201e
-   // FCMPD F11, F27                          // 60236b1e
-   // FCMPD $(0.0), F25                       // 2823601e
-   // FCMPES F16, F30                         // d023301e
-   // FCMPES $(0.0), F29                      // b823201e
-   // FCMPED F13, F10                         // 50216d1e
-   // FCMPED $(0.0), F25                      // 3823601e
-   // FCSELS EQ, F26, F27, F25                // 590f3b1e
-   // FCSELD PL, F8, F22, F7                  // 075d761e
+   FCMPS F3, F17                              // 2022231e
+   FCMPS $(0.0), F8                           // 0821201e
+   FCMPD F11, F27                             // 60236b1e
+   FCMPD $(0.0), F25                          // 2823601e
+   FCMPES F16, F30                            // d023301e
+   FCMPES $(0.0), F29                         // b823201e
+   FCMPED F13, F10                            // 50216d1e
+   FCMPED $(0.0), F25                         // 3823601e
+   FCSELS EQ, F26, F27, F25                   // 590f3b1e
+   FCSELD PL, F8, F22, F7                     // 075d761e
    //TODO FCVTASW F21, R15                    // af02241e
    //TODO FCVTAS F20, ZR                      // 9f02249e
    //TODO FCVTASW F6, R11                     // cb00641e

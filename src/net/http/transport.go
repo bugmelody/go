@@ -1269,8 +1269,8 @@ func useProxy(addr string) bool {
 		}
 	}
 
-	no_proxy := noProxyEnv.Get()
-	if no_proxy == "*" {
+	noProxy := noProxyEnv.Get()
+	if noProxy == "*" {
 		return false
 	}
 
@@ -1279,7 +1279,7 @@ func useProxy(addr string) bool {
 		addr = addr[:strings.LastIndex(addr, ":")]
 	}
 
-	for _, p := range strings.Split(no_proxy, ",") {
+	for _, p := range strings.Split(noProxy, ",") {
 		p = strings.ToLower(strings.TrimSpace(p))
 		if len(p) == 0 {
 			continue
@@ -2066,8 +2066,8 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 // a t.Logf func. See export_test.go's Request.WithT method.
 type tLogKey struct{}
 
-func (r *transportRequest) logf(format string, args ...interface{}) {
-	if logf, ok := r.Request.Context().Value(tLogKey{}).(func(string, ...interface{})); ok {
+func (tr *transportRequest) logf(format string, args ...interface{}) {
+	if logf, ok := tr.Request.Context().Value(tLogKey{}).(func(string, ...interface{})); ok {
 		logf(time.Now().Format(time.RFC3339Nano)+": "+format, args...)
 	}
 }

@@ -738,23 +738,6 @@ TEXT runtime·cputicks(SB),NOSPLIT,$0-8
 	MOVD	R3, ret+0(FP)
 	RET
 
-// memhash_varlen(p unsafe.Pointer, h seed) uintptr
-// redirects to memhash(p, h, size) using the size
-// stored in the closure.
-TEXT runtime·memhash_varlen(SB),NOSPLIT,$40-24
-	GO_ARGS
-	NO_LOCAL_POINTERS
-	MOVD	p+0(FP), R3
-	MOVD	h+8(FP), R4
-	MOVD	8(R11), R5
-	MOVD	R3, FIXED_FRAME+0(R1)
-	MOVD	R4, FIXED_FRAME+8(R1)
-	MOVD	R5, FIXED_FRAME+16(R1)
-	BL	runtime·memhash(SB)
-	MOVD	FIXED_FRAME+24(R1), R3
-	MOVD	R3, ret+16(FP)
-	RET
-
 // AES hashing not implemented for ppc64
 TEXT runtime·aeshash(SB),NOSPLIT|NOFRAME,$0-0
 	MOVW	(R0), R1
@@ -1074,24 +1057,6 @@ equal:
 	MOVD    $1, R9
 	RET
 
-// eqstring tests whether two strings are equal.
-// The compiler guarantees that strings passed
-// to eqstring have equal length.
-// See runtime_test.go:eqstring_generic for
-// equivalent Go code.
-TEXT runtime·eqstring(SB),NOSPLIT,$0-33
-	MOVD    s1_base+0(FP), R3
-	MOVD    s2_base+16(FP), R4
-	MOVD    $1, R5
-	MOVB    R5, ret+32(FP)
-	CMP     R3, R4
-	BNE     2(PC)
-	RET
-	MOVD    s1_len+8(FP), R5
-	BL      runtime·memeqbody(SB)
-	MOVB    R9, ret+32(FP)
-	RET
-
 TEXT bytes·Equal(SB),NOSPLIT,$0-49
 	MOVD	a_len+8(FP), R4
 	MOVD	b_len+32(FP), R5
@@ -1352,18 +1317,6 @@ TEXT runtime·goexit(SB),NOSPLIT|NOFRAME,$0-0
 	BL	runtime·goexit1(SB)	// does not return
 	// traceback from goexit1 must hit code range of goexit
 	MOVD	R0, R0	// NOP
-
-TEXT runtime·prefetcht0(SB),NOSPLIT,$0-8
-	RET
-
-TEXT runtime·prefetcht1(SB),NOSPLIT,$0-8
-	RET
-
-TEXT runtime·prefetcht2(SB),NOSPLIT,$0-8
-	RET
-
-TEXT runtime·prefetchnta(SB),NOSPLIT,$0-8
-	RET
 
 TEXT runtime·sigreturn(SB),NOSPLIT,$0-0
 	RET

@@ -462,6 +462,15 @@ func callinstr(np **Node, init *Nodes, wr int, skip int) bool {
 		return false
 	}
 	t := n.Type
+	// dowidth may not have been called for PEXTERN.
+	dowidth(t)
+	w := t.Width
+	if w == BADWIDTH {
+		Fatalf("instrument: %v badwidth", t)
+	}
+	if w == 0 {
+		return false // can't race on zero-sized things
+	}
 	if isartificial(n) {
 		return false
 	}
@@ -494,26 +503,19 @@ func callinstr(np **Node, init *Nodes, wr int, skip int) bool {
 			if wr != 0 {
 				name = "msanwrite"
 			}
-			// dowidth may not have been called for PEXTERN.
-			dowidth(t)
-			w := t.Width
-			if w == BADWIDTH {
-				Fatalf("instrument: %v badwidth", t)
-			}
 			f = mkcall(name, nil, init, uintptraddr(n), nodintconst(w))
-		} else if flag_race && (t.IsStruct() || t.IsArray()) {
+		} else if flag_race && t.NumComponents() > 1 {
+			// for composite objects we have to write every address
+			// because a write might happen to any subobject.
+			// composites with only one element don't have subobjects, though.
 			name := "racereadrange"
 			if wr != 0 {
 				name = "racewriterange"
 			}
-			// dowidth may not have been called for PEXTERN.
-			dowidth(t)
-			w := t.Width
-			if w == BADWIDTH {
-				Fatalf("instrument: %v badwidth", t)
-			}
 			f = mkcall(name, nil, init, uintptraddr(n), nodintconst(w))
 		} else if flag_race {
+			// for non-composite objects we can write just the start
+			// address, as any write must write the first byte.
 			name := "raceread"
 			if wr != 0 {
 				name = "racewrite"

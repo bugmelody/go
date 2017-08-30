@@ -889,8 +889,7 @@ func (w *reflectWithString) resolve() error {
 }
 
 // NOTE: keep in sync with stringBytes below.
-func (e *encodeState) string(s string, escapeHTML bool) int {
-	len0 := e.Len()
+func (e *encodeState) string(s string, escapeHTML bool) {
 	e.WriteByte('"')
 	start := 0
 	for i := 0; i < len(s); {
@@ -962,12 +961,10 @@ func (e *encodeState) string(s string, escapeHTML bool) int {
 		e.WriteString(s[start:])
 	}
 	e.WriteByte('"')
-	return e.Len() - len0
 }
 
 // NOTE: keep in sync with string above.
-func (e *encodeState) stringBytes(s []byte, escapeHTML bool) int {
-	len0 := e.Len()
+func (e *encodeState) stringBytes(s []byte, escapeHTML bool) {
 	e.WriteByte('"')
 	start := 0
 	for i := 0; i < len(s); {
@@ -1039,7 +1036,6 @@ func (e *encodeState) stringBytes(s []byte, escapeHTML bool) int {
 		e.Write(s[start:])
 	}
 	e.WriteByte('"')
-	return e.Len() - len0
 }
 
 // A field represents a single field found in a struct.

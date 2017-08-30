@@ -1712,14 +1712,17 @@ var optab =
 
 var opindex [(ALAST + 1) & obj.AMask]*Optab
 
-// isextern reports whether s describes an external symbol that must avoid pc-relative addressing.
+// useAbs reports whether s describes a symbol that must avoid pc-relative addressing.
 // This happens on systems like Solaris that call .so functions instead of system calls.
 // It does not seem to be necessary for any other systems. This is probably working
 // around a Solaris-specific bug that should be fixed differently, but we don't know
 // what that bug is. And this does fix it.
-func isextern(s *obj.LSym) bool {
-	// All the Solaris dynamic imports from libc.so begin with "libc_".
-	return strings.HasPrefix(s.Name, "libc_")
+func useAbs(ctxt *obj.Link, s *obj.LSym) bool {
+	if ctxt.Headtype == objabi.Hsolaris {
+		// All the Solaris dynamic imports from libc.so begin with "libc_".
+		return strings.HasPrefix(s.Name, "libc_")
+	}
+	return ctxt.Arch.Family == sys.I386 && !ctxt.Flag_shared
 }
 
 // single-instruction no-ops of various lengths.
@@ -2269,6 +2272,13 @@ func oclass(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 			return Yxxx
 		}
 		if ctxt.Arch.Family == sys.AMD64 {
+			// Offset must fit in a 32-bit signed field (or fit in a 32-bit unsigned field
+			// where the sign extension doesn't matter).
+			// Note: The latter happens only in assembly, for example crypto/sha1/sha1block_amd64.s.
+			if !(a.Offset == int64(int32(a.Offset)) ||
+				a.Offset == int64(uint32(a.Offset)) && p.As == ALEAL) {
+				return Yxxx
+			}
 			switch a.Name {
 			case obj.NAME_EXTERN, obj.NAME_STATIC, obj.NAME_GOTREF:
 				// Global variables can't use index registers and their
@@ -2299,7 +2309,7 @@ func oclass(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 
 		case obj.NAME_EXTERN,
 			obj.NAME_STATIC:
-			if a.Sym != nil && isextern(a.Sym) || (ctxt.Arch.Family == sys.I386 && !ctxt.Flag_shared) {
+			if a.Sym != nil && useAbs(ctxt, a.Sym) {
 				return Yi32
 			}
 			return Yiauto // use pc-relative addressing
@@ -2800,7 +2810,7 @@ func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
 		if a.Name == obj.NAME_GOTREF {
 			r.Siz = 4
 			r.Type = objabi.R_GOTPCREL
-		} else if isextern(s) || (ctxt.Arch.Family != sys.AMD64 && !ctxt.Flag_shared) {
+		} else if useAbs(ctxt, s) {
 			r.Siz = 4
 			r.Type = objabi.R_ADDR
 		} else {
@@ -2883,7 +2893,7 @@ func (asmbuf *AsmBuf) asmandsz(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog, a 
 		case obj.NAME_EXTERN,
 			obj.NAME_GOTREF,
 			obj.NAME_STATIC:
-			if !isextern(a.Sym) && ctxt.Arch.Family == sys.AMD64 {
+			if !useAbs(ctxt, a.Sym) && ctxt.Arch.Family == sys.AMD64 {
 				goto bad
 			}
 			if ctxt.Arch.Family == sys.I386 && ctxt.Flag_shared {
@@ -2953,7 +2963,7 @@ func (asmbuf *AsmBuf) asmandsz(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog, a 
 
 	asmbuf.rexflag |= regrex[base]&Rxb | rex
 	if base == REG_NONE || (REG_CS <= base && base <= REG_GS) || base == REG_TLS {
-		if (a.Sym == nil || !isextern(a.Sym)) && base == REG_NONE && (a.Name == obj.NAME_STATIC || a.Name == obj.NAME_EXTERN || a.Name == obj.NAME_GOTREF) || ctxt.Arch.Family != sys.AMD64 {
+		if (a.Sym == nil || !useAbs(ctxt, a.Sym)) && base == REG_NONE && (a.Name == obj.NAME_STATIC || a.Name == obj.NAME_EXTERN || a.Name == obj.NAME_GOTREF) || ctxt.Arch.Family != sys.AMD64 {
 			if a.Name == obj.NAME_GOTREF && (a.Offset != 0 || a.Index != 0 || a.Scale != 0) {
 				ctxt.Diag("%v has offset against gotref", p)
 			}

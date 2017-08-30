@@ -411,3 +411,35 @@ func TestCgoNumGoroutine(t *testing.T) {
 		t.Errorf("expected %q got %v", want, got)
 	}
 }
+
+func TestCatchPanic(t *testing.T) {
+	t.Parallel()
+	switch runtime.GOOS {
+	case "plan9", "windows":
+		t.Skipf("no signals on %s", runtime.GOOS)
+	case "darwin":
+		if runtime.GOARCH == "amd64" {
+			t.Skipf("crash() on darwin/amd64 doesn't raise SIGABRT")
+		}
+	}
+
+	testenv.MustHaveGoRun(t)
+
+	exe, err := buildTestProg(t, "testprogcgo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, early := range []bool{true, false} {
+		cmd := testEnv(exec.Command(exe, "CgoCatchPanic"))
+		// Make sure a panic results in a crash.
+		cmd.Env = append(cmd.Env, "GOTRACEBACK=crash")
+		if early {
+			// Tell testprogcgo to install an early signal handler for SIGABRT
+			cmd.Env = append(cmd.Env, "CGOCATCHPANIC_EARLY_HANDLER=1")
+		}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("testprogcgo CgoCatchPanic failed: %v\n%s", err, out)
+		}
+	}
+}

@@ -102,7 +102,7 @@ func adddynrel(ctxt *ld.Link, s *ld.Symbol, r *ld.Reloc) bool {
 	switch r.Type {
 	default:
 		if r.Type >= 256 {
-			ld.Errorf(s, "unexpected relocation type %d", r.Type)
+			ld.Errorf(s, "unexpected relocation type %d (%s)", r.Type, ld.RelocName(r.Type))
 			return false
 		}
 
@@ -116,6 +116,17 @@ func adddynrel(ctxt *ld.Link, s *ld.Symbol, r *ld.Reloc) bool {
 		}
 		r.Type = objabi.R_PCREL
 		r.Add += 4
+		return true
+
+	case 256 + ld.R_X86_64_PC64:
+		if targ.Type == ld.SDYNIMPORT {
+			ld.Errorf(s, "unexpected R_X86_64_PC64 relocation for dynamic symbol %s", targ.Name)
+		}
+		if targ.Type == 0 || targ.Type == ld.SXREF {
+			ld.Errorf(s, "unknown symbol %s in pcrel", targ.Name)
+		}
+		r.Type = objabi.R_PCREL
+		r.Add += 8
 		return true
 
 	case 256 + ld.R_X86_64_PLT32:
@@ -358,37 +369,33 @@ func adddynrel(ctxt *ld.Link, s *ld.Symbol, r *ld.Reloc) bool {
 	return false
 }
 
-func elfreloc1(ctxt *ld.Link, r *ld.Reloc, sectoff int64) int {
+func elfreloc1(ctxt *ld.Link, r *ld.Reloc, sectoff int64) bool {
 	ld.Thearch.Vput(uint64(sectoff))
 
 	elfsym := r.Xsym.ElfsymForReloc()
 	switch r.Type {
 	default:
-		return -1
-
+		return false
 	case objabi.R_ADDR:
 		if r.Siz == 4 {
 			ld.Thearch.Vput(ld.R_X86_64_32 | uint64(elfsym)<<32)
 		} else if r.Siz == 8 {
 			ld.Thearch.Vput(ld.R_X86_64_64 | uint64(elfsym)<<32)
 		} else {
-			return -1
+			return false
 		}
-
 	case objabi.R_TLS_LE:
 		if r.Siz == 4 {
 			ld.Thearch.Vput(ld.R_X86_64_TPOFF32 | uint64(elfsym)<<32)
 		} else {
-			return -1
+			return false
 		}
-
 	case objabi.R_TLS_IE:
 		if r.Siz == 4 {
 			ld.Thearch.Vput(ld.R_X86_64_GOTTPOFF | uint64(elfsym)<<32)
 		} else {
-			return -1
+			return false
 		}
-
 	case objabi.R_CALL:
 		if r.Siz == 4 {
 			if r.Xsym.Type == ld.SDYNIMPORT {
@@ -401,9 +408,8 @@ func elfreloc1(ctxt *ld.Link, r *ld.Reloc, sectoff int64) int {
 				ld.Thearch.Vput(ld.R_X86_64_PC32 | uint64(elfsym)<<32)
 			}
 		} else {
-			return -1
+			return false
 		}
-
 	case objabi.R_PCREL:
 		if r.Siz == 4 {
 			if r.Xsym.Type == ld.SDYNIMPORT && r.Xsym.ElfType == elf.STT_FUNC {
@@ -412,30 +418,29 @@ func elfreloc1(ctxt *ld.Link, r *ld.Reloc, sectoff int64) int {
 				ld.Thearch.Vput(ld.R_X86_64_PC32 | uint64(elfsym)<<32)
 			}
 		} else {
-			return -1
+			return false
 		}
-
 	case objabi.R_GOTPCREL:
 		if r.Siz == 4 {
 			ld.Thearch.Vput(ld.R_X86_64_GOTPCREL | uint64(elfsym)<<32)
 		} else {
-			return -1
+			return false
 		}
 	}
 
 	ld.Thearch.Vput(uint64(r.Xadd))
-	return 0
+	return true
 }
 
-func machoreloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) int {
+func machoreloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) bool {
 	var v uint32
 
 	rs := r.Xsym
 
 	if rs.Type == ld.SHOSTOBJ || r.Type == objabi.R_PCREL || r.Type == objabi.R_GOTPCREL {
 		if rs.Dynid < 0 {
-			ld.Errorf(s, "reloc %d to non-macho symbol %s type=%d", r.Type, rs.Name, rs.Type)
-			return -1
+			ld.Errorf(s, "reloc %d (%s) to non-macho symbol %s type=%d (%s)", r.Type, ld.RelocName(r.Type), rs.Name, rs.Type, rs.Type)
+			return false
 		}
 
 		v = uint32(rs.Dynid)
@@ -443,14 +448,14 @@ func machoreloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) int {
 	} else {
 		v = uint32(rs.Sect.Extnum)
 		if v == 0 {
-			ld.Errorf(s, "reloc %d to symbol %s in non-macho section %s type=%d", r.Type, rs.Name, rs.Sect.Name, rs.Type)
-			return -1
+			ld.Errorf(s, "reloc %d (%s) to symbol %s in non-macho section %s type=%d (%s)", r.Type, ld.RelocName(r.Type), rs.Name, rs.Sect.Name, rs.Type, rs.Type)
+			return false
 		}
 	}
 
 	switch r.Type {
 	default:
-		return -1
+		return false
 
 	case objabi.R_ADDR:
 		v |= ld.MACHO_X86_64_RELOC_UNSIGNED << 28
@@ -470,7 +475,7 @@ func machoreloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) int {
 
 	switch r.Siz {
 	default:
-		return -1
+		return false
 
 	case 1:
 		v |= 0 << 25
@@ -487,7 +492,7 @@ func machoreloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) int {
 
 	ld.Thearch.Lput(uint32(sectoff))
 	ld.Thearch.Lput(v)
-	return 0
+	return true
 }
 
 func pereloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) bool {
@@ -496,7 +501,7 @@ func pereloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) bool {
 	rs := r.Xsym
 
 	if rs.Dynid < 0 {
-		ld.Errorf(s, "reloc %d to non-coff symbol %s type=%d", r.Type, rs.Name, rs.Type)
+		ld.Errorf(s, "reloc %d (%s) to non-coff symbol %s type=%d (%s)", r.Type, ld.RelocName(r.Type), rs.Name, rs.Type, rs.Type)
 		return false
 	}
 
@@ -527,8 +532,8 @@ func pereloc1(s *ld.Symbol, r *ld.Reloc, sectoff int64) bool {
 	return true
 }
 
-func archreloc(ctxt *ld.Link, r *ld.Reloc, s *ld.Symbol, val *int64) int {
-	return -1
+func archreloc(ctxt *ld.Link, r *ld.Reloc, s *ld.Symbol, val *int64) bool {
+	return false
 }
 
 func archrelocvariant(ctxt *ld.Link, r *ld.Reloc, s *ld.Symbol, t int64) int64 {

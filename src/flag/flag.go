@@ -301,7 +301,9 @@ const (
 type FlagSet struct {
 	// Usage is the function called when an error occurs while parsing flags.
 	// The field is a function (not a method) that may be changed to point to
-	// a custom error handler.
+	// a custom error handler. What happens after Usage is called depends
+	// on the ErrorHandling setting; for the command line, this defaults
+	// to ExitOnError, which exits the program after calling Usage.
 	//
 	// Usage 字段类型 是一个函数, 这个函数的签名是 func(), 无参数,无返回值
 	// 当 parsing flags 时发生错误,会调用此函数
@@ -641,13 +643,17 @@ func (f *FlagSet) defaultUsage() {
 // because it serves (via godoc flag Usage) as the example
 // for how to write your own usage function.
 
-// Usage prints to standard error a usage message documenting all defined command-line flags.
+// Usage prints a usage message documenting all defined command-line flags
+// to CommandLine's output, which by default is os.Stderr.
 // It is called when an error occurs while parsing flags.
 // The function is a variable that may be changed to point to a custom function.
 // By default it prints a simple header and calls PrintDefaults; for details about the
 // format of the output and how to control it, see the documentation for PrintDefaults.
+// Custom usage functions may choose to exit the program; by default exiting
+// happens anyway as the command line's error handling strategy is set to
+// ExitOnError.
 var Usage = func() {
-	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+	fmt.Fprintf(CommandLine.out(), "Usage of %s:\n", os.Args[0])
 	PrintDefaults()
 }
 
@@ -783,13 +789,13 @@ func (f *FlagSet) UintVar(p *uint, name string, value uint, usage string) {
 }
 
 // UintVar defines a uint flag with specified name, default value, and usage string.
-// The argument p points to a uint  variable in which to store the value of the flag.
+// The argument p points to a uint variable in which to store the value of the flag.
 func UintVar(p *uint, name string, value uint, usage string) {
 	CommandLine.Var(newUintValue(value, p), name, usage)
 }
 
 // Uint defines a uint flag with specified name, default value, and usage string.
-// The return value is the address of a uint  variable that stores the value of the flag.
+// The return value is the address of a uint variable that stores the value of the flag.
 func (f *FlagSet) Uint(name string, value uint, usage string) *uint {
 	p := new(uint)
 	f.UintVar(p, name, value, usage)
@@ -797,7 +803,7 @@ func (f *FlagSet) Uint(name string, value uint, usage string) *uint {
 }
 
 // Uint defines a uint flag with specified name, default value, and usage string.
-// The return value is the address of a uint  variable that stores the value of the flag.
+// The return value is the address of a uint variable that stores the value of the flag.
 func Uint(name string, value uint, usage string) *uint {
 	return CommandLine.Uint(name, value, usage)
 }
@@ -1146,7 +1152,7 @@ func (f *FlagSet) Parsed() bool {
 	return f.parsed
 }
 
-// Parse parses the command-line flags from os.Args[1:].  Must be called
+// Parse parses the command-line flags from os.Args[1:]. Must be called
 // after all flags are defined and before flags are accessed by the program.
 func Parse() {
 	// Ignore errors; CommandLine is set for ExitOnError.

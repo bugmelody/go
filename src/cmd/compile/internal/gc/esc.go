@@ -848,7 +848,7 @@ func (e *EscState) esc(n *Node, parent *Node) {
 
 	case ORETURN:
 		retList := n.List
-		if retList.Len() == 1 && Curfn.Type.Results().NumFields() > 1 {
+		if retList.Len() == 1 && Curfn.Type.NumResults() > 1 {
 			// OAS2FUNC in disguise
 			// esccall already done on n.List.First()
 			// tie e.nodeEscState(n.List.First()).Retval to Curfn.Func.Dcl PPARAMOUT's
@@ -1554,20 +1554,20 @@ func (e *EscState) esccall(call *Node, parent *Node) {
 					call.Right = arg
 				}
 				e.escassignWhyWhere(n, arg, "arg to recursive call", call) // TODO this message needs help.
-				if arg != args[0] {
-					// "..." arguments are untracked
-					for _, a := range args {
-						if Debug['m'] > 3 {
-							fmt.Printf("%v::esccall:: ... <- %S, untracked\n", linestr(lineno), a)
-						}
-						e.escassignSinkWhyWhere(arg, a, "... arg to recursive call", call)
-					}
-					// No more PPARAM processing, but keep
-					// going for PPARAMOUT.
-					args = nil
+				if arg == args[0] {
+					args = args[1:]
 					continue
 				}
-				args = args[1:]
+				// "..." arguments are untracked
+				for _, a := range args {
+					if Debug['m'] > 3 {
+						fmt.Printf("%v::esccall:: ... <- %S, untracked\n", linestr(lineno), a)
+					}
+					e.escassignSinkWhyWhere(arg, a, "... arg to recursive call", call)
+				}
+				// No more PPARAM processing, but keep
+				// going for PPARAMOUT.
+				args = nil
 
 			case PPARAMOUT:
 				cE.Retval.Append(n)

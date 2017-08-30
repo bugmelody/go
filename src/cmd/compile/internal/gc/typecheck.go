@@ -1096,11 +1096,9 @@ OpSwitch:
 	case OSEND:
 		ok |= Etop
 		n.Left = typecheck(n.Left, Erv)
-		l := n.Left
 		n.Right = typecheck(n.Right, Erv)
 		n.Left = defaultlit(n.Left, nil)
-		l = n.Left
-		t := l.Type
+		t := n.Left.Type
 		if t == nil {
 			n.Type = nil
 			return n
@@ -1123,7 +1121,7 @@ OpSwitch:
 			n.Type = nil
 			return n
 		}
-		n.Right = assignconv(r, l.Type.Elem(), "send")
+		n.Right = assignconv(r, t.Elem(), "send")
 
 		// TODO: more aggressive
 		n.Etype = 0
@@ -1296,11 +1294,11 @@ OpSwitch:
 
 		typecheckaste(OCALL, n.Left, n.Isddd(), t.Params(), n.List, func() string { return fmt.Sprintf("argument to %v", n.Left) })
 		ok |= Etop
-		if t.Results().NumFields() == 0 {
+		if t.NumResults() == 0 {
 			break OpSwitch
 		}
 		ok |= Erv
-		if t.Results().NumFields() == 1 {
+		if t.NumResults() == 1 {
 			n.Type = l.Type.Results().Field(0).Type
 
 			if n.Op == OCALLFUNC && n.Left.Op == ONAME && isRuntimePkg(n.Left.Sym.Pkg) && n.Left.Sym.Name == "getg" {
@@ -1478,8 +1476,8 @@ OpSwitch:
 				// Bail. This error will be reported elsewhere.
 				return n
 			}
-			if t.Results().NumFields() != 2 {
-				yyerror("invalid operation: complex expects two arguments, %v returns %d results", n.List.First(), t.Results().NumFields())
+			if t.NumResults() != 2 {
+				yyerror("invalid operation: complex expects two arguments, %v returns %d results", n.List.First(), t.NumResults())
 				n.Type = nil
 				return n
 			}
@@ -1762,7 +1760,7 @@ OpSwitch:
 		var why string
 		n.Op = convertop(t, n.Type, &why)
 		if n.Op == 0 {
-			if !n.Diag() && !n.Type.Broke() {
+			if !n.Diag() && !n.Type.Broke() && !n.Left.Diag() {
 				yyerror("cannot convert %L to type %v%s", n.Left, n.Type, why)
 				n.SetDiag(true)
 			}
@@ -2638,54 +2636,52 @@ func typecheckaste(op Op, call *Node, isddd bool, tstruct *types.Type, nl Nodes,
 	n = nil
 	if nl.Len() == 1 {
 		n = nl.First()
-		if n.Type != nil {
-			if n.Type.IsFuncArgStruct() {
-				if !hasddd(tstruct) {
-					n1 := tstruct.NumFields()
-					n2 := n.Type.NumFields()
-					if n2 > n1 {
-						goto toomany
-					}
-					if n2 < n1 {
-						goto notenough
-					}
-				}
-
-				lfs := tstruct.FieldSlice()
-				rfs := n.Type.FieldSlice()
-				var why string
-				for i, tl := range lfs {
-					if tl.Isddd() {
-						for _, tn := range rfs[i:] {
-							if assignop(tn.Type, tl.Type.Elem(), &why) == 0 {
-								if call != nil {
-									yyerror("cannot use %v as type %v in argument to %v%s", tn.Type, tl.Type.Elem(), call, why)
-								} else {
-									yyerror("cannot use %v as type %v in %s%s", tn.Type, tl.Type.Elem(), desc(), why)
-								}
-							}
-						}
-						goto out
-					}
-
-					if i >= len(rfs) {
-						goto notenough
-					}
-					tn := rfs[i]
-					if assignop(tn.Type, tl.Type, &why) == 0 {
-						if call != nil {
-							yyerror("cannot use %v as type %v in argument to %v%s", tn.Type, tl.Type, call, why)
-						} else {
-							yyerror("cannot use %v as type %v in %s%s", tn.Type, tl.Type, desc(), why)
-						}
-					}
-				}
-
-				if len(rfs) > len(lfs) {
+		if n.Type != nil && n.Type.IsFuncArgStruct() {
+			if !hasddd(tstruct) {
+				n1 := tstruct.NumFields()
+				n2 := n.Type.NumFields()
+				if n2 > n1 {
 					goto toomany
 				}
-				goto out
+				if n2 < n1 {
+					goto notenough
+				}
 			}
+
+			lfs := tstruct.FieldSlice()
+			rfs := n.Type.FieldSlice()
+			var why string
+			for i, tl := range lfs {
+				if tl.Isddd() {
+					for _, tn := range rfs[i:] {
+						if assignop(tn.Type, tl.Type.Elem(), &why) == 0 {
+							if call != nil {
+								yyerror("cannot use %v as type %v in argument to %v%s", tn.Type, tl.Type.Elem(), call, why)
+							} else {
+								yyerror("cannot use %v as type %v in %s%s", tn.Type, tl.Type.Elem(), desc(), why)
+							}
+						}
+					}
+					goto out
+				}
+
+				if i >= len(rfs) {
+					goto notenough
+				}
+				tn := rfs[i]
+				if assignop(tn.Type, tl.Type, &why) == 0 {
+					if call != nil {
+						yyerror("cannot use %v as type %v in argument to %v%s", tn.Type, tl.Type, call, why)
+					} else {
+						yyerror("cannot use %v as type %v in %s%s", tn.Type, tl.Type, desc(), why)
+					}
+				}
+			}
+
+			if len(rfs) > len(lfs) {
+				goto toomany
+			}
+			goto out
 		}
 	}
 
@@ -3675,7 +3671,7 @@ ret:
 	ntypecheckdeftype--
 }
 
-func typecheckdef(n *Node) *Node {
+func typecheckdef(n *Node) {
 	lno := lineno
 	setlineno(n)
 
@@ -3691,11 +3687,11 @@ func typecheckdef(n *Node) *Node {
 			yyerror("undefined: %v", n.Sym)
 		}
 
-		return n
+		return
 	}
 
 	if n.Walkdef() == 1 {
-		return n
+		return
 	}
 
 	typecheckdefstack = append(typecheckdefstack, n)
@@ -3861,7 +3857,7 @@ ret:
 
 	lineno = lno
 	n.SetWalkdef(1)
-	return n
+	return
 }
 
 func checkmake(t *types.Type, arg string, n *Node) bool {
@@ -4005,7 +4001,7 @@ func (n *Node) isterminating() bool {
 
 // checkreturn makes sure that fn terminates appropriately.
 func checkreturn(fn *Node) {
-	if fn.Type.Results().NumFields() != 0 && fn.Nbody.Len() != 0 {
+	if fn.Type.NumResults() != 0 && fn.Nbody.Len() != 0 {
 		markbreaklist(fn.Nbody, nil)
 		if !fn.Nbody.isterminating() {
 			yyerrorl(fn.Func.Endlineno, "missing return at end of function")

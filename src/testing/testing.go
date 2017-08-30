@@ -252,7 +252,7 @@ var (
 	chatty               = flag.Bool("test.v", false, "verbose: print additional output")
 	count                = flag.Uint("test.count", 1, "run tests and benchmarks `n` times")
 	coverProfile         = flag.String("test.coverprofile", "", "write a coverage profile to `file`")
-	matchList            = flag.String("test.list", "", "list tests, examples, and benchmarch maching `regexp` then exit")
+	matchList            = flag.String("test.list", "", "list tests, examples, and benchmarks matching `regexp` then exit")
 	match                = flag.String("test.run", "", "run only tests and examples matching `regexp`")
 	memProfile           = flag.String("test.memprofile", "", "write a memory profile to `file`")
 	memProfileRate       = flag.Int("test.memprofilerate", 0, "set memory profiling `rate` (see runtime.MemProfileRate)")
@@ -512,7 +512,8 @@ func (c *common) Failed() bool {
 	return failed || c.raceErrors+race.Errors() > 0
 }
 
-// FailNow marks the function as having failed and stops its execution.
+// FailNow marks the function as having failed and stops its execution
+// by calling runtime.Goexit.
 // Execution will continue at the next test or benchmark.
 // FailNow must be called from the goroutine running the
 // test or benchmark function, not from other goroutines
@@ -600,7 +601,8 @@ func (c *common) Skipf(format string, args ...interface{}) {
 	c.SkipNow()
 }
 
-// SkipNow marks the test as having been skipped and stops its execution.
+// SkipNow marks the test as having been skipped and stops its execution
+// by calling runtime.Goexit.
 // If a test fails (see Error, Errorf, Fail) and is then skipped,
 // it is still considered to have failed.
 // Execution will continue at the next test or benchmark. See also FailNow.
@@ -695,8 +697,7 @@ func tRunner(t *T, fn func(t *T)) {
 	// a call to runtime.Goexit, record the duration and send
 	// a signal saying that the test is done.
 	defer func() {
-		t.raceErrors += race.Errors()
-		if t.raceErrors > 0 {
+		if t.raceErrors+race.Errors() > 0 {
 			t.Errorf("race detected during execution of test")
 		}
 
@@ -875,6 +876,9 @@ type M struct {
 	tests      []InternalTest
 	benchmarks []InternalBenchmark
 	examples   []InternalExample
+
+	timer     *time.Timer
+	afterOnce sync.Once
 }
 
 // testDeps is an internal interface of functionality that is
@@ -909,6 +913,12 @@ func (m *M) Run() int {
 		flag.Parse()
 	}
 
+	if *parallel < 1 {
+		fmt.Fprintln(os.Stderr, "testing: -parallel can only be given a positive integer")
+		flag.Usage()
+		return 2
+	}
+
 	if len(*matchList) != 0 {
 		listTests(m.deps.MatchString, m.tests, m.benchmarks, m.examples)
 		return 0
@@ -917,22 +927,21 @@ func (m *M) Run() int {
 	parseCpuList()
 
 	m.before()
-	startAlarm()
+	defer m.after()
+	m.startAlarm()
 	haveExamples = len(m.examples) > 0
 	testRan, testOk := runTests(m.deps.MatchString, m.tests)
 	exampleRan, exampleOk := runExamples(m.deps.MatchString, m.examples)
-	stopAlarm()
+	m.stopAlarm()
 	if !testRan && !exampleRan && *matchBenchmarks == "" {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
 	}
 	if !testOk || !exampleOk || !runBenchmarks(m.deps.ImportPath(), m.deps.MatchString, m.benchmarks) || race.Errors() > 0 {
 		fmt.Println("FAIL")
-		m.after()
 		return 1
 	}
 
 	fmt.Println("PASS")
-	m.after()
 	return 0
 }
 
@@ -990,27 +999,29 @@ func runTests(matchString func(pat, str string) (bool, error), tests []InternalT
 	ok = true
 	for _, procs := range cpuList {
 		runtime.GOMAXPROCS(procs)
-		ctx := newTestContext(*parallel, newMatcher(matchString, *match, "-test.run"))
-		t := &T{
-			common: common{
-				signal:  make(chan bool),
-				barrier: make(chan bool),
-				w:       os.Stdout,
-				chatty:  *chatty,
-			},
-			context: ctx,
-		}
-		tRunner(t, func(t *T) {
-			for _, test := range tests {
-				t.Run(test.Name, test.F)
+		for i := uint(0); i < *count; i++ {
+			ctx := newTestContext(*parallel, newMatcher(matchString, *match, "-test.run"))
+			t := &T{
+				common: common{
+					signal:  make(chan bool),
+					barrier: make(chan bool),
+					w:       os.Stdout,
+					chatty:  *chatty,
+				},
+				context: ctx,
 			}
-			// Run catching the signal rather than the tRunner as a separate
-			// goroutine to avoid adding a goroutine during the sequential
-			// phase as this pollutes the stacktrace output when aborting.
-			go func() { <-t.signal }()
-		})
-		ok = ok && !t.Failed()
-		ran = ran || t.ran
+			tRunner(t, func(t *T) {
+				for _, test := range tests {
+					t.Run(test.Name, test.F)
+				}
+				// Run catching the signal rather than the tRunner as a separate
+				// goroutine to avoid adding a goroutine during the sequential
+				// phase as this pollutes the stacktrace output when aborting.
+				go func() { <-t.signal }()
+			})
+			ok = ok && !t.Failed()
+			ran = ran || t.ran
+		}
 	}
 	return ran, ok
 }
@@ -1060,6 +1071,12 @@ func (m *M) before() {
 
 // after runs after all testing.
 func (m *M) after() {
+	m.afterOnce.Do(func() {
+		m.writeProfiles()
+	})
+}
+
+func (m *M) writeProfiles() {
 	if *cpuProfile != "" {
 		m.deps.StopCPUProfile() // flushes profile to disk
 	}
@@ -1136,12 +1153,11 @@ func toOutputDir(path string) string {
 	return fmt.Sprintf("%s%c%s", *outputDir, os.PathSeparator, path)
 }
 
-var timer *time.Timer
-
 // startAlarm starts an alarm if requested.
-func startAlarm() {
+func (m *M) startAlarm() {
 	if *timeout > 0 {
-		timer = time.AfterFunc(*timeout, func() {
+		m.timer = time.AfterFunc(*timeout, func() {
+			m.after()
 			debug.SetTraceback("all")
 			panic(fmt.Sprintf("test timed out after %v", *timeout))
 		})
@@ -1149,9 +1165,9 @@ func startAlarm() {
 }
 
 // stopAlarm turns off the alarm.
-func stopAlarm() {
+func (m *M) stopAlarm() {
 	if *timeout > 0 {
-		timer.Stop()
+		m.timer.Stop()
 	}
 }
 
@@ -1166,13 +1182,9 @@ func parseCpuList() {
 			fmt.Fprintf(os.Stderr, "testing: invalid value %q for -test.cpu\n", val)
 			os.Exit(1)
 		}
-		for i := uint(0); i < *count; i++ {
-			cpuList = append(cpuList, cpu)
-		}
+		cpuList = append(cpuList, cpu)
 	}
 	if cpuList == nil {
-		for i := uint(0); i < *count; i++ {
-			cpuList = append(cpuList, runtime.GOMAXPROCS(-1))
-		}
+		cpuList = append(cpuList, runtime.GOMAXPROCS(-1))
 	}
 }

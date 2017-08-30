@@ -691,9 +691,8 @@ var errMissingHost = errors.New("http: Request.Write on Request with no Host or 
 // usingProxy:该请求是否使用代理
 // extraHeaders may be nil
 // waitForContinue may be nil
-// @see
-func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitForContinue func() bool) (err error) {
-	trace := httptrace.ContextClientTrace(req.Context())
+func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitForContinue func() bool) (err error) {
+	trace := httptrace.ContextClientTrace(r.Context())
 	if trace != nil && trace.WroteRequest != nil {
 		defer func() {
 			trace.WroteRequest(httptrace.WroteRequestInfo{
@@ -706,12 +705,12 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	// is not given, use the host from the request URL.
 	//
 	// Clean the host, in case it arrives with unexpected stuff in it.
-	host := cleanHost(req.Host)
+	host := cleanHost(r.Host)
 	if host == "" {
-		if req.URL == nil {
+		if r.URL == nil {
 			return errMissingHost
 		}
-		host = cleanHost(req.URL.Host)
+		host = cleanHost(r.URL.Host)
 	}
 
 	// According to RFC 6874, an HTTP client, proxy, or other
@@ -719,11 +718,10 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	// to an outgoing URI.
 	host = removeZone(host)
 
-	ruri := req.URL.RequestURI()
-	if usingProxy && req.URL.Scheme != "" && req.URL.Opaque == "" {
-		// 重设 ruri
-		ruri = req.URL.Scheme + "://" + host + ruri
-	} else if req.Method == "CONNECT" && req.URL.Path == "" {
+	ruri := r.URL.RequestURI()
+	if usingProxy && r.URL.Scheme != "" && r.URL.Opaque == "" {
+		ruri = r.URL.Scheme + "://" + host + ruri
+	} else if r.Method == "CONNECT" && r.URL.Path == "" {
 		// CONNECT requests normally give just the host and port, not a full URL.
 		// 重设 ruri
 		// http CONNECT:把请求连接转换到透明的TCP/IP通道。
@@ -752,8 +750,7 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	}
 	// 现在 w 肯定实现了 io.ByteWriter 接口, 也就是拥有  WriteByte(c byte) error 方法
 
-	// ++++写入请求行
-	_, err = fmt.Fprintf(w, "%s %s HTTP/1.1\r\n", valueOrDefault(req.Method, "GET"), ruri)
+	_, err = fmt.Fprintf(w, "%s %s HTTP/1.1\r\n", valueOrDefault(r.Method, "GET"), ruri)
 	if err != nil {
 		return err
 	}
@@ -768,9 +765,8 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	// Use the defaultUserAgent unless the Header contains one, which
 	// may be blank to not send the header.
 	userAgent := defaultUserAgent
-	if _, ok := req.Header["User-Agent"]; ok {
-		// 如果req.Header中设置了,使用之
-		userAgent = req.Header.Get("User-Agent")
+	if _, ok := r.Header["User-Agent"]; ok {
+		userAgent = r.Header.Get("User-Agent")
 	}
 	if userAgent != "" {
 		// 不为空的时候才发送 User-Agent 头, 如果为空,则不发送
@@ -781,7 +777,7 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 	}
 
 	// Process Body,ContentLength,Close,Trailer
-	tw, err := newTransferWriter(req)
+	tw, err := newTransferWriter(r)
 	if err != nil {
 		return err
 	}
@@ -791,8 +787,8 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 		return err
 	}
 
-	// 写入部分header,这些header是req.Header减去reqWriteExcludeHeader
-	err = req.Header.WriteSubset(w, reqWriteExcludeHeader)
+// 写入部分header,这些header是req.Header减去reqWriteExcludeHeader
+	err = r.Header.WriteSubset(w, reqWriteExcludeHeader)
 	if err != nil {
 		return err
 	}
@@ -849,7 +845,7 @@ to send a request body.
 		}
 		if !waitForContinue() {
 			// 如果waitForContinue返回false,关闭req.Body,函数返回,根本不会写body
-			req.closeBody()
+			r.closeBody()
 			return nil
 		}
 	}

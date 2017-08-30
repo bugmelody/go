@@ -255,7 +255,10 @@ var genericOps = []opData{
 	{name: "PopCount32", argLength: 1}, // Count bits in arg[0]
 	{name: "PopCount64", argLength: 1}, // Count bits in arg[0]
 
-	{name: "Sqrt", argLength: 1}, // sqrt(arg0), float64 only
+	{name: "Sqrt", argLength: 1},  // sqrt(arg0), float64 only
+	{name: "Floor", argLength: 1}, // floor(arg0), float64 only
+	{name: "Ceil", argLength: 1},  // ceil(arg0), float64 only
+	{name: "Trunc", argLength: 1}, // trunc(arg0), float64 only
 
 	// Data movement, max argument length for Phi is indefinite so just pick
 	// a really large number
@@ -417,6 +420,7 @@ var genericOps = []opData{
 	{name: "VarKill", argLength: 1, aux: "Sym", symEffect: "None"},            // aux is a *gc.Node of a variable that is known to be dead.  arg0=mem, returns mem
 	{name: "VarLive", argLength: 1, aux: "Sym", symEffect: "None"},            // aux is a *gc.Node of a variable that must be kept live.  arg0=mem, returns mem
 	{name: "KeepAlive", argLength: 2, typ: "Mem"},                             // arg[0] is a value that must be kept alive until this mark.  arg[1]=mem, returns mem
+	{name: "RegKill"},                                                         // regalloc has determined that the value in this register is dead
 
 	// Ops for breaking 64-bit operations on 32-bit architectures
 	{name: "Int64Make", argLength: 2, typ: "UInt64"}, // arg0=hi, arg1=lo

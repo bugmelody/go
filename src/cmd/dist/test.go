@@ -353,27 +353,6 @@ func (t *tester) registerTests() {
 		return
 	}
 
-	// This test needs its stdout/stderr to be terminals, so we don't run it from cmd/go's tests.
-	// See issue 18153.
-	if t.goos == "linux" {
-		t.tests = append(t.tests, distTest{
-			name:    "cmd_go_test_terminal",
-			heading: "cmd/go terminal test",
-			fn: func(dt *distTest) error {
-				t.runPending(dt)
-				if !stdOutErrAreTerminals() {
-					fmt.Println("skipping terminal test; stdout/stderr not terminals")
-					return nil
-				}
-				cmd := exec.Command("go", "test")
-				cmd.Dir = filepath.Join(os.Getenv("GOROOT"), "src/cmd/go/testdata/testterminal18153")
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				return cmd.Run()
-			},
-		})
-	}
-
 	// Fast path to avoid the ~1 second of `go list std cmd` when
 	// the caller lists specific tests to run. (as the continuous
 	// build coordinator does).
@@ -430,6 +409,27 @@ func (t *tester) registerTests() {
 				// creation of first goroutines and first garbage collections in the parallel setting.
 				cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
 				return nil
+			},
+		})
+	}
+
+	// This test needs its stdout/stderr to be terminals, so we don't run it from cmd/go's tests.
+	// See issue 18153.
+	if t.goos == "linux" {
+		t.tests = append(t.tests, distTest{
+			name:    "cmd_go_test_terminal",
+			heading: "cmd/go terminal test",
+			fn: func(dt *distTest) error {
+				t.runPending(dt)
+				if !stdOutErrAreTerminals() {
+					fmt.Println("skipping terminal test; stdout/stderr not terminals")
+					return nil
+				}
+				cmd := exec.Command("go", "test")
+				cmd.Dir = filepath.Join(os.Getenv("GOROOT"), "src/cmd/go/testdata/testterminal18153")
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				return cmd.Run()
 			},
 		})
 	}
@@ -535,6 +535,14 @@ func (t *tester) registerTests() {
 		},
 	})
 
+	if t.raceDetectorSupported() {
+		t.tests = append(t.tests, distTest{
+			name:    "race",
+			heading: "Testing race detector",
+			fn:      t.raceTest,
+		})
+	}
+
 	if t.cgoEnabled && !t.iOS() {
 		// Disabled on iOS. golang.org/issue/15919
 		t.tests = append(t.tests, distTest{
@@ -576,14 +584,6 @@ func (t *tester) registerTests() {
 		})
 	}
 
-	if t.raceDetectorSupported() {
-		t.tests = append(t.tests, distTest{
-			name:    "race",
-			heading: "Testing race detector",
-			fn:      t.raceTest,
-		})
-	}
-
 	if t.hasBash() && t.cgoEnabled && t.goos != "android" && t.goos != "darwin" {
 		t.registerTest("testgodefs", "../misc/cgo/testgodefs", "./test.bash")
 	}
@@ -608,7 +608,7 @@ func (t *tester) registerTests() {
 			t.registerHostTest("testcarchive", "../misc/cgo/testcarchive", "misc/cgo/testcarchive", "carchive_test.go")
 		}
 		if t.supportedBuildmode("c-shared") {
-			t.registerTest("testcshared", "../misc/cgo/testcshared", "./test.bash")
+			t.registerHostTest("testcshared", "../misc/cgo/testcshared", "misc/cgo/testcshared", "cshared_test.go")
 		}
 		if t.supportedBuildmode("shared") {
 			t.registerTest("testshared", "../misc/cgo/testshared", "go", "test")
@@ -620,7 +620,7 @@ func (t *tester) registerTests() {
 			t.registerTest("testasan", "../misc/cgo/testasan", "go", "run", "main.go")
 		}
 		if t.goos == "linux" && t.goarch == "amd64" {
-			t.registerTest("testsanitizers", "../misc/cgo/testsanitizers", "./test.bash")
+			t.registerHostTest("testsanitizers/msan", "../misc/cgo/testsanitizers", "misc/cgo/testsanitizers", ".")
 		}
 		if t.hasBash() && t.goos != "android" && !t.iOS() && t.gohostos != "windows" {
 			t.registerTest("cgo_errors", "../misc/cgo/errors", "./test.bash")
@@ -824,7 +824,7 @@ func (t *tester) supportedBuildmode(mode string) bool {
 		return false
 	case "c-shared":
 		switch pair {
-		case "linux-386", "linux-amd64", "linux-arm", "linux-arm64",
+		case "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-ppc64le",
 			"darwin-amd64", "darwin-386",
 			"android-arm", "android-arm64", "android-386":
 			return true

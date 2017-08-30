@@ -296,15 +296,15 @@ func (p *Package) guessKinds(f *File) []*Name {
 	// For each name, we generate these lines, where xxx is the index in toSniff plus one.
 	//
 	//	#line xxx "not-declared"
-	//	void __cgo_f_xxx_1(void) { __typeof__(name) *__cgo_undefined__; }
+	//	void __cgo_f_xxx_1(void) { __typeof__(name) *__cgo_undefined__1; }
 	//	#line xxx "not-type"
-	//	void __cgo_f_xxx_2(void) { name *__cgo_undefined__; }
+	//	void __cgo_f_xxx_2(void) { name *__cgo_undefined__2; }
 	//	#line xxx "not-int-const"
-	//	void __cgo_f_xxx_3(void) { enum { __cgo_undefined__ = (name)*1 }; }
+	//	void __cgo_f_xxx_3(void) { enum { __cgo_undefined__3 = (name)*1 }; }
 	//	#line xxx "not-num-const"
-	//	void __cgo_f_xxx_4(void) { static const double x = (name); }
+	//	void __cgo_f_xxx_4(void) { static const double __cgo_undefined__4 = (name); }
 	//	#line xxx "not-str-lit"
-	//	void __cgo_f_xxx_5(void) { static const char x[] = (name); }
+	//	void __cgo_f_xxx_5(void) { static const char __cgo_undefined__5[] = (name); }
 	//	#line xxx "not-signed-int-const"
 	//	#if 0 < -(name)
 	//	#line xxx "not-signed-int-const"
@@ -327,15 +327,15 @@ func (p *Package) guessKinds(f *File) []*Name {
 
 	for i, n := range names {
 		fmt.Fprintf(&b, "#line %d \"not-declared\"\n"+
-			"void __cgo_f_%d_1(void) { __typeof__(%s) *__cgo_undefined__; }\n"+
+			"void __cgo_f_%d_1(void) { __typeof__(%s) *__cgo_undefined__1; }\n"+
 			"#line %d \"not-type\"\n"+
-			"void __cgo_f_%d_2(void) { %s *__cgo_undefined__; }\n"+
+			"void __cgo_f_%d_2(void) { %s *__cgo_undefined__2; }\n"+
 			"#line %d \"not-int-const\"\n"+
-			"void __cgo_f_%d_3(void) { enum { __cgo_undefined__ = (%s)*1 }; }\n"+
+			"void __cgo_f_%d_3(void) { enum { __cgo_undefined__3 = (%s)*1 }; }\n"+
 			"#line %d \"not-num-const\"\n"+
-			"void __cgo_f_%d_4(void) { static const double x = (%s); }\n"+
+			"void __cgo_f_%d_4(void) { static const double __cgo_undefined__4 = (%s); }\n"+
 			"#line %d \"not-str-lit\"\n"+
-			"void __cgo_f_%d_5(void) { static const char s[] = (%s); }\n"+
+			"void __cgo_f_%d_5(void) { static const char __cgo_undefined__5[] = (%s); }\n"+
 			"#line %d \"not-signed-int-const\"\n"+
 			"#if 0 < (%s)\n"+
 			"#line %d \"not-signed-int-const\"\n"+
@@ -438,14 +438,7 @@ func (p *Package) guessKinds(f *File) []*Name {
 	for i, n := range names {
 		switch sniff[i] &^ notSignedIntConst {
 		default:
-			var tpos token.Pos
-			for _, ref := range f.Ref {
-				if ref.Name == n {
-					tpos = ref.Pos()
-					break
-				}
-			}
-			error_(tpos, "could not determine kind of name for C.%s", fixGo(n.Go))
+			error_(f.NamePos[n], "could not determine kind of name for C.%s", fixGo(n.Go))
 		case notStrLiteral | notType:
 			if sniff[i]&notSignedIntConst != 0 {
 				n.Kind = "uconst"
@@ -543,14 +536,6 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 
 	// Scan DWARF info for top-level TagVariable entries with AttrName __cgo__i.
 	types := make([]dwarf.Type, len(names))
-	nameToIndex := make(map[*Name]int)
-	for i, n := range names {
-		nameToIndex[n] = i
-	}
-	nameToRef := make(map[*Name]*Ref)
-	for _, ref := range f.Ref {
-		nameToRef[ref.Name] = ref
-	}
 	r := d.Reader()
 	for {
 		e, err := r.Next()
@@ -601,10 +586,7 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 		if types[i] == nil {
 			continue
 		}
-		pos := token.NoPos
-		if ref, ok := nameToRef[n]; ok {
-			pos = ref.Pos()
-		}
+		pos := f.NamePos[n]
 		f, fok := types[i].(*dwarf.FuncType)
 		if n.Kind != "type" && fok {
 			n.Kind = "func"

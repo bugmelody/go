@@ -1235,7 +1235,7 @@ func gcStart(mode gcMode, trigger gcTrigger) {
 		}
 	}
 
-	// Ok, we're doing it!  Stop everybody else
+	// Ok, we're doing it! Stop everybody else
 	semacquire(&worldsema)
 
 	if trace.enabled {
@@ -1256,6 +1256,9 @@ func gcStart(mode gcMode, trigger gcTrigger) {
 	now := nanotime()
 	work.tSweepTerm = now
 	work.pauseStart = now
+	if trace.enabled {
+		traceGCSTWStart(1)
+	}
 	systemstack(stopTheWorldWithSema)
 	// Finish sweep before we start concurrent scan.
 	systemstack(func() {
@@ -1308,11 +1311,17 @@ func gcStart(mode gcMode, trigger gcTrigger) {
 		gcController.markStartTime = now
 
 		// Concurrent mark.
-		systemstack(startTheWorldWithSema)
-		now = nanotime()
+		systemstack(func() {
+			now = startTheWorldWithSema(trace.enabled)
+		})
 		work.pauseNS += now - work.pauseStart
 		work.tMark = now
 	} else {
+		if trace.enabled {
+			// Switch to mark termination STW.
+			traceGCSTWDone()
+			traceGCSTWStart(0)
+		}
 		t := nanotime()
 		work.tMark, work.tMarkTerm = t, t
 		work.heapGoal = work.heap0
@@ -1413,6 +1422,9 @@ top:
 		work.tMarkTerm = now
 		work.pauseStart = now
 		getg().m.preemptoff = "gcing"
+		if trace.enabled {
+			traceGCSTWStart(0)
+		}
 		systemstack(stopTheWorldWithSema)
 		// The gcphase is _GCmark, it will transition to _GCmarktermination
 		// below. The important thing is that the wb remains active until
@@ -1573,7 +1585,7 @@ func gcMarkTermination(nextTriggerRatio float64) {
 	// so events don't leak into the wrong cycle.
 	mProf_NextCycle()
 
-	systemstack(startTheWorldWithSema)
+	systemstack(func() { startTheWorldWithSema(true) })
 
 	// Flush the heap profile so we can start a new cycle next GC.
 	// This is relatively expensive, so we don't do it with the
@@ -1914,10 +1926,6 @@ func gcMark(start_time int64) {
 		work.helperDrainBlock = true
 	}
 
-	if trace.enabled {
-		traceGCScanStart()
-	}
-
 	if work.nproc > 1 {
 		noteclear(&work.alldone)
 		helpgc(int32(work.nproc))
@@ -1959,10 +1967,6 @@ func gcMark(start_time int64) {
 		if gcw.scanWork != 0 || gcw.bytesMarked != 0 {
 			throw("P has unflushed stats at end of mark termination")
 		}
-	}
-
-	if trace.enabled {
-		traceGCScanDone()
 	}
 
 	cachestats()
@@ -2102,10 +2106,6 @@ func gchelper() {
 	_g_.m.traceback = 2
 	gchelperstart()
 
-	if trace.enabled {
-		traceGCScanStart()
-	}
-
 	// Parallel mark over GC roots and heap
 	if gcphase == _GCmarktermination {
 		gcw := &_g_.m.p.ptr().gcw
@@ -2115,10 +2115,6 @@ func gchelper() {
 			gcDrain(gcw, gcDrainNoBlock)
 		}
 		gcw.dispose()
-	}
-
-	if trace.enabled {
-		traceGCScanDone()
 	}
 
 	nproc := atomic.Load(&work.nproc) // work.nproc can change right after we increment work.ndone
