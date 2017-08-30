@@ -119,6 +119,7 @@ type NestedOrder struct {
 
 /**
 只有C,D会共享同一个parent1
+A因为没有和C,D挨着,因此不会和C,D共享同一个parent1
  */
 type MixedNested struct {
 	XMLName struct{} `xml:"result"`
@@ -604,7 +605,7 @@ var marshalTests = []struct {
 	{Value: &Plain{NamedType("potato")}, ExpectXML: `<Plain><V>potato</V></Plain>`},
 	{Value: &Plain{[]int{1, 2, 3}}, ExpectXML: `<Plain><V>1</V><V>2</V><V>3</V></Plain>`},
 	{Value: &Plain{[3]int{1, 2, 3}}, ExpectXML: `<Plain><V>1</V><V>2</V><V>3</V></Plain>`},
-	// 注意:Marshal时,xml是interface包含的值
+	// 注意:Marshal时,标签名使用类型名,xml值是interface包含的值,
 	{Value: ifaceptr(true), MarshalOnly: true, ExpectXML: `<bool>true</bool>`},
 
 	// 注: Value: &Plain 的不会进行 Unmarshal 测试
@@ -642,13 +643,13 @@ var marshalTests = []struct {
 		Value:         &Data{},
 		ExpectXML:     `<Data></Data>`,
 		UnmarshalOnly: true,
-		// 注意:Unmarshal的结果,各字段是nil
+		// 注意:Unmarshal的结果,各字段是nil,因为xml中没有任何标签
 	},
 	{
 		Value:         &Data{Bytes: []byte{}, Custom: MyBytes{}, Attr: []byte{}},
 		ExpectXML:     `<Data Attr=""><Bytes></Bytes><Custom></Custom></Data>`,
 		UnmarshalOnly: true,
-		// 注意和上面的测试的区别
+		// 注意和上面的测试的区别,各字段不是nil,而是empty slice
 	},
 
 	// Check that []byte works, including named []byte types.
@@ -660,6 +661,7 @@ var marshalTests = []struct {
 
 	// Test innerxml
 	{
+		// 根据Marshal文档: a field with tag ",innerxml" is written verbatim, not subject to the usual marshaling procedure.
 		Value: &SecretAgent{
 			Handle:    "007",
 			Identity:  "James Bond",
@@ -677,7 +679,7 @@ var marshalTests = []struct {
 		},
 		ExpectXML:     `<agent handle="007"><Identity>James Bond</Identity><redacted/></agent>`,
 		UnmarshalOnly: true,
-		// 注:UnmarshalOnly
+		// 注:UnmarshalOnly, unmarshal的时候,会把整个<agent>...</agent>之间的内容作为innerxml进行保存
 	},
 
 	// Test structs
@@ -687,7 +689,7 @@ var marshalTests = []struct {
 	{Value: &Port{Type: "<unix>"}, ExpectXML: `<port type="&lt;unix&gt;"></port>`},
 	// 注: 在Port的定义中,Comment字段先于Number字段,因此 Marshal的时候也是按照这个顺序.
 	{Value: &Port{Number: "443", Comment: "https"}, ExpectXML: `<port><!--https-->443</port>`},
-	// 注: MarshalOnly, 如果comment字段以-结尾,实际生成的xml的-后面会多出空格
+	// 注: MarshalOnly, comment是内嵌到<!----> 之间的,如果有空格需要自己添加
 	{Value: &Port{Number: "443", Comment: "add space-"}, ExpectXML: `<port><!--add space- -->443</port>`, MarshalOnly: true},
 	// 注: Domain.Name字段的定义: Name []byte `xml:",chardata"`
 	{Value: &Domain{Name: []byte("google.com&friends")}, ExpectXML: `<domain>google.com&amp;friends</domain>`},
@@ -854,12 +856,12 @@ var marshalTests = []struct {
 	{
 		Value:     &Service{Port: &Port{Number: "80"}},
 		ExpectXML: `<service><host><port>80</port></host></service>`,
-		// 注意:没有出现第二个host标签
+		// 注意:marshal时没有出现第二个host标签,因为Service.Extra2是nil
 	},
 	{
 		Value:     &Service{},
 		ExpectXML: `<service></service>`,
-		// 注意:2个host标签都没出现
+		// 注意:marshal时2个host标签都没出现
 	},
 	{
 		Value: &Service{Port: &Port{Number: "80"}, Extra1: "A", Extra2: "B"},
@@ -884,7 +886,7 @@ var marshalTests = []struct {
 	},
 	{
 		Value: &struct {
-			// UnMarshal的时候,不会给XMLName字段赋值
+			// UnMarshal的时候,不会给XMLName字段赋值,因为是空struct
 			XMLName struct{} `xml:"space top"`
 			// 可以看出字段A,B,C,C1,D1在同一个x下
 			A       string   `xml:"x>a"`
@@ -913,6 +915,7 @@ var marshalTests = []struct {
 	{
 		Value: &struct {
 			XMLName Name
+			// 可以看出,所有字段在同一个x下
 			A       string `xml:"x>a"`
 			B       string `xml:"x>b"`
 			C       string `xml:"space x>c"`
@@ -941,6 +944,7 @@ var marshalTests = []struct {
 	{
 		Value: &struct {
 			XMLName struct{} `xml:"top"`
+			// 可以看出,所有字段在同一个x下
 			B       string   `xml:"space x>b"`
 			B1      string   `xml:"space1 x>b"`
 		}{
@@ -954,9 +958,10 @@ var marshalTests = []struct {
 		// 注:所有字段共享同一个x父元素
 	},
 
-	// Test struct embedding
+	// Test struct embedding到此
 	{
 		Value: &EmbedA{
+			// EmbedC是匿名字段
 			EmbedC: EmbedC{
 				FieldA1: "", // Shadowed by A.A
 				FieldA2: "", // Shadowed by A.A
@@ -1223,6 +1228,7 @@ var marshalTests = []struct {
 		//   * If the XML element contains a sub-element that hasn't matched any
 		//      of the above rules and the struct has a field with tag ",any",
 		//      unmarshal maps the sub-element to that struct field.
+		//      此时不会管标签名和字段名或tag是否匹配
 		ExpectXML: `<a><nested><value>known</value></nested><other><sub>unknown</sub></other></a>`,
 		Value: &AnyTest{
 			Nested: "known",

@@ -8,6 +8,13 @@
 <h3 id="What_is_the_purpose_of_the_project">
 What is the purpose of the project?</h3>
 
+<pre>
+antithetical [,æntɪ'θetɪk(ə)l] adj. 对立的，正相反的
+rebellion [rɪ'beljən] n. 叛乱；反抗；谋反；不服从
+cumbersome ['kʌmbəs(ə)m] adj. 笨重的；累赘的；难处理的
+mascot ['mæskɒt] n. 吉祥物；福神（等于mascotte）
+</pre>
+
 <p>
 No major systems language has emerged in over a decade, but over that time
 the computing landscape has changed tremendously. There are several trends:
@@ -320,6 +327,8 @@ case-for-visibility rule is unlikely to change however; it's one
 of our favorite features of Go.
 </p>
 
+<p>unsatisfactory [,ʌnsætɪs'fækt(ə)rɪ] adj. 不令人满意的；不满足的；不符合要求的</p>
+
 <h3 id="Why_doesnt_Go_have_feature_X">Why does Go not have feature X?</h3>
 
 <p>
@@ -331,6 +340,11 @@ missing because it doesn't fit, because it affects compilation speed or
 clarity of design, or because it would make the fundamental system model
 too difficult.
 </p>
+
+<pre>
+    felicity [fɪ'lɪsɪtɪ] n. 幸福；快乐；幸运
+    orthogonality [,ɔ:θɔɡə'næləti] n.【数学、统计学、晶体学】正交性；正交状态
+</pre>
 
 <p>
 If it bothers you that Go is missing feature <var>X</var>,
@@ -355,6 +369,10 @@ plus the ability to use the empty interface to construct containers
 code that does what generics would enable, if less smoothly.
 </p>
 
+<pre>
+    proportionate [prə'pɔːʃ(ə)nət] adj. 成比例的；相称的；适当的 vt. 使成比例；使相称
+</pre>
+
 <p>
 The topic remains open.
 For a look at several previous unsuccessful attempts to
@@ -371,6 +389,10 @@ convoluted code.  It also tends to encourage programmers to label
 too many ordinary errors, such as failing to open a file, as
 exceptional.
 </p>
+
+<pre>
+    convoluted [,kɒnvə'l(j)uːtɪd] adj. 复杂的；费解的；旋绕的 v. 盘绕；缠绕（convolute的过去分词）
+</pre>
 
 <p>
 Go takes a different approach.  For plain error handling, Go's multi-value
@@ -407,6 +429,11 @@ errors are particularly important when the programmer seeing the errors is
 not familiar with the code.
 </p>
 
+<pre>
+    undeniably [,ʌndi'naiəbli] adv. 不可否认地；确凿无疑地
+    crutch [krʌtʃ] n. 拐杖；支柱；依靠；胯部 vt. 用拐杖支撑；支持
+</pre>
+
 <p>
 We understand that this is a point of contention. There are many things in
 the Go language and libraries that differ from modern practices, simply
@@ -433,6 +460,11 @@ whose main contribution is the powerful notion of channels as first class object
 Experience with several earlier languages has shown that the CSP model
 fits well into a procedural language framework.
 </p>
+
+<pre>
+    linguistic, linguistical [liŋ'ɡwistik;-kəl] adj.1.语言的；语言上的 2.语音学的
+    stem from 起源于
+</pre>
 
 <h3 id="goroutines">
 Why goroutines instead of threads?</h3>
@@ -461,6 +493,11 @@ If goroutines were just threads, system resources would
 run out at a much smaller number.
 </p>
 
+<pre>
+    minted ['mɪntɪd] adj. 刚完成的；刚制作的 v. 铸造；发明；铸币（mint的过去分词）
+    modest ['mɒdɪst] adj. 谦虚的，谦逊的；适度的；端庄的；羞怯的
+</pre>
+
 <h3 id="atomic_maps">
 Why are map operations not defined to be atomic?</h3>
 
@@ -478,6 +515,10 @@ The language does not preclude atomic map updates.  When required, such
 as when hosting an untrusted program, the implementation could interlock
 map access.
 </p>
+
+<pre>
+    preclude [prɪ'kluːd] vt. 排除；妨碍；阻止
+</pre>
 
 <h3 id="language_changes">
 Will you accept my language change?</h3>
@@ -498,6 +539,11 @@ idea, regardless of its merit.
 A future major release of Go may be incompatible with Go 1, but we're not ready
 to start talking about what that might be.
 </p>
+
+<pre>
+    entertain [entə'teɪn] vt. 娱乐；招待；怀抱；容纳 vi. 款待
+    merit ['merɪt] n. 优点，价值；功绩；功过 vt. 值得 vi. 应受报答
+</pre>
 
 <p>
 Even if your proposal is compatible with the Go 1 spec, it might
@@ -524,6 +570,10 @@ they can be defined for any sort of data, even built-in types such
 as plain, &ldquo;unboxed&rdquo; integers.
 They are not restricted to structs (classes).
 </p>
+
+<pre>
+    yes and no 既肯定又否定
+</pre>
 
 <p>
 Also, the lack of a type hierarchy makes &ldquo;objects&rdquo; in Go feel much more
@@ -574,6 +624,19 @@ image files.  All these ideas stem from a single interface
 Go's interfaces have a profound influence on how programs are structured.
 </p>
 
+<pre>
+    profound [prəu'faund] adj.
+    1.很深的；深深的
+    2.(兴趣等)深厚的；深切的；深刻的
+    3.深奥的；渊博的；造诣深的
+    4.意味深长的；意义深远的
+    5.(注意等)充分的；来自心底的；彻底的
+    6.完全的，十分的
+    7.谦恭的，低下的
+    
+    influence ['ɪnflʊəns] n. 影响；势力；感化；有影响的人或事 vt. 影响；改变
+</pre>
+
 <p>
 It takes some getting used to but this implicit style of type
 dependency is one of the most productive things about Go.
@@ -616,6 +679,10 @@ to build on patterns that emerge as the code develops.
 The semantics of interfaces is one of the main reasons for Go's nimble,
 lightweight feel.
 </p>
+
+<pre>
+    nimble ['nɪmb(ə)l] adj. 敏捷的；聪明的；敏感的
+</pre>
 
 <p>
 See the <a href="#inheritance">question on type inheritance</a> for more detail.
@@ -894,6 +961,10 @@ assignment and so on.
 </p>
 
 <p>
+    algebraic [,ældʒɪ'breɪɪk] adj. [数] 代数的；关于代数学的
+</p>
+
+<p>
 We considered adding variant types to Go, but after discussion
 decided to leave them out because they overlap in confusing ways
 with interfaces. What would happen if the elements of a variant type
@@ -909,6 +980,10 @@ syntax tree example is also doable, although not as elegantly.
 
 <h3 id="covariant_types">
 Why does Go not have covariant result types?</h3>
+
+<pre>
+    covariant ['ko'vɛrɪənt] adj. 协变的 n. 共变式；[数][物] 协变量
+</pre>
 
 <p>
 Covariant result types would mean that an interface like
@@ -956,6 +1031,22 @@ at the cost of some explicit conversions in the code.
 The definition of constants in Go&mdash;arbitrary precision values free
 of signedness and size annotations&mdash;ameliorates matters considerably,
 though.
+</p>
+
+<p>
+    outweigh [,aut'wei] vt.
+    1.在价值(或重要性、影响等) 方面超过：
+    The gain is outweighed by the loss.
+    得不偿失。
+    2.在重量上超过，比…重：
+    The boxer outweighed his opponent by 15 pounds.
+    这名拳击手比他的对手重了15磅。
+    3.对…过于沉重(或成为负担)：
+    It's possible that the beam may break if the loads outweigh its supports.
+    如果负荷过重，主梁的断裂是有可能发生的。
+
+    ameliorate [ə'mi:ljəreit] vt.使变好，改善，改进；改良；减轻： vi.变好，改善：
+    considerably [kən'sɪd(ə)rəblɪ] adv. 相当地；非常地
 </p>
 
 <p>
@@ -1012,6 +1103,11 @@ language but had a large effect on usability: Go became a more
 productive, comfortable language when it was introduced.
 </p>
 
+<pre>
+    early on 早先，早些时候，前不久；开始不久；在初期，在早期，在开始阶段
+    regrettable [rɪ'gretəb(ə)l] adj. 令人遗憾的；可惜的；可悲的；抱歉的
+</pre>
+
 <h2 id="Writing_Code">Writing Code</h2>
 
 <h3 id="How_are_libraries_documented">
@@ -1053,6 +1149,10 @@ compendium of do's and don'ts that allows interpretation.
 All the Go code in the repository has been run through <code>gofmt</code>.
 </p>
 
+<pre>
+    compendium [kəm'pendɪəm] n. 纲要；概略
+</pre>
+
 <p>
 The document titled
 <a href="//golang.org/s/comments">Go Code Review Comments</a>
@@ -1061,6 +1161,10 @@ missed by programmers.
 It is a handy reference for people doing code reviews for Go projects.
 </p>
 
+<pre>
+    essay ['esei; e'sei] n.1.论说文，短论，短评；小品文，散文，随笔；文章
+</pre>
+
 <h3 id="How_do_I_submit_patches_to_the_Go_libraries">
 How do I submit patches to the Go libraries?</h3>
 
@@ -1068,6 +1172,10 @@ How do I submit patches to the Go libraries?</h3>
 The library sources are in the <code>src</code> directory of the repository.
 If you want to make a significant change, please discuss on the mailing list before embarking.
 </p>
+
+<pre>
+    embark [ɪm'bɑːk; em-] vi. 从事，着手；上船或飞机 vt. 使从事；使上船
+</pre>
 
 <p>
 See the document
@@ -1086,6 +1194,10 @@ When using HTTPS instead of HTTP, <code>git</code> enforces certificate validati
 default, providing protection against man-in-the-middle, eavesdropping and tampering attacks.
 The <code>go get</code> command therefore uses HTTPS for safety.
 </p>
+
+<pre>
+    eavesdrop ['iːvzdrɒp] n. 屋檐上流下来的水 vi. 偷听，窃听
+</pre>
 
 <p>
 If you use <code>git</code> and prefer to push changes through SSH using your existing key 
@@ -1354,6 +1466,10 @@ The storage location chosen by the implementation is irrelevant to the
 semantics of the language.
 </p>
 
+<pre>
+    correctness standpoint 正确的角度
+</pre>
+
 <p>
 The storage location does have an effect on writing efficient programs.
 When possible, the Go compilers will allocate variables that are
@@ -1380,6 +1496,11 @@ The Go memory allocator reserves a large region of virtual memory as an arena
 for allocations. This virtual memory is local to the specific Go process; the
 reservation does not deprive other processes of memory.
 </p>
+
+<pre>
+    arena [ə'riːnə] n. 舞台；竞技场
+    deprive [dɪ'praɪv] vt. 使丧失，剥夺
+</pre>
 
 <p>
 To find the amount of actual memory allocated to a Go process, use the Unix
@@ -1623,10 +1744,18 @@ Source files can refer to items from different files at will; there is
 no need for forward declarations or a header file.
 </p>
 
+<pre>
+    at will 随意；任意
+</pre>
+
 <p>
 Other than being split into multiple files, the package will compile and test
 just like a single-file package.
 </p>
+
+<pre>
+    other than 1.与…不同，非 2.除了
+</pre>
 
 <h3 id="How_do_I_write_a_unit_test">
 How do I write a unit test?</h3>
@@ -1674,6 +1803,10 @@ Time invested writing a good error message now pays off later when the
 test breaks.
 </p>
 
+<pre>
+    pays off 值得；有回报
+</pre>
+
 <p>
 A related point is that testing frameworks tend to develop into mini-languages
 of their own, with conditionals and controls and printing mechanisms,
@@ -1703,6 +1836,10 @@ It also contains elements important for web programming, including
 cryptography and support for standards like HTTP, JSON, and XML.
 </p>
 
+<pre>
+    cryptography [krip'tɔɡrəfi] n. 1.密码学 2.密码的编制和破译；密文，暗语
+</pre>
+
 <p>
 There is no clear criterion that defines what is included because for
 a long time, this was the <i>only</i> Go library.
@@ -1720,6 +1857,10 @@ and is subject to the Go
 <a href="https://golang.org/s/releasesched">release schedule</a>,
 preventing bug fixes from being available to users quickly.
 </p>
+
+<pre>
+    ongoing ['ɔn,ɡəuiŋ; 'ɔ:n-] adj.进行中的，不间断的；不断发展中的 n.1.进行；前进；发展
+</pre>
 
 <p>
 Most new code should live outside of the standard library and be accessible

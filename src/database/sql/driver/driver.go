@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
-// [[[5-over]]] 2017-6-14 09:20:04 这个文件以后暂时不要看了,太多driver的东西
+// [[[6-over]]] 2017-08-21 19:45:07
 
 // Package driver defines interfaces to be implemented by database
 // drivers as used by package sql.

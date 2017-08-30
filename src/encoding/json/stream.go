@@ -247,6 +247,8 @@ func (enc *Encoder) SetEscapeHTML(on bool) {
 type RawMessage []byte
 
 // MarshalJSON returns m as the JSON encoding of m.
+//
+// @see
 func (m RawMessage) MarshalJSON() ([]byte, error) {
 	if m == nil {
 		return []byte("null"), nil
@@ -255,6 +257,8 @@ func (m RawMessage) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON sets *m to a copy of data.
+//
+// @see
 func (m *RawMessage) UnmarshalJSON(data []byte) error {
 	if m == nil {
 		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")

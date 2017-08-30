@@ -45,7 +45,7 @@ import (
 //
 //   * 翻译:如果struct有一个字段类型是[]byte或string,并且tag是",innerxml":
 //      Unmarshal会将xml元素中的raw XML写入此字段.然后会继续下面的rules.
-//      注意: 会继续下面的rules.
+//      注意: 会继续下面的rules.并不会在此中断.
 //
 //   * If the struct has a field named XMLName of type Name,
 //      Unmarshal records the element name in that field.
@@ -111,18 +111,22 @@ import (
 //      explicit name tag as per the previous rule, unmarshal maps
 //      the sub-element to that struct field.
 //
-//   * ?????? 上面这条是什么意思
+//   * 如果XML元素包含一个直接子元素,其标签名匹配结构体字段的XMLName tag
+//        && 结构体的字段没有显示指定name tag(根据上条规则)
+//      此时unmarshal会映射此直接子元素到匹配的XMLName tag的字段.
 //
 //   * If the XML element contains a sub-element whose name matches a
 //      field without any mode flags (",attr", ",chardata", etc), Unmarshal
 //      maps the sub-element to that struct field.
 //
-//   * 翻译:如果XML element有一个子元素,其标签名匹配一个结构体中的字段(可能是通过字段名,也可能是通过tag),并且此字段的tag不具有任何的mode flag,
-//      Unmarshal会将这个子元素映射到这个字段.
+//   * 翻译:如果XML element有一个子元素,其标签名匹配一个结构体中的字段(可能是通过字段名,也可能是通过tag)
+//         并且此字段的tag不具有任何的mode flag
+//     Unmarshal会将这个子元素映射到这个字段.
 //
 //   * If the XML element contains a sub-element that hasn't matched any
 //      of the above rules and the struct has a field with tag ",any",
 //      unmarshal maps the sub-element to that struct field.
+//      此时不会管标签名和字段名或tag是否匹配
 //
 //   * 在marshal_test.go中搜索'any1112'可以看到any的例子
 //

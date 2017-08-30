@@ -1,6 +1,8 @@
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[1-over]]] 2017-08-10 09:57:26
 
 package httptest_test
 
@@ -19,6 +21,8 @@ func ExampleResponseRecorder() {
 	}
 
 	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
+	// 文档: ResponseRecorder is an implementation of http.ResponseWriter that
+	//       records its mutations for later inspection in tests.
 	w := httptest.NewRecorder()
 	handler(w, req)
 
@@ -36,6 +40,7 @@ func ExampleResponseRecorder() {
 }
 
 func ExampleServer() {
+	// ts是testServer的缩写
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello, client")
 	}))

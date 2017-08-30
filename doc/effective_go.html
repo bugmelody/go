@@ -25,6 +25,17 @@ construction, and so on, so that programs you write
 will be easy for other Go programmers to understand.
 </p>
 
+<pre>
+    https://www.kancloud.cn/kancloud/effective/72199 中文翻译
+    
+    
+    unusual(adj. 不寻常的；与众不同的)
+    in character 相称；适合
+    satisfactory(adj. 满意的；符合要求的)
+    established conventions 既有的惯例；既定惯例
+    augments(补充，增补)
+</pre>
+
 <p>
 This document gives tips for writing clear, idiomatic Go code.
 It augments the <a href="/ref/spec">language specification</a>,
@@ -66,6 +77,16 @@ The problem is how to approach this Utopia without a long
 prescriptive style guide.
 </p>
 
+<pre>
+    contentious [kən'tenʃəs] adj. 诉讼的；有异议的，引起争论的；爱争论的
+    consequential [kɒnsɪ'kwenʃ(ə)l] adj. 间接的；结果的；重要的；随之发生的；自傲的
+    most contentious but the least consequential 最具争议但最不重要
+    be devoted to 专心于/致力于…的；献身…的
+    adheres to(坚持；粘附；拥护，追随)
+    Utopia(乌托邦)
+    prescriptive(adj. 规定的，规范的；指定的)
+</pre>
+
 <p>
 With Go we take an unusual
 approach and let the machine
@@ -83,12 +104,21 @@ seem right, rearrange your program (or file a bug about <code>gofmt</code>),
 don't work around it.
 </p>
 
+<pre>
+    emits(vt. 发出，放射；发行；发表)
+    indentation(缩进)
+</pre>
+
 <p>
 As an example, there's no need to spend time lining up
 the comments on the fields of a structure.
 <code>Gofmt</code> will do that for you.  Given the
 declaration
 </p>
+
+<pre>
+    line up 排列起；整队
+</pre>
 
 <pre>
 type T struct {
@@ -117,6 +147,10 @@ All Go code in the standard packages has been formatted with <code>gofmt</code>.
 Some formatting details remain.  Very briefly:
 </p>
 
+<pre>
+    punched card【计算机】穿孔卡(片)
+</pre>
+
 <dl>
     <dt>Indentation</dt>
     <dd>We use tabs for indentation and <code>gofmt</code> emits them by default.
@@ -140,7 +174,15 @@ x&lt;&lt;8 + y&lt;&lt;16
     </dd>
 </dl>
 
+<pre>
+    Indentation(缩进)
+</pre>
+
 <h2 id="commentary">Commentary</h2>
+
+<pre>
+    commentary ['kɒmənt(ə)rɪ] n. 评论；注释；评注；说明
+</pre>
 
 <p>
 Go provides C-style <code>/* */</code> block comments
@@ -149,6 +191,11 @@ Line comments are the norm;
 block comments appear mostly as package comments, but
 are useful within an expression or to disable large swaths of code.
 </p>
+
+<pre>
+    are the norm 是常态
+    swaths of 大片
+</pre>
 
 <p>
 The program—and web server—<code>godoc</code> processes
@@ -239,6 +286,10 @@ starts with the name being declared.
 </p>
 
 <pre>
+    complete sentence 完整句
+</pre>
+
+<pre>
 // Compile parses a regular expression and returns, if successful,
 // a Regexp that can be used to match against text.
 func Compile(str string) (*Regexp, error) {
@@ -276,6 +327,10 @@ Go's declaration syntax allows grouping of declarations.
 A single doc comment can introduce a group of related constants or variables.
 Since the whole declaration is presented, such a comment can often be perfunctory.
 </p>
+
+<pre>
+    perfunctory(adj. 敷衍的；马虎的；得过且过的)
+</pre>
 
 <pre>
 // Error codes returned by failures to parse an expression.
@@ -341,6 +396,15 @@ In any case, confusion is rare because the file name in the import
 determines just which package is being used.
 </p>
 
+<pre>
+    implies(v. 意味着（imply的第三人称单数）；蕴含；暗指)
+    evocative(使产生回忆的)
+    err on the side of 错在…方面，失之…，偏于,宁可
+    confusion(n. 混淆，混乱；困惑)
+    
+    priori [praɪ'ɔ:raɪ] adj. 先验的；优先的（等于a priori） adv. 先验地（等于a priori）
+</pre>
+
 <p>
 Another convention is that the package name is the base name of
 its source directory;
@@ -369,6 +433,11 @@ package is called <code>ring</code>, it's called just <code>New</code>,
 which clients of the package see as <code>ring.New</code>.
 Use the package structure to help you choose good names.
 </p>
+
+<pre>
+    importer(指主动导入方)
+    stutter(n. 口吃，结巴)
+</pre>
 
 <p>
 Another short example is <code>once.Do</code>;
@@ -401,6 +470,13 @@ if owner != user {
 
 <h3 id="interface-names">Interface names</h3>
 
+<pre>
+    Agent noun 是什么意思: In linguistics, an agent noun (in Latin, nomen
+    agentis) is a word that is derived from another word denoting an
+    action, and that identifies an entity that does that action.
+    For example, "driver" is an agent noun formed from the verb "drive".
+</pre>
+
 <p>
 By convention, one-method interfaces are named by
 the method name plus an -er suffix or similar modification
@@ -423,6 +499,11 @@ give it the same name and signature;
 call your string-converter method <code>String</code> not <code>ToString</code>.
 </p>
 
+<pre>
+    productive [prə'dʌktɪv] adj. 能生产的；生产的，生产性的；多产的；富有成效的
+    Conversely(adv. 相反地)
+</pre>
+
 <h3 id="mixed-caps">MixedCaps</h3>
 
 <p>
@@ -439,6 +520,12 @@ but unlike in C, those semicolons do not appear in the source.
 Instead the lexer uses a simple rule to insert semicolons automatically
 as it scans, so the input text is mostly free of them.
 </p>
+
+<pre>
+    formal grammar 【计算机】形式文法
+    lexer(词法分析程序)
+    free of: 使(某人心中)摆脱(某种想法等)；(心中)摆脱
+</pre>
 
 <p>
 The rule is this. If the last token before a newline is an identifier
@@ -470,6 +557,10 @@ continuation elements.  They are also necessary to separate multiple
 statements on a line, should you write code that way.
 </p>
 
+<pre>
+    // 注: go func() { for { dst <- <-src [省略分号]} }()
+</pre>
+
 <p>
 One consequence of the semicolon insertion rules
 is that you cannot put the opening brace of a
@@ -489,7 +580,7 @@ not like this
 </p>
 <pre>
 if i &lt; f()  // wrong!
-{           // wrong!
+{           // wrong! # 分号会自动被插入到上一行 f() 的后面
     g()
 }
 </pre>
@@ -515,6 +606,11 @@ there are no parentheses
 and the bodies must always be brace-delimited.
 </p>
 
+<pre>
+    generalized(adj. 广义的，普遍的；无显著特点的)
+    (type switch 属于 golang 的一个名词概念)
+</pre>
+
 <h3 id="if">If</h3>
 
 <p>
@@ -532,6 +628,26 @@ on multiple lines.  It's good style to do so anyway,
 especially when the body contains a control statement such as a
 <code>return</code> or <code>break</code>.
 </p>
+
+<pre>
+    上面这段是说:
+    if(xxx) {
+        xxx1
+        xxx2
+    }
+    即使在php中,也是良好的风格
+    
+    而相比
+    
+    if(xxx) xxx1
+    在php中也是不好的风格
+    
+    因此,if使用大括号是非常好的
+</pre>
+
+<pre>
+    Mandatory(adj. 强制的；托管的；命令的)
+</pre>
 
 <p>
 Since <code>if</code> and <code>switch</code> accept an initialization
@@ -570,6 +686,10 @@ statements, the resulting code needs no <code>else</code> statements.
 </p>
 
 <pre>
+    (避免多个else条件看着头晕,避免if,else嵌套)
+</pre>
+
+<pre>
 f, err := os.Open(name)
 if err != nil {
     return err
@@ -592,7 +712,7 @@ The declaration that calls <code>os.Open</code> reads,
 </p>
 
 <pre>
-f, err := os.Open(name)
+f, err := os.Open(name) // 在这里, err 被声明并赋值
 </pre>
 
 <p>
@@ -601,7 +721,7 @@ A few lines later, the call to <code>f.Stat</code> reads,
 </p>
 
 <pre>
-d, err := f.Stat()
+d, err := f.Stat() // 在这里, err 仅仅是被重新赋值
 </pre>
 
 <p>
@@ -618,6 +738,10 @@ In a <code>:=</code> declaration a variable <code>v</code> may appear even
 if it has already been declared, provided:
 </p>
 
+<pre>
+    provided(conj. 假如；倘若)
+</pre>
+
 <ul>
 <li>this declaration is in the same scope as the existing declaration of <code>v</code>
 (if <code>v</code> is already declared in an outer scope, the declaration will create a new variable §),</li>
@@ -631,6 +755,12 @@ making it easy to use a single <code>err</code> value, for example,
 in a long <code>if-else</code> chain.
 You'll see it used often.
 </p>
+
+<pre>
+    pragmatism(n. 实用主义)
+    lexically(adv. 词汇方面；字典地)
+    unifies(vt. 统一；使相同，使一致)
+</pre>
 
 <p>
 § It's worth noting here that in Go the scope of function parameters and return values
@@ -729,6 +859,12 @@ character U+FFFD '�' starts at byte position 6
 character U+8A9E '語' starts at byte position 7
 </pre>
 
+<pre>
+    terminology [,tɜːmɪ'nɒlədʒɪ] n. 术语，术语学；用辞
+    [ 每次 range 迭代,是生成了一个 Unicode code points(也就是 rune),而不是 byte ]
+    precludes(vt. 排除；妨碍；阻止)
+</pre>
+
 <p>
 Finally, Go has no comma operator and <code>++</code> and <code>--</code>
 are statements not expressions.
@@ -736,7 +872,7 @@ Thus if you want to run multiple variables in a <code>for</code>
 you should use parallel assignment (although that precludes <code>++</code> and <code>--</code>).
 </p>
 <pre>
-// Reverse a
+// Reverse a // 颠倒 a 数组的顺序
 for i, j := 0, len(a)-1; i &lt; j; i, j = i+1, j-1 {
     a[i], a[j] = a[j], a[i]
 }
@@ -799,7 +935,7 @@ Loop:
 		switch {
 		case src[n] &lt; sizeOne:
 			if validateOnly {
-				break
+				break // 跳出 switch
 			}
 			size = 1
 			update(src[n])
@@ -807,10 +943,10 @@ Loop:
 		case src[n] &lt; sizeTwo:
 			if n+1 &gt;= len(src) {
 				err = errShortInput
-				break Loop
+				break Loop // 跳出 loop标记的循环
 			}
 			if validateOnly {
-				break
+				break // 跳出 switch
 			}
 			size = 2
 			update(src[n] + src[n+1]&lt;&lt;shift)
@@ -832,6 +968,7 @@ To close this section, here's a comparison routine for byte slices that uses two
 // lexicographically.
 // The result will be 0 if a == b, -1 if a &lt; b, and +1 if a &gt; b
 func Compare(a, b []byte) int {
+    // 先以两者间最小长度来比较
     for i := 0; i &lt; len(a) &amp;&amp; i &lt; len(b); i++ {
         switch {
         case a[i] &gt; b[i]:
@@ -840,6 +977,7 @@ func Compare(a, b []byte) int {
             return -1
         }
     }
+    // 最小长度已经比较完毕,看谁的总长度长
     switch {
     case len(a) &gt; len(b):
         return 1
@@ -852,6 +990,10 @@ func Compare(a, b []byte) int {
 
 <h3 id="type_switch">Type switch</h3>
 
+<pre>
+    Type switch (专门比较type的switch语句)
+</pre>
+
 <p>
 A switch can also be used to discover the dynamic type of an interface
 variable.  Such a <em>type switch</em> uses the syntax of a type
@@ -862,10 +1004,15 @@ It's also idiomatic to reuse the name in such cases, in effect declaring
 a new variable with the same name but a different type in each case.
 </p>
 <pre>
+    比如下方的代码: t := t.(type)
+    声明了一个新的变量t(It's also idiomatic to reuse the name in such cases)
+    新的变量t在每个case中有对应的类型
+</pre>
+<pre>
 var t interface{}
 t = functionOfSomeType()
 switch t := t.(type) {
-default:
+default: // default 的顺序不重要,可以放到第一个
     fmt.Printf("unexpected type %T\n", t)     // %T prints whatever type t has
 case bool:
     fmt.Printf("boolean %t\n", t)             // t has type bool
@@ -881,6 +1028,19 @@ case *int:
 <h2 id="functions">Functions</h2>
 
 <h3 id="multiple-returns">Multiple return values</h3>
+
+<pre>
+    clumsy(adj. 笨拙的)
+    idioms(n. 成语，习语；土话)
+    in-band(带内)
+    volatile(易变的)
+    obviate ['ɔbvieit] vt.
+    1.防止，排除，消除(困难、不利因素等)：
+    to obviate the risk of serious injury
+    消除各种受伤的危险
+    2.使成为不必要，避免
+    simple-minded(adj. 头脑简单的；愚蠢的)
+</pre>
 
 <p>
 One of Go's unusual features is that functions and methods
@@ -921,8 +1081,10 @@ and the next position.
 
 <pre>
 func nextInt(b []byte, i int) (int, int) {
+    // 通过循环,找到从位置i开始的是数字的位置
     for ; i &lt; len(b) &amp;&amp; !isDigit(b[i]); i++ {
     }
+    // 现在, 位置 i 上,是数字
     x := 0
     for ; i &lt; len(b) &amp;&amp; isDigit(b[i]); i++ {
         x = x*10 + int(b[i]) - '0'
@@ -953,6 +1115,12 @@ with no arguments, the current values of the result parameters are
 used as the returned values.
 </p>
 
+<pre>
+    注意这里的称呼 Named result parameters,
+    是把返回值也当成 parameters,因为一旦进入 function,
+    Named result parameters 会被初始化为 zero values,仅仅针对 Named result parameters 而言
+</pre>
+
 <p>
 The names are not mandatory but they can make code shorter and clearer:
 they're documentation.
@@ -970,6 +1138,12 @@ Because named results are initialized and tied to an unadorned return, they can 
 as well as clarify.  Here's a version
 of <code>io.ReadFull</code> that uses them well:
 </p>
+
+<pre>
+    unadorned(adj. 朴素的；未装饰的)
+    clarify(vt. 澄清；阐明 vi. 得到澄清；变得明晰；得到净化)
+    [unadorned return: 这里应该是指单纯的 return,也就是不带值的 return]
+</pre>
 
 <pre>
 func ReadFull(r Reader, buf []byte) (n int, err error) {
@@ -1035,6 +1209,12 @@ about variables changing values as the function executes, this means
 that a single deferred call site can defer multiple function
 executions.  Here's a silly example.
 </p>
+
+<pre>
+    silly(adj. 愚蠢的)
+    plausible(adj. 貌似可信的，花言巧语的；貌似真实的，貌似有理的)
+    exploiting(v. 利用；开发（exploit的ing形式）)
+</pre>
 
 <pre>
 for i := 0; i &lt; 5; i++ {
@@ -1116,6 +1296,20 @@ that it's not block-based but function-based.  In the section on
 <code>panic</code> and <code>recover</code> we'll see another
 example of its possibilities.
 </p>
+
+<pre>
+    peculiar(adj. 特殊的；独特的；奇怪的；罕见的)
+    precisely(adv. 精确地；恰恰)
+    namesakes(n. 名义；同名物；同名的人)
+    arrange( 安排；排列；整理)
+    (get right to:马上开始)
+    states(n. 国家；州；情形;vt. 规定；声明；陈述)
+    transitively(及物的；过渡的；可迁的)
+    arrangement(n. 布置；整理；准备)
+    composite(adj. 复合的；合成的) literals
+    derived from:来源于
+    boilerplate:样板文件
+</pre>
 
 <h2 id="data">Data</h2>
 
@@ -1207,9 +1401,14 @@ func NewFile(fd int, name string) *File {
     if fd &lt; 0 {
         return nil
     }
+    // File{fd, name, nil, 0}, 这就是所谓的 'composite literal'
     f := File{fd, name, nil, 0}
     return &amp;f
 }
+</pre>
+
+<pre>
+    不像C语言,golang里面返回局部变量的地址是没有问题的
 </pre>
 
 <p>
@@ -1222,7 +1421,7 @@ so we can combine these last two lines.
 </p>
 
 <pre>
-    return &amp;File{fd, name, nil, 0}
+    return &amp;File{fd, name, nil, 0} // 这种形式,因为没有指定哪个字段,所以必须全部列出,并且顺序要对
 </pre>
 
 <p>
@@ -1233,7 +1432,7 @@ order, with the missing ones left as their respective zero values.  Thus we coul
 </p>
 
 <pre>
-    return &amp;File{fd: fd, name: name}
+    return &amp;File{fd: fd, name: name} // 这种形式,因为有指定字段,所以不必全部列出,并且顺序没有关系
 </pre>
 
 <p>
@@ -1249,6 +1448,7 @@ In these examples, the initializations work regardless of the values of <code>En
 </p>
 
 <pre>
+// a := [...]string ? 这是什么语法,这是声明了一个数组,但是长度是由后面的字面量来决定.
 a := [...]string   {Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 s := []string      {Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 m := map[int]string{Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
@@ -1322,6 +1522,11 @@ they are a building block for slices, the subject of the next section.
 To lay the foundation for that topic, here are a few words about arrays.
 </p>
 
+<pre>
+    数组可以用于规划内存的精细布局,有时利于避免分配,不过从根本上讲,它们是切片的基本
+    构件,这是下一章节的话题.作为铺垫,这里介绍一下数组。
+</pre>
+
 <p>
 There are major differences between the ways arrays work in Go and C.
 In Go,
@@ -1363,6 +1568,11 @@ Use slices instead.
 
 <h3 id="slices">Slices</h3>
 
+<pre>
+    transformation matrix [数] 变换矩阵，转换矩阵
+    除了像转换矩阵这样具有显式维度的项,Go中大多数的数组编程都是通过切片完成,而不是简单数组
+</pre>
+
 <p>
 Slices wrap arrays to give a more general, powerful, and convenient
 interface to sequences of data.  Except for items with explicit
@@ -1391,6 +1601,8 @@ To read into the first 32 bytes of a larger buffer
 <code>buf</code>, <i>slice</i> (here used as a verb) the buffer.
 </p>
 <pre>
+    // buf[0:32] ,从slice中再slice出一个slice
+    // 因为出来的那个slice设定了len为32,因此在 f.Read 内部会自动读取到32个 byte
     n, err := f.Read(buf[0:32])
 </pre>
 <p>
@@ -1401,6 +1613,7 @@ the moment, the following snippet would also read the first 32 bytes of the buff
     var n int
     var err error
     for i := 0; i &lt; 32; i++ {
+        // slice设定了len为1,因此在 f.Read 内部会自动读取到 1 个 byte
         nbytes, e := f.Read(buf[i:i+1])  // Read one byte.
         if nbytes == 0 || e != nil {
             err = e
@@ -1430,7 +1643,9 @@ func Append(slice, data []byte) []byte {
         copy(newSlice, slice)
         slice = newSlice
     }
-    slice = slice[0:l+len(data)]
+    slice = slice[0:l+len(data)] // 重新 slice 一次,整理长度
+    
+    // 刚才只是分配了空间,还没有赋值,现在开始赋值
     for i, c := range data {
         slice[l+i] = c
     }
@@ -1442,6 +1657,13 @@ We must return the slice afterwards because, although <code>Append</code>
 can modify the elements of <code>slice</code>, the slice itself (the run-time data
 structure holding the pointer, length, and capacity) is passed by value.
 </p>
+
+<pre>
+    afterwards(adv. 后来；然后)
+    我们必须在后面返回slice,尽管Append可以修改slice的元素,slice本身是按照值传递的.
+    因为内部可能重新分配了一个slice(上面那段代码中的newSlice),两个引用是不同的,之前的那个老的slice引用已经没有意义了
+    因此必须返回变量slice
+</pre>
 
 <p>
 The idea of appending to a slice is so useful it's captured by the
@@ -1476,6 +1698,12 @@ text := LinesOfText{
 	[]byte("for all good gophers"),
 	[]byte("to bring some fun to the party."),
 }
+</pre>
+
+<pre>
+    []byte(xxx) 是在进行类型转换
+    For reference(以供参考；备案)
+    here are sketches(草图；示意图) of
 </pre>
 
 <p>
@@ -1573,6 +1801,7 @@ attended := map[string]bool{
     ...
 }
 
+// bool 类型的 zero value 是 false
 if attended[person] { // will be false if person is not in the map
     fmt.Println(person, "was at the meeting")
 }
@@ -1583,6 +1812,10 @@ a zero value.  Is there an entry for <code>"UTC"</code>
 or is that 0 because it's not in the map at all?
 You can discriminate with a form of multiple assignment.
 </p>
+<pre>
+    distinguish(vt. 区分；辨别；使杰出，使表现突出)
+    discriminate(vt. 歧视；区别；辨别)
+</pre>
 <pre>
 var seconds int
 var ok bool
@@ -1611,7 +1844,7 @@ you can use the <a href="#blank">blank identifier</a> (<code>_</code>)
 in place of the usual variable for the value.
 </p>
 <pre>
-_, present := timeZone[tz]
+_, present := timeZone[tz] // 只想测试值是否存在
 </pre>
 <p>
 To delete a map entry, use the <code>delete</code>
@@ -1645,8 +1878,8 @@ In this example each line produces the same output.
 <pre>
 fmt.Printf("Hello %d\n", 23)
 fmt.Fprint(os.Stdout, "Hello ", 23, "\n")
-fmt.Println("Hello", 23)
-fmt.Println(fmt.Sprint("Hello ", 23))
+fmt.Println("Hello", 23) // ln 系列函数自动添加空格和换行
+fmt.Println(fmt.Sprint("Hello ", 23)) // the Print versions add blanks only if the operand on neither side is a string.
 </pre>
 <p>
 The formatted print functions <code>fmt.Fprint</code>
@@ -1659,6 +1892,12 @@ Here things start to diverge from C.  First, the numeric formats such as <code>%
 do not take flags for signedness or size; instead, the printing routines use the
 type of the argument to decide these properties.
 </p>
+<pre>
+    diverge(vi. 分歧；偏离；分叉；离题)
+</pre>
+<pre>
+    和C不同.数字格式,像%d,并不接受正负号和size的标记.相反的,打印程序使用参数的类型来决定这些属性.
+</pre>
 <pre>
 var x uint64 = 1&lt;&lt;64 - 1
 fmt.Printf("%d %x; %d %x\n", x, x, int64(x), int64(x))
@@ -1684,6 +1923,9 @@ which gives output
 </p>
 <pre>
 map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
+</pre>
+<pre>
+    annotates(vi. 注释；给…作注释或评注)
 </pre>
 <p>
 For maps the keys may be output in any order, of course.
@@ -1759,6 +2001,17 @@ that's more efficient and idiomatic for struct types.
 See the section below on <a href="#pointers_vs_values">pointers vs. value receivers</a> for more information.)
 </p>
 
+<pre>
+    如果你需要打印类型为T的值,同时需要打印类型为*T的值,那么String的接收者必须为值类型的;这个例子使
+    用了指针,是因为这对于结构体类型更加有效和符合语言习惯
+    
+    pointers vs. value receivers 一节中提到
+    The rule about pointers vs. values for receivers is that value methods can be invoked
+    on pointers and values, but pointer methods can only be invoked on pointers. This is
+    because pointer methods can modify the receiver; invoking them on a copy of the value
+    would cause those modifications to be discarded.
+</pre>
+
 <p>
 Our <code>String</code> method is able to call <code>Sprintf</code> because the
 print routines are fully reentrant and can be wrapped this way.
@@ -1816,6 +2069,9 @@ function <code>log.Println</code> we used above. It passes its arguments directl
 // Println prints to the standard logger in the manner of fmt.Println.
 func Println(v ...interface{}) {
     std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
+    // Output 函数的 parameters 是 (int, string)
+    // 如果写成 std.Output(2, fmt.Sprintln(v)) ,传递进 fmt.Sprintln 的是一个单独的 slice
+	// 写成 std.Output(2, fmt.Sprintln(v...)) 样子,才是把 v 继续作为可变参数传递到 fmt.Sprintln
 }
 </pre>
 <p>
@@ -1833,6 +2089,7 @@ for a min function that chooses the least of a list of integers:
 </p>
 <pre>
 func Min(a ...int) int {
+    // 先找到最大的,每次循环发现小的就进行替换
     min := int(^uint(0) &gt;&gt; 1)  // largest int
     for _, i := range a {
         if i &lt; min {
@@ -1844,6 +2101,11 @@ func Min(a ...int) int {
 </pre>
 
 <h3 id="append">Append</h3>
+
+<pre>
+    Schematically(adv. 计划性地；按照图式)
+</pre>
+
 <p>
 Now we have the missing piece we needed to explain the design of
 the <code>append</code> built-in function.  The signature of <code>append</code>
@@ -1860,12 +2122,26 @@ is determined by the caller.
 That's why <code>append</code> is built in: it needs support from the
 compiler.
 </p>
+
+<pre>
+    其中T为任意给定类型的占位符.
+    你在Go中是无法写出一个类型T由调用者来确定的函数.这就是为什么append是内建的:它需要编译器的支持.
+    (注:其实就是因为go不支持泛型)
+</pre>
+
 <p>
 What <code>append</code> does is append the elements to the end of
 the slice and return the result.  The result needs to be returned
 because, as with our hand-written <code>Append</code>, the underlying
 array may change.  This simple example
 </p>
+
+<pre>
+    注:为什么必须返回slice?
+    我们必须在后面返回slice,尽管Append可以修改slice的元素,slice本身(持有指针,长度,容量的运行时数据结构)是按照值传递的.
+    而当slice因为某些原因进行重新分配内存空间的时候,应该返回重新分配的slice.
+    见前面部分的讨论,Slices 那一节
+</pre>
 <pre>
 x := []int{1,2,3}
 x = append(x, 4, 5, 6)
@@ -1883,9 +2159,12 @@ site, just as we did in the call to <code>Output</code> above.  This
 snippet produces identical output to the one above.
 </p>
 <pre>
+    at the call site(调用端)
+</pre>
+<pre>
 x := []int{1,2,3}
 y := []int{4,5,6}
-x = append(x, y...)
+x = append(x, y...) // 将 y 这个 slice,作为可变参数传递进去
 fmt.Println(x)
 </pre>
 <p>
@@ -1895,6 +2174,10 @@ would be wrong; <code>y</code> is not of type <code>int</code>.
 
 <h2 id="initialization">Initialization</h2>
 
+<pre>
+    superficially(adv. 表面地；浅薄地)
+</pre>
+
 <p>
 Although it doesn't look superficially very different from
 initialization in C or C++, initialization in Go is more powerful.
@@ -1902,6 +2185,11 @@ Complex structures can be built during initialization and the ordering
 issues among initialized objects, even among different packages, are handled
 correctly.
 </p>
+
+<pre>
+    Go中的初始化,虽然表面上看和C或者C++差别不大,但功能更加强大.
+    在初始化过程中可以构建复杂的结构体,并且能够正确处理初始化对象之间,甚至不同程序包之间的顺序问题.
+</pre>
 
 <h3 id="constants">Constants</h3>
 
@@ -1919,6 +2207,9 @@ the function call to <code>math.Sin</code> needs
 to happen at run time.
 </p>
 
+<pre>
+    intricate(adj. 复杂的；错综的，缠结的)
+</pre>
 <p>
 In Go, enumerated constants are created using the <code>iota</code>
 enumerator.  Since <code>iota</code> can be part of an expression and
@@ -1974,6 +2265,15 @@ variable declarations in the package have evaluated their initializers,
 and those are evaluated only after all the imported packages have been
 initialized.
 </p>
+<pre>
+    package a
+    import "b"
+
+    initialize的顺序:
+    1.被导入的包b首先被initialize
+    2.包a中的variable declarations(此时会对initializers进行估值)
+    3.包a中的init函数(一个文件或者说包,可以拥有多个init函数).
+</pre>
 <p>
 Besides initializations that cannot be expressed as declarations,
 a common use of <code>init</code> functions is to verify or repair
@@ -2004,6 +2304,10 @@ As we saw with <code>ByteSize</code>,
 methods can be defined for any named type (except a pointer or an interface);
 the receiver does not have to be a struct.
 </p>
+<pre>
+    上文中: can be defined for any named type (except a pointer or an interface)
+    是指  named type  不能是 a pointer or an interface
+</pre>
 <p>
 In the discussion of slices above, we wrote an <code>Append</code>
 function.  We can define it as a method on slices instead.  To do
@@ -2091,6 +2395,12 @@ Interfaces with only one or two methods are common in Go code, and are
 usually given a name derived from the method, such as <code>io.Writer</code>
 for something that implements <code>Write</code>.
 </p>
+<pre>
+    一个类型,
+    只要实现了String method,就可以被print系列函数使用;
+    只要实现了Write method,就可以被 Fprintf 使用
+    contrived(adj. 人为的；做作的；不自然的)
+</pre>
 <p>
 A type can implement multiple interfaces.
 For instance, a collection can be sorted
@@ -2126,6 +2436,9 @@ as though the existing value has a new type.
 (There are other legal conversions, such as from integer to floating point, that
 do create a new value.)
 </p>
+<pre>
+    注意这里提到的,有些转换会创建一个新的值,有些不会
+</pre>
 <p>
 It's an idiom in Go programs to convert the
 type of an expression to access a different
@@ -2138,6 +2451,7 @@ type Sequence []int
 
 // Method for printing - sorts the elements before printing
 func (s Sequence) String() string {
+    // sort.IntSlice(s): 把s这个Sequence转换成IntSlice类型,然后调用IntSlice的Sort方法
     sort.IntSlice(s).Sort()
     return fmt.Sprint([]int(s))
 }
@@ -2150,6 +2464,12 @@ and <code>[]int</code>), each of which does some part of the job.
 That's more unusual in practice but can be effective.
 </p>
 
+<pre>
+    现在,Sequence没有实现多个接口(排序和打印),相反,我们利用了能够将数据项转换为多
+    个类型(Sequence,sort.IntSlice,[]int)的能力,每个类型完成工作的一部分.
+    这在实际中不常见,但是却可以很有效.
+</pre>
+
 <h3 id="interface_conversions">Interface conversions and type assertions</h3>
 
 <p>
@@ -2160,6 +2480,12 @@ a string using a type switch.
 If it's already a string, we want the actual string value held by the interface, while if it has a
 <code>String</code> method we want the result of calling the method.
 </p>
+
+<pre>
+    in a sense(in a sense:就某种意义来说)
+    [注意: Type switches 也是 conversion的一种形式.]
+    Generality(n. 概论；普遍性；大部分)
+</pre>
 
 <pre>
 type Stringer interface {
@@ -2237,6 +2563,7 @@ if str, ok := value.(string); ok {
 </pre>
 
 <h3 id="generality">Generality</h3>
+
 <p>
 If a type exists only to implement an interface and will
 never have exported methods beyond that interface, there is
@@ -2257,6 +2584,14 @@ Substituting the CRC-32 algorithm for Adler-32 in a Go program
 requires only changing the constructor call;
 the rest of the code is unaffected by the change of algorithm.
 </p>
+<pre>
+    返回一个接口,容纳各种算法类型,通过对返回的接口进行编程,可以在将来方便的替换hash算法
+</pre>
+<pre>
+    cipher(密码,加密) algorithms
+    by analogy(n. 类比；类推；类似)
+    block encryption-分组加密
+</pre>
 <p>
 A similar approach allows the streaming cipher algorithms
 in the various <code>crypto</code> packages to be
@@ -2308,6 +2643,12 @@ calls must be edited, but because the surrounding code must treat the result onl
 as a <code>Stream</code>, it won't notice the difference.
 </p>
 
+<pre>
+    NewCTR并不只是用于一个特定的加密算法和数据源,而是用于任何对Block接口的实现和任何Stream.
+    因为它们返回接口Stream,所以将CTR加密替换为其它加密模式只是一个局部的改变.
+    只有构造器调用必须被修改,不过因为上下文代码必须将结果只作为Stream来处理,所以其不会注意到差别.
+</pre>
+
 <h3 id="interface_methods">Interfaces and methods</h3>
 <p>
 Since almost anything can have methods attached, almost anything can
@@ -2344,6 +2685,7 @@ type Counter struct {
 
 func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
     ctr.n++
+    // 可以像 io.Writer 的方式一样来使用 http.ResponseWriter
     fmt.Fprintf(w, "counter = %d\n", ctr.n)
 }
 </pre>
@@ -2356,6 +2698,7 @@ For reference, here's how to attach such a server to a node on the URL tree.
 import "net/http"
 ...
 ctr := new(Counter)
+// ctr类型是Counter,在*Counter上面定义了ServeHTTP方法
 http.Handle("/counter", ctr)
 </pre>
 <p>
@@ -2381,6 +2724,9 @@ has been visited?  Tie a channel to the web page.
 type Chan chan *http.Request
 
 func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+    // req 的类型为 *http.Request, ch 的类型为 Chan,底层类型对应 chan *http.Request,可以传输 *http.Request
+    // 因此 ch 和 req 的类型匹配
+    // 通过这种方式,可以实现web页面的异步处理(消息队列)
     ch &lt;- req
     fmt.Fprint(w, "notification sent")
 }
@@ -2439,6 +2785,7 @@ to access <code>IntSlice.Sort</code>.
 The code to set it up is concise:
 </p>
 <pre>
+// ArgServer 类型被转换为 http.HandlerFunc
 http.Handle("/args", http.HandlerFunc(ArgServer))
 </pre>
 <p>
@@ -2471,6 +2818,11 @@ to be used as a place-holder
 where a variable is needed but the actual value is irrelevant.
 It has uses beyond those we've seen already.
 </p>
+
+<pre>
+    It has uses beyond those we've seen already.
+    它实际的用途其实不止于此
+</pre>
 
 <h3 id="blank_assign">The blank identifier in multiple assignment</h3>
 
@@ -2512,6 +2864,12 @@ if fi.IsDir() {
 </pre>
 
 <h3 id="blank_unused">Unused imports and variables</h3>
+
+<pre>
+    bloat(vt. 使膨胀)
+    indicative(adj. 象征的;指示的;表示…的)
+    complaint about-投诉;对…抱怨
+</pre>
 
 <p>
 It is an error to import a package or to declare a variable without using it.
@@ -2587,6 +2945,10 @@ expecting an <code>io.Reader</code> will not compile unless
 <code>*os.File</code> implements the <code>io.Reader</code> interface.
 </p>
 
+<pre>
+    有些接口检查是编辑期间检查
+</pre>
+
 <p>
 Some interface checks do happen at run-time, though.
 One instance is in the <code><a href="/pkg/encoding/json/">encoding/json</a></code>
@@ -2596,6 +2958,10 @@ the encoder invokes the value's marshaling method to convert it to JSON
 instead of doing the standard conversion.
 The encoder checks this property at run time with a <a href="#interface_conversions">type assertion</a> like:
 </p>
+
+<pre>
+    有些接口检查是运行期间检查
+</pre>
 
 <pre>
 m, ok := val.(json.Marshaler)
@@ -2611,6 +2977,10 @@ identifier to ignore the type-asserted value:
 if _, ok := val.(json.Marshaler); ok {
     fmt.Printf("value %v of type %T implements json.Marshaler\n", val, val)
 }
+</pre>
+
+<pre>
+    inadvertently(adv. 非故意地；不注意地)
 </pre>
 
 <p>
@@ -2650,6 +3020,22 @@ which is a rare event.
 
 
 <h2 id="embedding">Embedding</h2>
+
+<pre>
+什么是 Embedding:参见 spec:
+A field declared with a type but no explicit field name is an anonymous field,
+also called an embedded field or an embedding of the type in the struct.
+An embedded type must be specified as a type name T or as a pointer to a
+non-interface type name *T, and T itself may not be
+a pointer type. The unqualified type name acts as the field name.
+
+因此,只有匿名嵌入才叫 Embedding,非匿名嵌入不叫Embedding.
+</pre>
+
+<pre>
+    notion(概念，观念)
+    evocative   [i'vɔkətiv] adj.1.唤起…的，召唤的，引起…的(of)2.使产生回忆的3.使形象再现的
+</pre>
 
 <p>
 Go does not provide the typical, type-driven notion of subclassing,
@@ -2694,6 +3080,14 @@ does; it is a union of the embedded interfaces (which must be disjoint
 sets of methods).
 Only interfaces can be embedded within interfaces.
 </p>
+<pre>
+    disjoint(脱臼的，关节脱离的；被拆开的)
+    which must be disjoint sets of methods: 意思是指分成了几套 method set
+    
+    Only interfaces can be embedded within interfaces.[只有接口才能被嵌入接口][意思是接口中不能嵌入其他类型]
+    
+    far-reaching(adj. 深远的；广泛的；伸至远处的) implications(意义,含义,寓意)
+</pre>
 <p>
 The same basic idea applies to structs, but with more far-reaching
 implications.  The <code>bufio</code> package has two struct types,
@@ -2709,8 +3103,10 @@ but does not give them field names.
 // ReadWriter stores pointers to a Reader and a Writer.
 // It implements io.ReadWriter.
 type ReadWriter struct {
-    *Reader  // *bufio.Reader
-    *Writer  // *bufio.Writer
+    // bufio.Reader and bufio.Writer, each of which of course implements the analogous interfaces from package io
+    // bufio 包中, 在 *bufio.Reader 和 *bufio.Writer 这两个 receiver 上面定义了 package io 包中那些接口要求的方法.
+    *Reader  // *bufio.Reader  // bufio.Reader 是一个结构体, 而 Reader 在 io 包中是interface
+    *Writer  // *bufio.Writer // bufio.Writer 是一个结构体, 而 Reader 在 io 包中是interface
 }
 </pre>
 <p>
@@ -2720,6 +3116,7 @@ can be used.
 The <code>ReadWriter</code> struct could be written as
 </p>
 <pre>
+// 非匿名形式的嵌入
 type ReadWriter struct {
     reader *Reader
     writer *Writer
@@ -2731,7 +3128,13 @@ satisfy the <code>io</code> interfaces, we would also need
 to provide forwarding methods, like this:
 </p>
 <pre>
+// 意指: 非匿名形式的嵌入,必须手动提供 Read 和 Write 方法来满足接口
 func (rw *ReadWriter) Read(p []byte) (n int, err error) {
+    // 注意后面有提到: In our example, when the Read method of
+    // a bufio.ReadWriter is invoked, it has exactly the same
+    // effect as the forwarding method written out above; the
+    // receiver is the reader field of the ReadWriter, not the
+    // ReadWriter itself.(这点很重要)
     return rw.reader.Read(p)
 }
 </pre>
@@ -2744,6 +3147,10 @@ it also satisfies all three interfaces:
 <code>io.Writer</code>, and
 <code>io.ReadWriter</code>.
 </p>
+<pre>
+    By embedding the structs directly, we avoid this bookkeeping.
+    匿名嵌入避免了需要手动提供方法来满足接口
+</pre>
 <p>
 There's an important way in which embedding differs from subclassing.  When we embed a type,
 the methods of that type become methods of the outer type,
@@ -2799,6 +3206,7 @@ we would write <code>job.Logger</code>,
 which would be useful if we wanted to refine the methods of <code>Logger</code>.
 </p>
 <pre>
+// refine the methods of Logger, 也就是对默认得到的Job.Logf方法进行了覆盖
 func (job *Job) Logf(format string, args ...interface{}) {
     job.Logger.Logf("%q: %s", job.Command, fmt.Sprintf(format, args...))
 }
@@ -2820,6 +3228,16 @@ This qualification provides some protection against changes made to types embedd
 is no problem if a field is added that conflicts with another field in another subtype if neither field
 is ever used.
 </p>
+
+<pre>
+    qualification [,kwɔlifi'keiʃən] n.
+    1.资格；合格证明，合格性
+    2.限制，限定性条件
+    3.(担任某种职务或行使某种权利等)必须具备的先决条件
+    4.定性；描述
+    
+    上文中的 'This qualification provides...' 是说 '这种合法性提供了...'
+</pre>
 
 
 <h2 id="concurrency">Concurrency</h2>
@@ -2843,6 +3261,9 @@ To encourage this way of thinking we have reduced it to a slogan:
 Do not communicate by sharing memory;
 instead, share memory by communicating.
 </blockquote>
+<pre>
+    take too far 做得过火
+</pre>
 <p>
 This approach can be taken too far.  Reference counts may be best done
 by putting a mutex around an integer variable, for instance.  But as a
@@ -2861,6 +3282,11 @@ it can also be seen as a type-safe generalization of Unix pipes.
 </p>
 
 <h3 id="goroutines">Goroutines</h3>
+
+<pre>
+    convey(传达；运输；让与)
+    connotation [,kɔnəu'teiʃən] n.1.含蓄，言外之意 2.涵义 3.【逻辑学】内涵
+</pre>
 
 <p>
 They're called <em>goroutines</em> because the existing
@@ -2937,6 +3363,7 @@ c := make(chan int)  // Allocate a channel.
 // Start the sort in a goroutine; when it completes, signal on the channel.
 go func() {
     list.Sort()
+    // 这里能使用c是因为闭包可以引用外层变量
     c &lt;- 1  // Send a signal; value does not matter.
 }()
 doSomethingForAWhile()
@@ -2950,6 +3377,18 @@ If the channel has a buffer, the sender blocks only until the
 value has been copied to the buffer; if the buffer is full, this
 means waiting until some receiver has retrieved a value.
 </p>
+<pre>
+    意思是有人抽走了数据让buffer有了空间,sender才有机会发送数据从而让自己不阻塞
+</pre>
+<pre>
+    throughput(吞吐量，通过量，总处理能力)
+    prime
+    adj. 主要的；最好的；基本的
+    adv. 极好地
+    n. 初期；青年；精华；全盛时期
+    vt. 使准备好；填装
+    vi. 作准备)
+</pre>
 <p>
 A buffered channel can be used like a semaphore, for instance to
 limit throughput.  In this example, incoming requests are passed
@@ -2960,18 +3399,19 @@ The capacity of the channel buffer limits the number of
 simultaneous calls to <code>process</code>.
 </p>
 <pre>
+// 这个例子,通过 channel 来模仿信号量, // outstanding  adj. 杰出的；显著的；未解决的；未偿付的 n. 未偿贷款
 var sem = make(chan int, MaxOutstanding)
 
 func handle(r *Request) {
-    sem &lt;- 1    // Wait for active queue to drain.
+    sem &lt;- 1    // Wait for active queue to drain. // 从sem这个channel中接收值,也就是获取使用权
     process(r)  // May take a long time.
-    &lt;-sem       // Done; enable next request to run.
+    &lt;-sem       // Done; enable next request to run. // 向sem这个channel随便发送一个值,也就是释放使用权
 }
 
 func Serve(queue chan *Request) {
     for {
         req := &lt;-queue
-        go handle(req)  // Don't wait for handle to finish.
+        go handle(req)  // Don't wait for handle to finish. // 在 handle 函数中,通过 sem 这个 channel 的缓冲长度限制了并发数
     }
 }
 </pre>
@@ -2981,6 +3421,11 @@ Once <code>MaxOutstanding</code> handlers are executing <code>process</code>,
 any more will block trying to send into the filled channel buffer,
 until one of the existing handlers finishes and receives from the buffer.
 </p>
+
+<pre>
+    deficiency(n. 缺陷,缺点)
+    gate(给…安装门(或阀门,牌楼等))
+</pre>
 
 <p>
 This design has a problem, though: <code>Serve</code>
@@ -2995,6 +3440,7 @@ Here's an obvious solution, but beware it has a bug we'll fix subsequently:
 
 <pre>
 func Serve(queue chan *Request) {
+    // 通过range来从chan中接收值,赋值给req
     for req := range queue {
         sem &lt;- 1
         go func() {
@@ -3018,6 +3464,7 @@ to the closure in the goroutine:
 func Serve(queue chan *Request) {
     for req := range queue {
         sem &lt;- 1
+        // 类似 javascript 的闭包解决方案
         go func(req *Request) {
             process(req)
             &lt;-sem
@@ -3035,6 +3482,8 @@ name, as in this example:
 <pre>
 func Serve(queue chan *Request) {
     for req := range queue {
+        // 类似于 javascript 的 var that = this 解决方案,但因为 golang 不像 js
+        // golang拥有块级作用域,块级作用域内声明的变量会仅仅在内层块内有效,会覆盖掉外层的同名变量
         req := req // Create new instance of req for the goroutine.
         sem &lt;- 1
         go func() {
@@ -3050,6 +3499,13 @@ It may seem odd to write
 
 <pre>
 req := req
+</pre>
+
+<pre>
+    deliberately(adv. 故意地；谨慎地；慎重地)
+    demultiplexing(n. 多路分解；多路解编；分成多路处理)
+    idealized(adj. 理想化的)
+    schematic(adj. 图解的；概要的 n. 原理图；图解视图)
 </pre>
 
 <p>
@@ -3120,7 +3576,7 @@ func sum(a []int) (s int) {
 }
 
 request := &amp;Request{[]int{3, 4, 5}, sum, make(chan int)}
-// Send request
+// Send request // 在这里发送
 clientRequests &lt;- request
 // Wait for response.
 fmt.Printf("answer: %d\n", &lt;-request.resultChan)
@@ -3140,6 +3596,14 @@ There's clearly a lot more to do to make it realistic, but this
 code is a framework for a rate-limited, parallel, non-blocking RPC
 system, and there's not a mutex in sight.
 </p>
+
+<pre>
+    realistic(adj. 现实的；现实主义的；逼真的；实在论的;具有真实感)
+    in sight - adv. 在即，在望；看得见；被看到
+    Parallelization([,pærəlelai'zeiʃən]并行化)
+    idealized(adj. 理想化的)
+    draining(vt. 喝光，耗尽；使流出；排掉水)
+</pre>
 
 <h3 id="parallel">Parallelization</h3>
 <p>
@@ -3173,17 +3637,33 @@ launching all the goroutines.
 <pre>
 const numCPU = 4 // number of CPU cores
 
+// 在 Vector 类型上面定义的方法 DoAll
 func (v Vector) DoAll(u Vector) {
-    c := make(chan int, numCPU)  // Buffering optional but sensible.
+    c := make(chan int, numCPU)  // Buffering optional but sensible. // channel 的缓冲数为 cpu 数量
     for i := 0; i &lt; numCPU; i++ {
+        /* 假设cpu为4核,v的长度为20,则会生成4个goroutine
+         1: 负责 0-4  : v.DoSome(0, 5, u, c)
+         2: 负责 5-9  : v.DoSome(5, 10, u, c)
+         3: 负责 10-14: v.DoSome(10, 15, u, c)
+         2: 负责 15-20: v.DoSome(15, 20, u, c)
+         */
         go v.DoSome(i*len(v)/numCPU, (i+1)*len(v)/numCPU, u, c)
     }
     // Drain the channel.
     for i := 0; i &lt; numCPU; i++ {
+        // 等待4次 c 的回传
         &lt;-c    // wait for one task to complete
     }
     // All done.
 }
+</pre>
+
+<pre>
+    dedicates(vt. 致力；献身；题献)
+    retired(退休)
+    cited(v. 引用（cite的过去分词）)
+    A leaky(adj. 漏的；有漏洞的) buffer
+    abstracted from - 从···提取
 </pre>
 <p>
 Rather than create a constant value for numCPU, we can ask the runtime what
@@ -3221,6 +3701,11 @@ For a discussion of the distinction, see the talk cited in
 blog post</a>.
 
 <h3 id="leaky_buffer">A leaky buffer</h3>
+
+<pre>
+    漏桶算法(Leaky Bucket)
+    https://baike.baidu.com/item/%E6%BC%8F%E6%A1%B6%E7%AE%97%E6%B3%95/8455361?fr=aladdin
+</pre>
 
 <p>
 The tools of concurrent programming can even make non-concurrent
@@ -3266,6 +3751,7 @@ func server() {
         case freeList &lt;- b:
             // Buffer on free list; nothing more to do.
         default:
+            // 如果上一个case没有通过,说明freeList满了
             // Free list full, just carry on.
         }
     }
@@ -3285,6 +3771,24 @@ This implementation builds a leaky bucket free list
 in just a few lines, relying on the buffered channel and
 the garbage collector for bookkeeping.
 </p>
+<pre>
+    客户端会尝试从空闲链表freeList中获取Buffer对象；如果没有可用对象，则分配一个新
+    的。服务器端会将用完的Buffer对象 b 加入到空闲链表freeList中，如果链表已满，则
+    将b丢弃，垃圾收集器会在未来某个时刻自动回收对应的内存单元。（select语句中
+    的default分支会在没有其他case分支满足条件时执行，这意味着select语句块不会阻
+    塞。）以上就是一个 Leaky Bucket Free List 的简单实现，借助Go语言中带缓冲
+    的channel以及“垃圾收集”机制，我们仅用几行代码就将其搞定了。
+    
+    leaky(adj. 漏的；有漏洞的)
+    bucket(n. 桶，水桶；铲斗；一桶的量v. 倾盆而下；颠簸着行进) free list
+    feasible(adj. 可行的；可能的；可实行的)
+    
+    in effect
+        在功效方面；实际上；实质上；事实上
+        在实行中，在实施中，有效
+        在结果方面
+
+</pre>
 
 <h2 id="errors">Errors</h2>
 
@@ -3408,18 +3912,34 @@ happened, such as exiting an infinite loop.
 
 <pre>
 // A toy implementation of cube root using Newton's method.
+// (toy n. 玩具)
+// cube root[立方根:cube root]
 func CubeRoot(x float64) float64 {
     z := x/3   // Arbitrary initial value
+    // 1000000 - 1百万
     for i := 0; i &lt; 1e6; i++ {
         prevz := z
         z -= (z*z*z-x) / (3*z*z)
         if veryClose(z, prevz) {
-            return z
+            return z // 从这里返回
         }
     }
     // A million iterations has not converged; something is wrong.
+    // converged(收敛的)
+    // 之前在循环中有 return, 如果到了这一行,说明有问题,该 panic
     panic(fmt.Sprintf("CubeRoot(%g) did not converge", x))
 }
+</pre>
+
+<pre>
+    %g说明:
+    %e	scientific notation, e.g. -1234.456e+78
+    %f	decimal point but no exponent, e.g. 123.456
+    %g	%e for large exponents, %f otherwise
+    counterexample(反例)
+    regain( 恢复；重新获得；收回)
+    
+    recover 只在 deferred function 中有用,其他地方用起来没有意义
 </pre>
 
 <p>
@@ -3511,9 +4031,12 @@ an <code>error</code> method, and the <code>Compile</code> function.
 </p>
 
 <pre>
+// 这是一个 regexp 包的 local error type
 // Error is the type of a parse error; it satisfies the error interface.
 type Error string
 func (e Error) Error() string {
+    // e的类型为Error,虽然底层类型本质上是string类型,
+    // 但不会自动做Error到string的类型转换,还是必须用string(e)转换类型
     return string(e)
 }
 
@@ -3530,6 +4053,7 @@ func Compile(str string) (regexp *Regexp, err error) {
     defer func() {
         if e := recover(); e != nil {
             regexp = nil    // Clear return value.
+            // 这是一个 type assertion, 这种类型的写法当assertion失败时会panic
             err = e.(Error) // Will re-panic if not a parse error.
         }
     }()
@@ -3562,6 +4086,7 @@ the parse stack by hand:
 
 <pre>
 if pos == 0 {
+    正则不应该以星号开头,因此这是一个parse error
     re.error("'*' illegal at start of expression")
 }
 </pre>
@@ -3583,6 +4108,16 @@ display only the original value, you can write a little more code to
 filter unexpected problems and re-panic with the original error.
 That's left as an exercise for the reader.
 </p>
+
+<pre>
+    顺便说一下，当确实有错误发生时，我们习惯采取的“重新触发panic”（re-panic）的
+    方法会改变panic的值。但新旧错误信息都会出现在崩溃报告中，引发错误的原始点仍然
+    可以找到。所以，通常这种简单的重新触发panic的机制就足够了—所有这些错误最终导
+    致了程序的崩溃—但是如果只想显示最初的错误信息的话，你就需要稍微多写一些代码
+    来过滤掉那些由重新触发引入的多余信息。这个功能就留给读者自己去实现吧！
+    
+    上面的re-panic其实相当于异常处理的重新抛出异常
+</pre>
 
 
 <h2 id="web_server">A web server</h2>

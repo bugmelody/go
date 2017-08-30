@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
-// [[[5-over]]] 2017-6-14 09:20:04
+// [[[6-over]]] 2017-08-21 19:05:58
 
 package driver
 
@@ -264,6 +264,7 @@ func callValuerValue(vr Valuer) (v Value, err error) {
 	return vr.Value()
 }
 
+// 这里只声明了receiver类型,并没有声明receiver变量
 func (defaultConverter) ConvertValue(v interface{}) (Value, error) {
 	if IsValue(v) {
 		// 文档:DefaultParameterConverter returns its argument directly if IsValue(arg).

@@ -9,8 +9,11 @@ import "fmt"
 type ByteSize float64
 
 const (
+	// 开始时候,iota 是 0
 	_           = iota // ignore first value by assigning to blank identifier
+	// 相当于: KB ByteSize = 1 << (10 * iota)
 	KB ByteSize = 1 << (10 * iota)
+	// 相当于: MB ByteSize = 1 << (10 * 2),以此类推
 	MB
 	GB
 	TB

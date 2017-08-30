@@ -129,6 +129,7 @@ type MarshalerAttr interface {
 // MarshalIndent works like Marshal, but each XML element begins on a new
 // indented line that starts with prefix and is followed by one or more
 // copies of indent according to the nesting depth.
+// @see
 func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 	var b bytes.Buffer
 	enc := NewEncoder(&b)
@@ -165,6 +166,9 @@ func (enc *Encoder) Indent(prefix, indent string) {
 // of Go values to XML.
 //
 // Encode calls Flush before returning.
+//
+// 内部调用了Flush
+// @see,比较EncodeElement
 func (enc *Encoder) Encode(v interface{}) error {
 	err := enc.p.marshalValue(reflect.ValueOf(v), nil, nil)
 	if err != nil {
@@ -180,6 +184,9 @@ func (enc *Encoder) Encode(v interface{}) error {
 // of Go values to XML.
 //
 // EncodeElement calls Flush before returning.
+//
+// 内部调用了Flush
+// @see,比较Encode
 func (enc *Encoder) EncodeElement(v interface{}, start StartElement) error {
 	err := enc.p.marshalValue(reflect.ValueOf(v), nil, &start)
 	if err != nil {
@@ -203,6 +210,8 @@ var (
 // Callers that create an Encoder and then invoke EncodeToken directly, without
 // using Encode or EncodeElement, need to call Flush when finished to ensure
 // that the XML is written to the underlying writer.
+//
+// 内部没有调用Flush
 //
 // EncodeToken allows writing a ProcInst with Target set to "xml" only as the first token
 // in the stream.

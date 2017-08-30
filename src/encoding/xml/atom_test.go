@@ -31,7 +31,7 @@ type Feed struct 中的字段定义顺序是:
 	Title   string    `xml:"title"`
 	Id      string    `xml:"id"`
 	Link    []Link    `xml:"link"`
-	Updated time.Time `xml:"updated,attr"`
+	Updated time.Time `xml:"updated,attr"` 这是属性
 	Author  Person    `xml:"author"`
 	Entry   []Entry   `xml:"entry"`
 

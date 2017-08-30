@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
-// [[[5-over]]] 2017-6-13 11:15:32
+// [[[6-over]]] 2017-08-21 13:50:27
 
 // Package sql provides a generic interface around SQL (or SQL-like)
 // databases.
@@ -70,13 +70,13 @@ func unregisterAllDrivers() {
 
 // Drivers returns a sorted list of the names of the registered drivers.
 //
-// Drivers会返回当前已经注册的driver的names, 按照 sort.Strings 进行排序.
+// Drivers会返回当前已经注册的driver的names,按照sort.Strings进行排序.
 // @see
 func Drivers() []string {
 	// 注意这里由于只需要读,因此使用的是RLock()
 	driversMu.RLock()
 	defer driversMu.RUnlock()
-	// 最后的返回值
+	// 声明最后的返回值
 	var list []string
 	for name := range drivers {
 		list = append(list, name)
@@ -98,6 +98,8 @@ type NamedArg struct {
 	//
 	// If empty, the ordinal position in the argument list will be
 	// used.
+	//
+	// Name must omit any symbol prefix. 是指比如 ':name', 应该忽略冒号成为 'name'
 	//
 	// Name must omit any symbol prefix.
 	Name string
@@ -286,6 +288,9 @@ func (n NullBool) Value() (driver.Value, error) {
 // Scanner is an interface used by Scan.
 type Scanner interface {
 	// Scan assigns a value from a database driver.
+	//
+	// src参数代表了database driver的值
+	// Scan方法调用表示将database driver的值扫描到一个目标变量
 	//
 	// The src value will be of one of the following types:
 	//
@@ -2036,6 +2041,8 @@ func (tx *Tx) Query(query string, args ...interface{}) (*Rows, error) {
 // If the query selects no rows, the *Row's Scan will return ErrNoRows.
 // Otherwise, the *Row's Scan scans the first selected row and discards
 // the rest.
+//
+// @see
 func (tx *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
 	rows, err := tx.QueryContext(ctx, query, args...)
 	return &Row{rows: rows, err: err}

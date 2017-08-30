@@ -772,6 +772,13 @@ func localRedirect(w ResponseWriter, r *Request, newPath string) {
 // 1. 上溯： Their inquiries ascend to the antiquity. 他们的研究上溯古代。
 // 2. 上升： The smoke ascended to the sky. 烟一直升天。
 // As a precaution 作为一项预防措施, 为预防起见
+//
+// 观察源码发现:
+// If Content-Type isn't set, use the file's extension to find it, but
+// if the Content-Type is unset explicitly, do not sniff the type.
+// 也就是说,如果调用此函数之前,手动设置了header[Content-Type],会使用手动设置的Content-Type.
+// 如果没有设置过,会尝试通过使用文件扩展名'mime.TypeByExtension(filepath.Ext(name))'和'http.DetectContentType(文件前512字节)'决定Content-Type
+// 如果the Content-Type is unset explicitly,不会进行sniff(比如设置w.Header().Set("Content-Type", nil)),因此响应中也就不会发送Content-Type
 func ServeFile(w ResponseWriter, r *Request, name string) {
 	if containsDotDot(r.URL.Path) {
 		// Too many programs use r.URL.Path to construct the argument to
