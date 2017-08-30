@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
-// [[[1-over]]] 2017-6-29 19:47:57
+// [[[2-over]]] 2017-08-30 12:58:52
 
 package sync
 
@@ -17,6 +17,8 @@ import (
 // It is optimized for use in concurrent loops with keys that are
 // stable over time, and either few steady-state stores, or stores
 // localized to one goroutine per key.
+//
+// steady ['stedɪ] adj. 稳定的；不变的；沉着的
 //
 // For use cases that do not share these attributes, it will likely have
 // comparable or worse performance and worse type safety than an ordinary
