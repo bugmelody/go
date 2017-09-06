@@ -533,8 +533,9 @@ func orderstmt(n *Node, order *Order) {
 		// out map read from map write when l is
 		// a map index expression.
 		t := marktemp(order)
-
 		n.Left = orderexpr(n.Left, order, nil)
+		n.Right = orderexpr(n.Right, order, nil)
+
 		n.Left = ordersafeexpr(n.Left, order)
 		tmp1 := treecopy(n.Left, src.NoXPos)
 		if tmp1.Op == OINDEXMAP {
@@ -761,8 +762,9 @@ func orderstmt(n *Node, order *Order) {
 			r := n.Right
 			n.Right = ordercopyexpr(r, r.Type, order, 0)
 
-			// n->alloc is the temp for the iterator.
-			prealloc[n] = ordertemp(types.Types[TUINT8], order, true)
+			// prealloc[n] is the temp for the iterator.
+			// hiter contains pointers and needs to be zeroed.
+			prealloc[n] = ordertemp(hiter(n.Type), order, true)
 		}
 		for i := range n.List.Slice() {
 			n.List.SetIndex(i, orderexprinplace(n.List.Index(i), order))

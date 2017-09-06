@@ -258,6 +258,11 @@ var allAsmTests = []*asmTests{
 		tests:   linuxMIPSTests,
 	},
 	{
+		arch:  "mips64",
+		os:    "linux",
+		tests: linuxMIPS64Tests,
+	},
+	{
 		arch:  "ppc64le",
 		os:    "linux",
 		tests: linuxPPC64LETests,
@@ -826,6 +831,20 @@ var linuxAMD64Tests = []*asmTest{
 		}`,
 		pos: []string{"\tADDQ\t[$]19", "\tIMULQ"}, // (a+19)*n
 	},
+	{
+		fn: `
+		func mul4(n int) int {
+			return 23*n - 9*n
+		}`,
+		pos: []string{"\tIMULQ\t[$]14"}, // 14*n
+	},
+	{
+		fn: `
+		func mul5(a, n int) int {
+			return a*n - 19*n
+		}`,
+		pos: []string{"\tADDQ\t[$]-19", "\tIMULQ"}, // (a-19)*n
+	},
 
 	// see issue 19595.
 	// We want to merge load+op in f58, but not in f59.
@@ -1144,6 +1163,20 @@ var linux386Tests = []*asmTest{
 		}
 		`,
 		pos: []string{"TEXT\t.*, [$]0-4"},
+	},
+	{
+		fn: `
+		func mul3(n int) int {
+			return 23*n - 9*n
+		}`,
+		pos: []string{"\tIMULL\t[$]14"}, // 14*n
+	},
+	{
+		fn: `
+		func mul4(a, n int) int {
+			return n*a - a*19
+		}`,
+		pos: []string{"\tADDL\t[$]-19", "\tIMULL"}, // (n-19)*a
 	},
 }
 
@@ -1744,6 +1777,17 @@ var linuxARM64Tests = []*asmTest{
 		`,
 		pos: []string{"TEXT\t.*, [$]-8-8"},
 	},
+	{
+		// check that we don't emit comparisons for constant shift
+		fn: `
+//go:nosplit
+		func $(x int) int {
+			return x << 17
+		}
+		`,
+		pos: []string{"LSL\t\\$17"},
+		neg: []string{"CMP"},
+	},
 }
 
 var linuxMIPSTests = []*asmTest{
@@ -1836,6 +1880,19 @@ var linuxMIPSTests = []*asmTest{
 		}
 		`,
 		pos: []string{"TEXT\t.*, [$]-4-4"},
+	},
+}
+
+var linuxMIPS64Tests = []*asmTest{
+	{
+		// check that we don't emit comparisons for constant shift
+		fn: `
+		func $(x int) int {
+			return x << 17
+		}
+		`,
+		pos: []string{"SLLV\t\\$17"},
+		neg: []string{"SGT"},
 	},
 }
 

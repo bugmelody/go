@@ -285,7 +285,9 @@ func makemap64(t *maptype, hint int64, h *hmap) *hmap {
 // If h != nil, the map can be created directly in h.
 // If h.buckets != nil, bucket pointed to can be used as the first bucket.
 func makemap(t *maptype, hint int, h *hmap) *hmap {
-	if sz := unsafe.Sizeof(hmap{}); sz > 48 || sz != t.hmap.size {
+	// The size of hmap should be 48 bytes on 64 bit
+	// and 28 bytes on 32 bit platforms.
+	if sz := unsafe.Sizeof(hmap{}); sz != 8+5*sys.PtrSize {
 		println("runtime: sizeof(hmap) =", sz, ", t.hmap.size =", t.hmap.size)
 		throw("bad hmap size")
 	}
@@ -294,43 +296,6 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 		hint = 0
 	}
 
-	if !ismapkey(t.key) {
-		throw("runtime.makemap: unsupported map key type")
-	}
-
-	// check compiler's and reflect's math
-	if t.key.size > maxKeySize && (!t.indirectkey || t.keysize != uint8(sys.PtrSize)) ||
-		t.key.size <= maxKeySize && (t.indirectkey || t.keysize != uint8(t.key.size)) {
-		throw("key size wrong")
-	}
-	if t.elem.size > maxValueSize && (!t.indirectvalue || t.valuesize != uint8(sys.PtrSize)) ||
-		t.elem.size <= maxValueSize && (t.indirectvalue || t.valuesize != uint8(t.elem.size)) {
-		throw("value size wrong")
-	}
-
-	// invariants we depend on. We should probably check these at compile time
-	// somewhere, but for now we'll do it here.
-	if t.key.align > bucketCnt {
-		throw("key align too big")
-	}
-	if t.elem.align > bucketCnt {
-		throw("value align too big")
-	}
-	if t.key.size%uintptr(t.key.align) != 0 {
-		throw("key size not a multiple of key align")
-	}
-	if t.elem.size%uintptr(t.elem.align) != 0 {
-		throw("value size not a multiple of value align")
-	}
-	if bucketCnt < 8 {
-		throw("bucketsize too small for proper alignment")
-	}
-	if dataOffset%uintptr(t.key.align) != 0 {
-		throw("need padding in bucket (key)")
-	}
-	if dataOffset%uintptr(t.elem.align) != 0 {
-		throw("need padding in bucket (value)")
-	}
 	if evacuatedX+1 != evacuatedY {
 		// evacuate relies on this relationship
 		throw("bad evacuatedN")
@@ -604,7 +569,7 @@ again:
 
 	// If we hit the max load factor or we have too many overflow buckets,
 	// and we're not already in the middle of growing, start growing.
-	if !h.growing() && (overLoadFactor(h.count, h.B) || tooManyOverflowBuckets(h.noverflow, h.B)) {
+	if !h.growing() && (overLoadFactor(h.count+1, h.B) || tooManyOverflowBuckets(h.noverflow, h.B)) {
 		hashGrow(t, h)
 		goto again // Growing the table invalidates everything, so try again
 	}
@@ -935,7 +900,7 @@ func hashGrow(t *maptype, h *hmap) {
 	// Otherwise, there are too many overflow buckets,
 	// so keep the same number of buckets and "grow" laterally.
 	bigger := uint8(1)
-	if !overLoadFactor(h.count, h.B) {
+	if !overLoadFactor(h.count+1, h.B) {
 		bigger = 0
 		h.flags |= sameSizeGrow
 	}
@@ -975,7 +940,7 @@ func hashGrow(t *maptype, h *hmap) {
 
 // overLoadFactor reports whether count items placed in 1<<B buckets is over loadFactor.
 func overLoadFactor(count int, B uint8) bool {
-	return count >= bucketCnt && uintptr(count) >= loadFactorNum*(bucketShift(B)/loadFactorDen)
+	return count > bucketCnt && uintptr(count) > loadFactorNum*(bucketShift(B)/loadFactorDen)
 }
 
 // tooManyOverflowBuckets reports whether noverflow buckets is too many for a map with 1<<B buckets.
@@ -1183,6 +1148,44 @@ func ismapkey(t *_type) bool {
 
 //go:linkname reflect_makemap reflect.makemap
 func reflect_makemap(t *maptype, cap int) *hmap {
+	// Check invariants and reflects math.
+	if sz := unsafe.Sizeof(hmap{}); sz != t.hmap.size {
+		println("runtime: sizeof(hmap) =", sz, ", t.hmap.size =", t.hmap.size)
+		throw("bad hmap size")
+	}
+	if !ismapkey(t.key) {
+		throw("runtime.reflect_makemap: unsupported map key type")
+	}
+	if t.key.size > maxKeySize && (!t.indirectkey || t.keysize != uint8(sys.PtrSize)) ||
+		t.key.size <= maxKeySize && (t.indirectkey || t.keysize != uint8(t.key.size)) {
+		throw("key size wrong")
+	}
+	if t.elem.size > maxValueSize && (!t.indirectvalue || t.valuesize != uint8(sys.PtrSize)) ||
+		t.elem.size <= maxValueSize && (t.indirectvalue || t.valuesize != uint8(t.elem.size)) {
+		throw("value size wrong")
+	}
+	if t.key.align > bucketCnt {
+		throw("key align too big")
+	}
+	if t.elem.align > bucketCnt {
+		throw("value align too big")
+	}
+	if t.key.size%uintptr(t.key.align) != 0 {
+		throw("key size not a multiple of key align")
+	}
+	if t.elem.size%uintptr(t.elem.align) != 0 {
+		throw("value size not a multiple of value align")
+	}
+	if bucketCnt < 8 {
+		throw("bucketsize too small for proper alignment")
+	}
+	if dataOffset%uintptr(t.key.align) != 0 {
+		throw("need padding in bucket (key)")
+	}
+	if dataOffset%uintptr(t.elem.align) != 0 {
+		throw("need padding in bucket (value)")
+	}
+
 	return makemap(t, cap, nil)
 }
 

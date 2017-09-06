@@ -22,8 +22,7 @@ import (
 // 参数 capacity: 代表了函数内部会分配的内部buffer的字节数
 // b: 读取到的数据
 func readAll(r io.Reader, capacity int64) (b []byte, err error) {
-	// 分配internal buffer,容量为capacity
-	buf := bytes.NewBuffer(make([]byte, 0, capacity))
+	var buf bytes.Buffer
 	// If the buffer overflows, we will get bytes.ErrTooLarge.
 	// Return that as an error. Any other panic remains.
 	defer func() {
@@ -42,9 +41,9 @@ func readAll(r io.Reader, capacity int64) (b []byte, err error) {
 			panic(e)
 		}
 	}()
-	// 将r中的内容全部读入buf
-	// buf.ReadFrom可能会panic出一个ErrTooLarge的错误,上
-	// 面的defer func中会处理这个panic,将其作为函数错误返回
+	if int64(int(capacity)) == capacity {
+		buf.Grow(int(capacity))
+	}
 	_, err = buf.ReadFrom(r)
 	// 返回buf中的内容
 	return buf.Bytes(), err
@@ -74,31 +73,20 @@ func ReadFile(filename string) ([]byte, error) {
 	defer f.Close()
 	// It's a good but not certain bet that FileInfo will tell us exactly how much to
 	// read, so let's try it but be prepared for the answer to be wrong.
-	// 需要读取多少字节
-	var n int64
+	var n int64 = bytes.MinRead
 
 	if fi, err := f.Stat(); err == nil {
-		// Don't preallocate a huge buffer, just in case.
-		// just in case: 以防万一
-		// fi.Size() 返回的是以字节为单位
-		/**
-		E后的数表示10的多少次方,用指数表示法显示数字,以 E+n 替换部分数字,
-		其中E(代表指数)表示将前面的数字乘以10的n次幂.
-		例如,用2位小数的"科学记数"格式表示12345678901,结果为 1.23E+10,即1.23乘以10的10次幂.
-		您可以指定要使用的小数位数.
-		这里: 1e9 = 1 后面带9个0 = 1 000 000 000 ≈ 1G
-		 */
-		if size := fi.Size(); size < 1e9 {
-			// 如果 fi.Size() 统计为 1G 内
+		// As initial capacity for readAll, use Size + a little extra in case Size
+		// is zero, and to avoid another allocation after Read has filled the
+		// buffer. The readAll call will read into its allocated internal buffer
+		// cheaply. If the size was wrong, we'll either waste some space off the end
+		// or reallocate as needed, but in the overwhelmingly common case we'll get
+		// it just right.
+		if size := fi.Size() + bytes.MinRead; size > n {
 			n = size
 		}
 	}
-	// As initial capacity for readAll, use n + a little extra in case Size is zero,
-	// and to avoid another allocation after Read has filled the buffer. The readAll
-	// call will read into its allocated internal buffer cheaply. If the size was
-	// wrong, we'll either waste some space off the end or reallocate as needed, but
-	// in the overwhelmingly common case we'll get it just right.
-	return readAll(f, n+bytes.MinRead)
+	return readAll(f, n)
 }
 
 // WriteFile writes data to a file named by filename.

@@ -620,6 +620,7 @@ const (
 	OpAMD64MOVWloadidx2
 	OpAMD64MOVLloadidx1
 	OpAMD64MOVLloadidx4
+	OpAMD64MOVLloadidx8
 	OpAMD64MOVQloadidx1
 	OpAMD64MOVQloadidx8
 	OpAMD64MOVBstoreidx1
@@ -627,6 +628,7 @@ const (
 	OpAMD64MOVWstoreidx2
 	OpAMD64MOVLstoreidx1
 	OpAMD64MOVLstoreidx4
+	OpAMD64MOVLstoreidx8
 	OpAMD64MOVQstoreidx1
 	OpAMD64MOVQstoreidx8
 	OpAMD64MOVBstoreconst
@@ -694,6 +696,7 @@ const (
 	OpARMRSCconst
 	OpARMMULLU
 	OpARMMULA
+	OpARMMULS
 	OpARMADDF
 	OpARMADDD
 	OpARMSUBF
@@ -7470,6 +7473,22 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
+		name:      "MOVLloadidx8",
+		auxType:   auxSymOff,
+		argLen:    3,
+		symEffect: SymRead,
+		asm:       x86.AMOVL,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{1, 65535},      // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15
+				{0, 4295032831}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15 SB
+			},
+			outputs: []outputInfo{
+				{0, 65519}, // AX CX DX BX BP SI DI R8 R9 R10 R11 R12 R13 R14 R15
+			},
+		},
+	},
+	{
 		name:        "MOVQloadidx1",
 		auxType:     auxSymOff,
 		argLen:      3,
@@ -7560,6 +7579,20 @@ var opcodeTable = [...]opInfo{
 	},
 	{
 		name:      "MOVLstoreidx4",
+		auxType:   auxSymOff,
+		argLen:    4,
+		symEffect: SymWrite,
+		asm:       x86.AMOVL,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{1, 65535},      // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15
+				{2, 65535},      // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15
+				{0, 4295032831}, // AX CX DX BX SP BP SI DI R8 R9 R10 R11 R12 R13 R14 R15 SB
+			},
+		},
+	},
+	{
+		name:      "MOVLstoreidx8",
 		auxType:   auxSymOff,
 		argLen:    4,
 		symEffect: SymWrite,
@@ -8445,6 +8478,21 @@ var opcodeTable = [...]opInfo{
 		name:   "MULA",
 		argLen: 3,
 		asm:    arm.AMULA,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14
+				{1, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14
+				{2, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14
+			},
+			outputs: []outputInfo{
+				{0, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14
+			},
+		},
+	},
+	{
+		name:   "MULS",
+		argLen: 3,
+		asm:    arm.AMULS,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14

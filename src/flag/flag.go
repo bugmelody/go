@@ -998,11 +998,8 @@ func (f *FlagSet) parseOne() (bool, error) {
 	}
 	// 后面还有需要进行解析的,准备开始解析,这里通过f.args[0]取出一个来进行解析
 	s := f.args[0]
-	if len(s) == 0 || s[0] != '-' || len(s) == 1 {
-		// 如果s长度为0
-		//   || 如果s长度不为0,s的第一个字节不是 - (说明这里已经不是flag了)
-		//   || (现在,s肯定以'-'开头)  s的长度为1字节 (说明s是单独的 -, )
-
+	if len(s) < 2 || s[0] != '-' {
+		// 如果s长度为0,说明后面没有参数了
 		// 注意在flag包开始处提到: Flag parsing stops just before the first non-flag
 		// argument ("-" is a non-flag argument) or after the terminator "--".
 		return false, nil

@@ -96,7 +96,8 @@ func makefield(name string, t *types.Type) *types.Field {
 	return f
 }
 
-func mapbucket(t *types.Type) *types.Type {
+// bmap makes the map bucket type given the type of the map.
+func bmap(t *types.Type) *types.Type {
 	if t.MapType().Bucket != nil {
 		return t.MapType().Bucket
 	}
@@ -121,11 +122,13 @@ func mapbucket(t *types.Type) *types.Type {
 
 	arr = types.NewArray(keytype, BUCKETSIZE)
 	arr.SetNoalg(true)
-	field = append(field, makefield("keys", arr))
+	keys := makefield("keys", arr)
+	field = append(field, keys)
 
 	arr = types.NewArray(valtype, BUCKETSIZE)
 	arr.SetNoalg(true)
-	field = append(field, makefield("values", arr))
+	values := makefield("values", arr)
+	field = append(field, values)
 
 	// Make sure the overflow pointer is the last memory in the struct,
 	// because the runtime assumes it can use size-ptrSize as the
@@ -144,7 +147,7 @@ func mapbucket(t *types.Type) *types.Type {
 	// so if the struct needs 64-bit padding (because a key or value does)
 	// then it would end with an extra 32-bit padding field.
 	// Preempt that by emitting the padding here.
-	if int(t.Val().Align) > Widthptr || int(t.Key().Align) > Widthptr {
+	if int(valtype.Align) > Widthptr || int(keytype.Align) > Widthptr {
 		field = append(field, makefield("pad", types.Types[TUINTPTR]))
 	}
 
@@ -155,11 +158,11 @@ func mapbucket(t *types.Type) *types.Type {
 	// the type of the overflow field to uintptr in this case.
 	// See comment on hmap.overflow in ../../../../runtime/hashmap.go.
 	otyp := types.NewPtr(bucket)
-	if !types.Haspointers(t.Val()) && !types.Haspointers(t.Key()) && t.Val().Width <= MAXVALSIZE && t.Key().Width <= MAXKEYSIZE {
+	if !types.Haspointers(valtype) && !types.Haspointers(keytype) {
 		otyp = types.Types[TUINTPTR]
 	}
-	ovf := makefield("overflow", otyp)
-	field = append(field, ovf)
+	overflow := makefield("overflow", otyp)
+	field = append(field, overflow)
 
 	// link up fields
 	bucket.SetNoalg(true)
@@ -167,10 +170,54 @@ func mapbucket(t *types.Type) *types.Type {
 	bucket.SetFields(field[:])
 	dowidth(bucket)
 
+	// Check invariants that map code depends on.
+	if !IsComparable(t.Key()) {
+		Fatalf("unsupported map key type for %v", t)
+	}
+	if BUCKETSIZE < 8 {
+		Fatalf("bucket size too small for proper alignment")
+	}
+	if keytype.Align > BUCKETSIZE {
+		Fatalf("key align too big for %v", t)
+	}
+	if valtype.Align > BUCKETSIZE {
+		Fatalf("value align too big for %v", t)
+	}
+	if keytype.Width > MAXKEYSIZE {
+		Fatalf("key size to large for %v", t)
+	}
+	if valtype.Width > MAXVALSIZE {
+		Fatalf("value size to large for %v", t)
+	}
+	if t.Key().Width > MAXKEYSIZE && !keytype.IsPtr() {
+		Fatalf("key indirect incorrect for %v", t)
+	}
+	if t.Val().Width > MAXVALSIZE && !valtype.IsPtr() {
+		Fatalf("value indirect incorrect for %v", t)
+	}
+	if keytype.Width%int64(keytype.Align) != 0 {
+		Fatalf("key size not a multiple of key align for %v", t)
+	}
+	if valtype.Width%int64(valtype.Align) != 0 {
+		Fatalf("value size not a multiple of value align for %v", t)
+	}
+	if bucket.Align%keytype.Align != 0 {
+		Fatalf("bucket align not multiple of key align %v", t)
+	}
+	if bucket.Align%valtype.Align != 0 {
+		Fatalf("bucket align not multiple of value align %v", t)
+	}
+	if keys.Offset%int64(keytype.Align) != 0 {
+		Fatalf("bad alignment of keys in bmap for %v", t)
+	}
+	if values.Offset%int64(valtype.Align) != 0 {
+		Fatalf("bad alignment of values in bmap for %v", t)
+	}
+
 	// Double-check that overflow field is final memory in struct,
 	// with no padding at end. See comment above.
-	if ovf.Offset != bucket.Width-int64(Widthptr) {
-		Fatalf("bad math in mapbucket for %v", t)
+	if overflow.Offset != bucket.Width-int64(Widthptr) {
+		Fatalf("bad offset of overflow in bmap for %v", t)
 	}
 
 	t.MapType().Bucket = bucket
@@ -186,7 +233,7 @@ func hmap(t *types.Type) *types.Type {
 		return t.MapType().Hmap
 	}
 
-	bmap := mapbucket(t)
+	bmap := bmap(t)
 
 	// build a struct:
 	// type hmap struct {
@@ -218,6 +265,13 @@ func hmap(t *types.Type) *types.Type {
 	hmap.SetLocal(t.Local())
 	hmap.SetFields(fields)
 	dowidth(hmap)
+
+	// The size of hmap should be 48 bytes on 64 bit
+	// and 28 bytes on 32 bit platforms.
+	if size := int64(8 + 5*Widthptr); hmap.Width != size {
+		Fatalf("hmap size not correct: got %d, want %d", hmap.Width, size)
+	}
+
 	t.MapType().Hmap = hmap
 	hmap.StructType().Map = t
 	return hmap
@@ -231,7 +285,7 @@ func hiter(t *types.Type) *types.Type {
 	}
 
 	hmap := hmap(t)
-	bmap := mapbucket(t)
+	bmap := bmap(t)
 
 	// build a struct:
 	// type hiter struct {
@@ -517,30 +571,12 @@ func dgopkgpathOff(s *obj.LSym, ot int, pkg *types.Pkg) int {
 	return dsymptrOff(s, ot, pkg.Pathsym, 0)
 }
 
-// isExportedField reports whether a struct field is exported.
-// It also returns the package to use for PkgPath for an unexported field.
-func isExportedField(ft *types.Field) (bool, *types.Pkg) {
-	if ft.Sym != nil && ft.Embedded == 0 {
-		return exportname(ft.Sym.Name), ft.Sym.Pkg
-	}
-	if ft.Type.Sym != nil &&
-		(ft.Type.Sym.Pkg == builtinpkg || !exportname(ft.Type.Sym.Name)) {
-		return false, ft.Type.Sym.Pkg
-	}
-	return true, nil
-}
-
 // dnameField dumps a reflect.name for a struct field.
 func dnameField(lsym *obj.LSym, ot int, spkg *types.Pkg, ft *types.Field) int {
-	var name string
-	if ft.Sym != nil {
-		name = ft.Sym.Name
+	if !exportname(ft.Sym.Name) && ft.Sym.Pkg != spkg {
+		Fatalf("package mismatch for %v", ft.Sym)
 	}
-	isExported, fpkg := isExportedField(ft)
-	if isExported || fpkg == spkg {
-		fpkg = nil
-	}
-	nsym := dname(name, ft.Note, fpkg, isExported)
+	nsym := dname(ft.Sym.Name, ft.Note, nil, exportname(ft.Sym.Name))
 	return dsymptr(lsym, ot, nsym, 0)
 }
 
@@ -1251,7 +1287,7 @@ ok:
 	case TMAP:
 		s1 := dtypesym(t.Key())
 		s2 := dtypesym(t.Val())
-		s3 := dtypesym(mapbucket(t))
+		s3 := dtypesym(bmap(t))
 		s4 := dtypesym(hmap(t))
 		ot = dcommontype(lsym, ot, t)
 		ot = dsymptr(lsym, ot, s1.Linksym(), 0)
@@ -1274,7 +1310,7 @@ ok:
 			ot = duint8(lsym, ot, 0) // not indirect
 		}
 
-		ot = duint16(lsym, ot, uint16(mapbucket(t).Width))
+		ot = duint16(lsym, ot, uint16(bmap(t).Width))
 		ot = duint8(lsym, ot, uint8(obj.Bool2int(isreflexive(t.Key()))))
 		ot = duint8(lsym, ot, uint8(obj.Bool2int(needkeyupdate(t.Key()))))
 		ot = dextratype(lsym, ot, t, 0)
@@ -1305,21 +1341,21 @@ ok:
 			n++
 		}
 
-		ot = dcommontype(lsym, ot, t)
-		pkg := localpkg
-		if t.Sym != nil {
-			pkg = t.Sym.Pkg
-		} else {
-			// Unnamed type. Grab the package from the first field, if any.
-			for _, f := range t.Fields().Slice() {
-				if f.Embedded != 0 {
-					continue
-				}
-				pkg = f.Sym.Pkg
+		// All non-exported struct field names within a struct
+		// type must originate from a single package. By
+		// identifying and recording that package within the
+		// struct type descriptor, we can omit that
+		// information from the field descriptors.
+		var spkg *types.Pkg
+		for _, f := range t.Fields().Slice() {
+			if !exportname(f.Sym.Name) {
+				spkg = f.Sym.Pkg
 				break
 			}
 		}
-		ot = dgopkgpath(lsym, ot, pkg)
+
+		ot = dcommontype(lsym, ot, t)
+		ot = dgopkgpath(lsym, ot, spkg)
 		ot = dsymptr(lsym, ot, lsym, ot+3*Widthptr+uncommonSize(t))
 		ot = duintptr(lsym, ot, uint64(n))
 		ot = duintptr(lsym, ot, uint64(n))
@@ -1329,7 +1365,7 @@ ok:
 
 		for _, f := range t.Fields().Slice() {
 			// ../../../../runtime/type.go:/structField
-			ot = dnameField(lsym, ot, pkg, f)
+			ot = dnameField(lsym, ot, spkg, f)
 			ot = dsymptr(lsym, ot, dtypesym(f.Type).Linksym(), 0)
 			offsetAnon := uint64(f.Offset) << 1
 			if offsetAnon>>1 != uint64(f.Offset) {

@@ -264,10 +264,6 @@ func (p *Package) guessKinds(f *File) []*Name {
 			if n.IsConst() {
 				continue
 			}
-
-			if isName(n.Define) {
-				n.C = n.Define
-			}
 		}
 
 		// If this is a struct, union, or enum type name, no need to guess the kind.
@@ -305,18 +301,12 @@ func (p *Package) guessKinds(f *File) []*Name {
 	//	void __cgo_f_xxx_4(void) { static const double __cgo_undefined__4 = (name); }
 	//	#line xxx "not-str-lit"
 	//	void __cgo_f_xxx_5(void) { static const char __cgo_undefined__5[] = (name); }
-	//	#line xxx "not-signed-int-const"
-	//	#if 0 < -(name)
-	//	#line xxx "not-signed-int-const"
-	//	#error found unsigned int
-	//	#endif
 	//
 	// If we see an error at not-declared:xxx, the corresponding name is not declared.
 	// If we see an error at not-type:xxx, the corresponding name is a type.
 	// If we see an error at not-int-const:xxx, the corresponding name is not an integer constant.
 	// If we see an error at not-num-const:xxx, the corresponding name is not a number constant.
 	// If we see an error at not-str-lit:xxx, the corresponding name is not a string literal.
-	// If we see an error at not-signed-int-const:xxx, the corresponding name is not a signed integer literal.
 	//
 	// The specific input forms are chosen so that they are valid C syntax regardless of
 	// whether name denotes a type or an expression.
@@ -335,18 +325,12 @@ func (p *Package) guessKinds(f *File) []*Name {
 			"#line %d \"not-num-const\"\n"+
 			"void __cgo_f_%d_4(void) { static const double __cgo_undefined__4 = (%s); }\n"+
 			"#line %d \"not-str-lit\"\n"+
-			"void __cgo_f_%d_5(void) { static const char __cgo_undefined__5[] = (%s); }\n"+
-			"#line %d \"not-signed-int-const\"\n"+
-			"#if 0 < (%s)\n"+
-			"#line %d \"not-signed-int-const\"\n"+
-			"#error found unsigned int\n"+
-			"#endif\n",
+			"void __cgo_f_%d_5(void) { static const char __cgo_undefined__5[] = (%s); }\n",
 			i+1, i+1, n.C,
 			i+1, i+1, n.C,
 			i+1, i+1, n.C,
 			i+1, i+1, n.C,
 			i+1, i+1, n.C,
-			i+1, n.C, i+1,
 		)
 	}
 	fmt.Fprintf(&b, "#line 1 \"completed\"\n"+
@@ -365,7 +349,6 @@ func (p *Package) guessKinds(f *File) []*Name {
 		notNumConst
 		notStrLiteral
 		notDeclared
-		notSignedIntConst
 	)
 	sawUnmatchedErrors := false
 	for _, line := range strings.Split(stderr, "\n") {
@@ -419,8 +402,6 @@ func (p *Package) guessKinds(f *File) []*Name {
 			sniff[i] |= notNumConst
 		case "not-str-lit":
 			sniff[i] |= notStrLiteral
-		case "not-signed-int-const":
-			sniff[i] |= notSignedIntConst
 		default:
 			if isError {
 				sawUnmatchedErrors = true
@@ -436,15 +417,11 @@ func (p *Package) guessKinds(f *File) []*Name {
 	}
 
 	for i, n := range names {
-		switch sniff[i] &^ notSignedIntConst {
+		switch sniff[i] {
 		default:
 			error_(f.NamePos[n], "could not determine kind of name for C.%s", fixGo(n.Go))
 		case notStrLiteral | notType:
-			if sniff[i]&notSignedIntConst != 0 {
-				n.Kind = "uconst"
-			} else {
-				n.Kind = "iconst"
-			}
+			n.Kind = "iconst"
 		case notIntConst | notStrLiteral | notType:
 			n.Kind = "fconst"
 		case notIntConst | notNumConst | notType:
@@ -489,7 +466,7 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 	b.WriteString("#line 1 \"cgo-dwarf-inference\"\n")
 	for i, n := range names {
 		fmt.Fprintf(&b, "__typeof__(%s) *__cgo__%d;\n", n.C, i)
-		if n.Kind == "iconst" || n.Kind == "uconst" {
+		if n.Kind == "iconst" {
 			fmt.Fprintf(&b, "enum { __cgo_enum__%d = %s };\n", i, n.C)
 		}
 	}
@@ -498,7 +475,7 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 	// so we can read them out of the object file.
 	fmt.Fprintf(&b, "long long __cgodebug_ints[] = {\n")
 	for _, n := range names {
-		if n.Kind == "iconst" || n.Kind == "uconst" {
+		if n.Kind == "iconst" {
 			fmt.Fprintf(&b, "\t%s,\n", n.C)
 		} else {
 			fmt.Fprintf(&b, "\t0,\n")
@@ -596,11 +573,11 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 			switch n.Kind {
 			case "iconst":
 				if i < len(ints) {
-					n.Const = fmt.Sprintf("%#x", ints[i])
-				}
-			case "uconst":
-				if i < len(ints) {
-					n.Const = fmt.Sprintf("%#x", uint64(ints[i]))
+					if _, ok := types[i].(*dwarf.UintType); ok {
+						n.Const = fmt.Sprintf("%#x", uint64(ints[i]))
+					} else {
+						n.Const = fmt.Sprintf("%#x", ints[i])
+					}
 				}
 			case "fconst":
 				if i < len(floats) {
@@ -1073,7 +1050,17 @@ func (p *Package) rewriteRef(f *File) {
 	// Assign mangled names.
 	for _, n := range f.Name {
 		if n.Kind == "not-type" {
-			n.Kind = "var"
+			if n.Define == "" {
+				n.Kind = "var"
+			} else {
+				n.Kind = "macro"
+				n.FuncType = &FuncType{
+					Result: n.Type,
+					Go: &ast.FuncType{
+						Results: &ast.FieldList{List: []*ast.Field{{Type: n.Type.Go}}},
+					},
+				}
+			}
 		}
 		if n.Mangle == "" {
 			p.mangleName(n)
@@ -1127,7 +1114,8 @@ func (p *Package) rewriteRef(f *File) {
 				break
 			}
 		case "expr":
-			if r.Name.Kind == "func" {
+			switch r.Name.Kind {
+			case "func":
 				if builtinDefs[r.Name.C] != "" {
 					error_(r.Pos(), "use of builtin '%s' not in function call", fixGo(r.Name.C))
 				}
@@ -1154,24 +1142,24 @@ func (p *Package) rewriteRef(f *File) {
 					Fun:  &ast.Ident{NamePos: (*r.Expr).Pos(), Name: "_Cgo_ptr"},
 					Args: []ast.Expr{ast.NewIdent(name.Mangle)},
 				}
-			} else if r.Name.Kind == "type" {
+			case "type":
 				// Okay - might be new(T)
 				if r.Name.Type == nil {
 					error_(r.Pos(), "expression C.%s: undefined C type '%s'", fixGo(r.Name.Go), r.Name.C)
 					break
 				}
 				expr = r.Name.Type.Go
-			} else if r.Name.Kind == "var" {
+			case "var":
 				expr = &ast.StarExpr{Star: (*r.Expr).Pos(), X: expr}
+			case "macro":
+				expr = &ast.CallExpr{Fun: expr}
 			}
-
 		case "selector":
 			if r.Name.Kind == "var" {
 				expr = &ast.StarExpr{Star: (*r.Expr).Pos(), X: expr}
 			} else {
 				error_(r.Pos(), "only C variables allowed in selector expression %s", fixGo(r.Name.Go))
 			}
-
 		case "type":
 			if r.Name.Kind != "type" {
 				error_(r.Pos(), "expression C.%s used as type", fixGo(r.Name.Go))
