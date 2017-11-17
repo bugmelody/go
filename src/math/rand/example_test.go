@@ -13,6 +13,7 @@ import (
 
 // These tests serve as an example but also make sure we don't change
 // the output of the random number generator when given a fixed seed.
+// 当seed固定的时候,生成的随机数序列是固定的
 
 func Example() {
 	rand.Seed(42) // Try changing this number!
@@ -48,6 +49,7 @@ func Example_rand() {
 	// Create and seed the generator.
 	// Typically a non-fixed seed should be used, such as time.Now().UnixNano().
 	// Using a fixed seed will produce the same output on every run.
+	// every run 每次运行
 	r := rand.New(rand.NewSource(99))
 
 	// The tabwriter here helps us generate aligned output.

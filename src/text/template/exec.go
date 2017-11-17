@@ -202,6 +202,8 @@ func (t *Template) execute(wr io.Writer, data interface{}) (err error) {
 // prefixed by the string "; defined templates are: ". If there are none,
 // it returns the empty string. For generating an error message here
 // and in html/template.
+//
+// @see
 func (t *Template) DefinedTemplates() string {
 	if t.common == nil {
 		return ""
@@ -279,6 +281,8 @@ func (s *state) walkIfOrWith(typ parse.NodeType, dot reflect.Value, pipe *parse.
 // IsTrue reports whether the value is 'true', in the sense of not the zero of its type,
 // and whether the value has a meaningful truth value. This is the definition of
 // truth used by if and other such actions.
+//
+// @see
 func IsTrue(val interface{}) (truth, ok bool) {
 	return isTrue(reflect.ValueOf(val))
 }

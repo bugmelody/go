@@ -29,6 +29,8 @@ type (
 	// unclosed tags or comments. The outputs of a sound HTML sanitizer
 	// and a template escaped by this package are fine for use with HTML.
 	//
+	// 这里的sound应该翻译为: adj. 健全的，健康的；合理的；可靠的；有效彻底的
+	//
 	// Use of this type presents a security risk:
 	// the encapsulated content should come from a trusted source,
 	// as it will be included verbatim in the template output.

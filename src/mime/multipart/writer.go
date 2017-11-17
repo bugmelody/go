@@ -78,6 +78,9 @@ func (w *Writer) SetBoundary(boundary string) error {
 // FormDataContentType returns the Content-Type for an HTTP
 // multipart/form-data with this Writer's Boundary.
 //
+// FormDataContentType返回的字符串可以被设置给整个请求的Header[Content-Type]
+// 比如,可以这样使用:
+// Request.Header.Set("Content-Type", mw.FormDataContentType())
 // @see
 func (w *Writer) FormDataContentType() string {
 	return "multipart/form-data; boundary=" + w.boundary
@@ -154,7 +157,8 @@ func escapeQuotes(s string) string {
 //
 // 1.jpg的内容
 //
-// @看源码
+// 本函数是针对文件上传字段,不是针对普通表单字段,普通表单字段字段应该使用Writer.CreateFormField
+// @see
 func (w *Writer) CreateFormFile(fieldname, filename string) (io.Writer, error) {
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition",
@@ -174,7 +178,8 @@ func (w *Writer) CreateFormFile(fieldname, filename string) (io.Writer, error) {
 // 
 // 用户名
 //
-// @看源码
+// 本函数是针对普通表单字段,不是针对文件上传字段,文件上传字段应该使用Writer.CreateFormFile
+// @see
 func (w *Writer) CreateFormField(fieldname string) (io.Writer, error) {
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition",

@@ -1528,6 +1528,7 @@ func (r *Request) ParseForm() error {
 // After one call to ParseMultipartForm, subsequent calls have no effect.
 //
 // multipart/form-data(文件上传)
+// 本方法调用后,就可以使用r.MultipartForm字段了
 //
 // @see
 func (r *Request) ParseMultipartForm(maxMemory int64) error {

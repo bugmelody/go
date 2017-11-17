@@ -169,6 +169,8 @@ func readSetCookies(h Header) []*Cookie {
 //
 // ??? 这个函数是设置整个 "Set-Cookie" 头???
 // ??? 一个http相应只能有一个"Set-Cookie" 头???
+//
+// ??? w.Header().Add 是进行了实际的发送还是仅仅是记录了下来 ???
 func SetCookie(w ResponseWriter, cookie *Cookie) {
 	if v := cookie.String(); v != "" {
 		w.Header().Add("Set-Cookie", v)

@@ -145,6 +145,7 @@ type Encoder struct {
 }
 
 // NewEncoder returns a new encoder that writes to w.
+// @see
 func NewEncoder(w io.Writer) *Encoder {
 	e := &Encoder{printer{Writer: bufio.NewWriter(w)}}
 	e.p.encoder = e

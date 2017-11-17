@@ -468,6 +468,8 @@ Parse may be called multiple times to assemble the various associated templates;
 see the ParseFiles and ParseGlob functions and methods for simple ways to parse
 related templates stored in files.
 
+需要去看看ParseFiles and ParseGlob这两个函数
+
 A template may be executed directly or through ExecuteTemplate, which executes
 an associated template identified by name. To invoke our example above, we
 might write,

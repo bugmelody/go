@@ -1135,6 +1135,9 @@ type StructField struct {
 	// PkgPath is the package path that qualifies a lower case (unexported)
 	// field name. It is empty for upper case (exported) field names.
 	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
+	//
+	// 对于非导出字段,是 packageName.fieldName
+	// 对于导出字段,是""
 	PkgPath string
 
 	Type      Type      // field type

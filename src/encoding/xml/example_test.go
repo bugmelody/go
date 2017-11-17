@@ -110,7 +110,7 @@ func ExampleUnmarshal() {
 	type Result struct {
 		XMLName xml.Name `xml:"Person"`
 		Name    string   `xml:"FullName"`
-		// 注: Note that the Phone field isn't modified
+		// 注: Note that the Phone field isn't modified , 因为xml中不存在Phone元素
 		Phone   string
 		Email   []Email
 		// 注: the Groups field is assigned considering the element path provided in its tag.

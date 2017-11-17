@@ -49,7 +49,9 @@ type Name struct {
 
 // An Attr represents an attribute in an XML element (Name=Value).
 type Attr struct {
+	// attr的name
 	Name  Name
+	// attr的value
 	Value string
 }
 
@@ -133,6 +135,7 @@ func (d Directive) Copy() Directive { return Directive(makeCopy(d)) }
 //
 // @see
 func CopyToken(t Token) Token {
+	// 这里的 type switch 是必须的
 	switch v := t.(type) {
 	case CharData:
 		return v.Copy()

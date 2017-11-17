@@ -113,7 +113,7 @@ import (
 //
 //   * 如果XML元素包含一个直接子元素,其标签名匹配结构体字段的XMLName tag
 //        && 结构体的字段没有显示指定name tag(根据上条规则)
-//      此时unmarshal会映射此直接子元素到匹配的XMLName tag的字段.
+//      此时unmarshal会映射此直接子元素到匹配的XMLName tag的字段. ?????????????????????????????
 //
 //   * If the XML element contains a sub-element whose name matches a
 //      field without any mode flags (",attr", ",chardata", etc), Unmarshal
@@ -170,12 +170,14 @@ import (
 // A missing element or empty attribute value will be unmarshaled as a zero value.
 // If the field is a slice, a zero value will be appended to the field. Otherwise, the
 // field will be set to its zero value.
+// @see
 func Unmarshal(data []byte, v interface{}) error {
 	return NewDecoder(bytes.NewReader(data)).Decode(v)
 }
 
 // Decode works like Unmarshal, except it reads the decoder
 // stream to find the start element.
+// @see
 func (d *Decoder) Decode(v interface{}) error {
 	return d.DecodeElement(v, nil)
 }
@@ -199,6 +201,8 @@ func (e UnmarshalError) Error() string { return string(e) }
 
 // Unmarshaler is the interface implemented by objects that can unmarshal
 // an XML element description of themselves.
+//
+// 注意下方提到的一句话: UnmarshalXML must consume exactly one XML element.
 //
 // UnmarshalXML decodes a single XML element
 // beginning with the given start element.
@@ -778,6 +782,7 @@ Loop:
 // skip nested structures.
 // It returns nil if it finds an end element matching the start
 // element; otherwise it returns an error describing the problem.
+// @see
 func (d *Decoder) Skip() error {
 	for {
 		tok, err := d.Token()

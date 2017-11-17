@@ -95,7 +95,7 @@ how {{.}} appears when used in the context to the left.
   Context                          {{.}} After
   普通的html转义: [<=&lt;] [>&gt;]
   {{.}}                            O'Reilly: How are &lt;i&gt;you&lt;/i&gt;?
-  自动识别html属性的转义
+  自动识别html属性的转义(attr中不需要转义 < , > ,打需要转义引号
   <a title='{{.}}'>                O&#39;Reilly: How are you?
   自动识别href属性的转义
   <a href="/{{.}}">                O&#39;Reilly: How are %3ci%3eyou%3c/i%3e?

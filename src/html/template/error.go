@@ -58,8 +58,8 @@ const (
 	//   {{.X}} is in an ambiguous URL context since, depending on {{.C}},
 	//  it may be either a URL suffix or a query parameter.
 	//   Moving {{.X}} into the condition removes the ambiguity:
-	//   <a href="{{if .C}}/path/{{.X}}{{else}}/search?q={{.X}}">
-	ErrAmbigContext
+//   <a href="{{if .C}}/path/{{.X}}{{else}}/search?q={{.X}}">
+ErrAmbigContext
 
 	// ErrBadHTML: "expected space, attr name, or end of tag, but got ...",
 	//   "... in unquoted attr", "... in attribute name"

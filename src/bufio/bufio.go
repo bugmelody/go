@@ -475,6 +475,7 @@ func (b *Reader) Buffered() int { return b.w - b.r }
 //
 // 返回的line,pointing at the bytes in the buffer(注意,是 in the buffer)
 // 返回的 line []byte 直到下一次 read 之前都是有效的
+// 注意这句话: it returns all the data in the buffer and the error itself
 func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 	for {
 		// Search buffer.

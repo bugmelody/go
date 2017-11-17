@@ -121,6 +121,7 @@ func (r *Reader) readForm(maxMemory int64) (_ *Form, err error) {
 //
 // Form是一个已解析的multipart form.
 // 注意: multipart.Form.Value,http.Request.PostForm,http.Request.Form是一样的,底层类型都是map[string][]string
+// Value字段是表单数据, File字段是文件数据
 type Form struct {
 	Value map[string][]string
 	File  map[string][]*FileHeader

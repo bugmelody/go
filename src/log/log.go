@@ -56,6 +56,7 @@ const (
 // multiple goroutines; it guarantees to serialize access to the Writer.
 //
 // prefix: 每一行日志的前缀
+// 如果调用了log.SetFlags(0) 将Logger.flag设置为0, 0代表没有任何前缀,时间,文件,行号等信息,只有log message
 type Logger struct {
 	mu     sync.Mutex // ensures atomic writes; protects the following fields
 	prefix string     // prefix to write at beginning of each line

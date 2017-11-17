@@ -407,18 +407,9 @@ var SkipDir = errors.New("skip this directory")
 // 总结:
 // WalkFunc的函数体内部,处理的是walk过程中遇到的一个文件path.
 // err是walk到path的错误,WalkFunc有权根据err决定如何处理这个错误.
-// 如果WalkFunc返回err=SkipDir,表示会忽略当前path.
+// 如果WalkFunc返回err=SkipDir,表示会忽略当前path(如果当前path是目录,会忽略此目录;如果当期path是文件,Walk函数忽略当前目录的剩余文件).
 // 如果WalkFunc返回err=非SkipDir error,整个walk结束.
 // 如果WalkFunc返回error=nil,表示没有遇到错误.
-//
-// 以下是粗略的翻译
-// Walk函数对每一个文件/目录都会调用WalkFunc函数类型值.
-// 调用时path参数会包含Walk的root参数作为前缀;就是说,如果Walk函数的root为"dir",该目录下有文件"a",
-// 将会使用"dir/a"作为path参数调用walkFn参数.
-// walkFn参数被调用时的info参数是path指定的地址(文件/目录)的文件信息,类型为os.FileInfo.
-// 如果遍历path指定的文件或目录时出现了问题,传入的参数err会描述该问题,WalkFunc类型函数可以决定
-// 如何去处理该错误(Walk函数将不会深入该目录);如果该函数返回一个错误,Walk函数的执行会中止;只有一个
-// 例外,如果Walk的walkFn返回值是SkipDir,将会跳过该目录的内容而Walk函数照常执行处理下一个文件.
 type WalkFunc func(path string, info os.FileInfo, err error) error
 
 var lstat = os.Lstat // for testing
@@ -490,6 +481,8 @@ func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 // Walk does not follow symbolic links.
 //
 // lexical order: 词典式序列
+// 注意:
+// 不会跟踪符号链接;root也会被alk;Walk的整个过程是字典排序的,因此如果文件夹比较大,性能会差
 // @see
 func Walk(root string, walkFn WalkFunc) error {
 	// 文档: does not follow symbolic links

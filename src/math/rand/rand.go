@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//
+// [[[2-over]]] 2017-10-9 18:55:24 本包中的遍数只以这里为准
 
 // Package rand implements pseudo-random number generators.
 //
@@ -19,6 +21,8 @@ import "sync"
 
 // A Source represents a source of uniformly-distributed
 // pseudo-random int64 values in the range [0, 1<<63).
+//
+// 	uniformly distributed [数] 均匀分布
 type Source interface {
 	Int63() int64
 	Seed(seed int64)
@@ -187,6 +191,8 @@ again:
 }
 
 // Perm returns, as a slice of n ints, a pseudo-random permutation of the integers [0,n).
+//
+// 	permutation [pɜːmjʊ'teɪʃ(ə)n] n. [数] 排列；[数] 置换
 func (r *Rand) Perm(n int) []int {
 	m := make([]int, n)
 	// In the following loop, the iteration when i=0 always swaps m[0] with m[0].
@@ -205,6 +211,8 @@ func (r *Rand) Perm(n int) []int {
 // Read generates len(p) random bytes and writes them into p. It
 // always returns len(p) and a nil error.
 // Read should not be called concurrently with any other Rand method.
+//
+// 	实现了io.Reader接口
 func (r *Rand) Read(p []byte) (n int, err error) {
 	if lk, ok := r.src.(*lockedSource); ok {
 		return lk.read(p, &r.readVal, &r.readPos)
@@ -302,6 +310,7 @@ func Read(p []byte) (n int, err error) { return globalRand.Read(p) }
 //
 //  sample = NormFloat64() * desiredStdDev + desiredMean
 //
+// 	normally distributed 正态分布
 func NormFloat64() float64 { return globalRand.NormFloat64() }
 
 // ExpFloat64 returns an exponentially distributed float64 in the range

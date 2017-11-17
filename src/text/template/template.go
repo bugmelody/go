@@ -187,6 +187,8 @@ func (t *Template) Lookup(name string) *Template {
 // define additional templates associated with t and are removed from the
 // definition of t itself.
 //
+// t 中老的 Named template definitions 被移除掉了??????
+//
 // Templates can be redefined in successive calls to Parse.
 // A template definition with a body containing only white space and comments
 // is considered empty and will not replace an existing template's body.
